@@ -184,19 +184,32 @@ percentage = present ÷ (present + absent), null when no counted days.
 Dates are school-local (schools.timezone); enrollment context from
 `student_enrollments` (pointer fallback documented).
 
-## 16. exams · exam_subjects · exam_schedules
+## 16. exams · exam_subjects · exam_schedules — ✅ implemented (Phase 5)
 
-**`exams`:** exam event (Mid-Term). `id`, `school_id`, `academic_year_id`,
-`name`, `class_id → classes`, `starts_on/ends_on DATE`, `status
-(DRAFT|SCHEDULED|ONGOING|COMPLETED)`, timestamps. **Index:** `(school_id, class_id, starts_on)`.
-**`exam_subjects`:** subject instance within an exam — owns marks config + lock.
-`id`, `school_id`, `exam_id → exams ON DELETE CASCADE`, `subject_id → subjects`,
-`max_marks NUMERIC`, `passing_marks NUMERIC`, `exam_date DATE`, `start_time/end_time TIME`,
-`is_locked BOOL DEFAULT false`, `is_published BOOL DEFAULT false`, timestamps.
-`UNIQUE(exam_id, subject_id)`; `CHECK (passing_marks <= max_marks)`.
-**`exam_schedules`** (room/invigilator detail; kept separate so date changes don't
-touch mark config): `id`, `school_id`, `exam_subject_id → exam_subjects ON DELETE CASCADE`,
-`room`, `invigilator_id → teachers NULL`, timestamps.
+**`exams`:** class-scoped exam event per academic year (configurable names:
+Unit Test 1, First Term Examination, …).
+`id`, `school_id`, `academic_year_id → academic_years`, `class_id → classes
+ON DELETE CASCADE`, `name`, `starts_on/ends_on DATE` (exam window,
+`ends_on >= starts_on`), `is_active BOOL`, timestamps.
+**Unique:** `(school_id, academic_year_id, class_id, name)` — duplicate
+definitions blocked at the DB. **Index:** `(school_id, class_id, starts_on DESC)`,
+`(school_id, academic_year_id)`.
+**`exam_subjects`:** per-subject configuration — owns marks config + schedule.
+`id`, `school_id`, `exam_id → exams ON DELETE CASCADE`, `subject_id → subjects
+ON DELETE CASCADE`, `max_marks NUMERIC(6,2) CHECK (> 0)`, `passing_marks
+NUMERIC(6,2) DEFAULT 0`, `exam_date DATE NULL`, `start_time/end_time TIME NULL`,
+timestamps. **Unique:** `(exam_id, subject_id)`; **CHECK** `passing_marks <=
+max_marks` (DB-enforced). **Index:** `(school_id, exam_id)`, `(school_id, exam_date)`.
+**`exam_schedules`** (room/invigilator detail; kept separate so date changes
+never touch marks config): `id`, `school_id`, `exam_subject_id → exam_subjects
+ON DELETE CASCADE` (UNIQUE — 1:1), `room`, `invigilator_id → teachers NULL`,
+timestamps.
+**Tenant triggers:** exams→year/class, exam_subjects→exam/subject,
+exam_schedules→exam_subject/invigilator cross-school references rejected;
+`school_id` immutable. **RLS:** admins full; teachers see exams whose class
+contains an assigned section (mirrored on subject/schedule tables via joins);
+parents see exams of linked children's classes; writes admin-only.
+Marks/results fields land in Phase 6 (this phase is configuration only).
 
 ## 17. marks
 

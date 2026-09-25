@@ -31,6 +31,16 @@ import {
   updateSubject,
 } from "@/lib/services/subjects";
 import {
+  addExamSubject,
+  createExam,
+  removeExamSchedule,
+  removeExamSubject,
+  setExamActive,
+  updateExam,
+  updateExamSubject,
+  upsertExamSchedule,
+} from "@/lib/services/exams";
+import {
   createStudent,
   updateStudent,
 } from "@/lib/services/students";
@@ -600,6 +610,167 @@ export async function confirmImportAction(
       created: result.created,
       failed: result.failed.length,
     };
+  } catch (error) {
+    return err(error);
+  }
+}
+
+/* --------------------------------- exams -------------------------------- */
+
+export async function createExamAction(
+  _prev: ActionState,
+  form: FormData,
+): Promise<ActionState> {
+  try {
+    const ctx = await requireRole("SCHOOL_ADMIN");
+    const db = await createServerSupabaseClient();
+    await createExam(db, ctx, {
+      name: str(form, "name") ?? "",
+      academicYearId: str(form, "academicYearId") ?? "",
+      classId: str(form, "classId") ?? "",
+      startsOn: str(form, "startsOn") ?? "",
+      endsOn: str(form, "endsOn") ?? "",
+      subjects: [],
+    });
+    revalidatePath("/admin/exams");
+    return { success: true };
+  } catch (error) {
+    return err(error);
+  }
+}
+
+export async function updateExamAction(
+  id: string,
+  _prev: ActionState,
+  form: FormData,
+): Promise<ActionState> {
+  try {
+    const ctx = await requireRole("SCHOOL_ADMIN");
+    const db = await createServerSupabaseClient();
+    await updateExam(db, ctx, id, {
+      name: str(form, "name"),
+      startsOn: str(form, "startsOn"),
+      endsOn: str(form, "endsOn"),
+    });
+    revalidatePath("/admin/exams");
+    revalidatePath(`/admin/exams/${id}`);
+    return { success: true };
+  } catch (error) {
+    return err(error);
+  }
+}
+
+export async function setExamActiveAction(
+  id: string,
+  active: boolean,
+): Promise<ActionState> {
+  try {
+    const ctx = await requireRole("SCHOOL_ADMIN");
+    const db = await createServerSupabaseClient();
+    await setExamActive(db, ctx, id, active);
+    revalidatePath("/admin/exams");
+    revalidatePath(`/admin/exams/${id}`);
+    return { success: true };
+  } catch (error) {
+    return err(error);
+  }
+}
+
+export async function addExamSubjectAction(
+  examId: string,
+  _prev: ActionState,
+  form: FormData,
+): Promise<ActionState> {
+  try {
+    const ctx = await requireRole("SCHOOL_ADMIN");
+    const db = await createServerSupabaseClient();
+    await addExamSubject(db, ctx, examId, {
+      subjectId: str(form, "subjectId") ?? "",
+      maxMarks: Number(str(form, "maxMarks") ?? 0),
+      passingMarks: Number(str(form, "passingMarks") ?? 0),
+      examDate: str(form, "examDate"),
+      startTime: str(form, "startTime"),
+      endTime: str(form, "endTime"),
+    });
+    revalidatePath(`/admin/exams/${examId}`);
+    return { success: true };
+  } catch (error) {
+    return err(error);
+  }
+}
+
+export async function updateExamSubjectAction(
+  examId: string,
+  examSubjectId: string,
+  _prev: ActionState,
+  form: FormData,
+): Promise<ActionState> {
+  try {
+    const ctx = await requireRole("SCHOOL_ADMIN");
+    const db = await createServerSupabaseClient();
+    const maxRaw = str(form, "maxMarks");
+    const passRaw = str(form, "passingMarks");
+    const dateRaw = str(form, "examDate");
+    await updateExamSubject(db, ctx, examSubjectId, {
+      maxMarks: maxRaw === undefined ? undefined : Number(maxRaw),
+      passingMarks: passRaw === undefined ? undefined : Number(passRaw),
+      examDate: dateRaw,
+      startTime: str(form, "startTime"),
+      endTime: str(form, "endTime"),
+    });
+    revalidatePath(`/admin/exams/${examId}`);
+    return { success: true };
+  } catch (error) {
+    return err(error);
+  }
+}
+
+export async function removeExamSubjectAction(
+  examId: string,
+  examSubjectId: string,
+): Promise<ActionState> {
+  try {
+    const ctx = await requireRole("SCHOOL_ADMIN");
+    const db = await createServerSupabaseClient();
+    await removeExamSubject(db, ctx, examSubjectId);
+    revalidatePath(`/admin/exams/${examId}`);
+    return { success: true };
+  } catch (error) {
+    return err(error);
+  }
+}
+
+export async function upsertExamScheduleAction(
+  examId: string,
+  examSubjectId: string,
+  _prev: ActionState,
+  form: FormData,
+): Promise<ActionState> {
+  try {
+    const ctx = await requireRole("SCHOOL_ADMIN");
+    const db = await createServerSupabaseClient();
+    const invigilatorRaw = str(form, "invigilatorId");
+    await upsertExamSchedule(db, ctx, examSubjectId, {
+      room: str(form, "room") ?? null,
+      invigilatorId: invigilatorRaw === undefined ? undefined : (invigilatorRaw || null),
+    });
+    revalidatePath(`/admin/exams/${examId}`);
+    return { success: true };
+  } catch (error) {
+    return err(error);
+  }
+}
+
+export async function removeExamScheduleAction(
+  examId: string,
+  examSubjectId: string,
+): Promise<ActionState> {
+  try {
+    const ctx = await requireRole("SCHOOL_ADMIN");
+    const db = await createServerSupabaseClient();
+    await removeExamSchedule(db, ctx, examSubjectId);
+    revalidatePath(`/admin/exams/${examId}`);
+    return { success: true };
   } catch (error) {
     return err(error);
   }

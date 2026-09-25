@@ -20,6 +20,9 @@ export interface FakeDb {
   seed: Record<string, Row[]>;
   calls: RecordedCall[];
   failNext: { code: string; message: string } | null;
+  /** Targeted failure: fires only for the given table+op (e.g. an INSERT that
+   *  violates a UNIQUE constraint later in a multi-query service call). */
+  failOn: { table: string; op: RecordedCall["op"]; code: string; message: string } | null;
   callsTo(table: string, op?: RecordedCall["op"]): RecordedCall[];
 }
 
@@ -158,7 +161,13 @@ export class FakeQuery {
   private consumeFailure(): { code: string; message: string } | null {
     const f = this.db.failNext;
     this.db.failNext = null;
-    return f;
+    if (f !== null) return f;
+    const fo = this.db.failOn;
+    if (fo !== null && fo.table === this.table && fo.op === this.op) {
+      this.db.failOn = null;
+      return { code: fo.code, message: fo.message };
+    }
+    return null;
   }
 
   async maybeSingle(): Promise<{ data: Row | null; error: null }> {
@@ -238,6 +247,7 @@ export function createFakeDb(seed: Record<string, Row[]> = {}): FakeDb {
     ),
     calls: [],
     failNext: null,
+    failOn: null,
     from(table: string) {
       return new FakeQuery(db, table);
     },

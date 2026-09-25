@@ -423,8 +423,8 @@ attendance happy paths. Tenant/RBAC suites block merges on failure.
 1. **Foundation gate:** docs + repo skeleton + CI green. ✅ done.
 2. Auth + users + school settings + academic years; RLS policies + tenant tests. ✅ done (Phase 2).
 3. Students/parents/teachers + classes/sections/subjects + Excel import. ✅ done (Phase 3).
-4. Attendance. ✅ done (Phase 4). Homework + notices + notifications inbox: next.
-5. Exams + marks + grading + report-card PDF.
+4. Attendance. ✅ done (Phase 4).
+5. Exams + exam schedules. ✅ done (Phase 5). Marks + grading + report-card PDF: next.
 6. Timetable + fee tracking + documents hardening + audit coverage pass.
 7. Dashboard shells per role (child selector, "My Classes"), pagination +
    performance pass, OpenAPI generation, pilot readiness (backups, monitoring).
@@ -507,7 +507,37 @@ Explicitly deferred: payments, SMS/WhatsApp, student dashboard, substitution.
   and records fetched in single batched queries (no N+1); summaries computed
   server-side; history paginated.
 
-## 19. Important architectural decisions (log)
+## 19. Phase 5: exams + exam schedules (implemented)
+
+- **Exam model:** `exams` (class-scoped event per academic year; configurable
+  names; window `starts_on → ends_on`; activate/deactivate is explicit +
+  audited) → `exam_subjects` (per-subject max/passing marks + schedule
+  date/time; UNIQUE per exam; passing ≤ max enforced at the DB) →
+  `exam_schedules` (1:1 room/invigilator detail, kept separate so schedule
+  edits never touch marks configuration). No marks/results fields in this
+  phase — configuration only; marks entry lands in Phase 6.
+- **Exam authorization:** admins full management within their own school.
+  Exams are CLASS-scoped, so relevance is class-based: a teacher sees exams
+  whose class contains one of their assigned sections; a parent sees exams of
+  linked children's classes. Enforced in BOTH services (`examScopeClassIds` +
+  explicit checks, 404 boundary — no client-supplied ids) and RLS (the exams/
+  exam_subjects/exam_schedules policies join through
+  `teacher_can_access_section()` / `parent_can_access_student()`).
+  Teachers/parents are read-only; STUDENT dormant.
+- **Validation:** exam window `ends_on >= starts_on`; subject examDate must
+  fall within the window (re-validated when the window changes); times are
+  HH:MM 24-hour with `end > start`; marks `max > 0`, `passing >= 0`,
+  `passing <= max` — enforced in Zod AND the service AND DB CHECKs. Duplicate
+  exam definitions blocked by `UNIQUE(school_id, academic_year_id, class_id, name)`
+  (409); duplicate subjects per exam by `UNIQUE(exam_id, subject_id)`.
+- **Audit:** exam created/updated/activated/deactivated, subject config
+  added/updated/removed, schedule upserts/removals — one append-only row per
+  mutation with the session actor/school.
+- **UI:** /admin/exams (list + filters + create/edit + subjects/schedule
+  management), /teacher/exams (relevant schedule), /parent/exams (child
+  selector + schedule). Functional, consistent with the existing design system.
+
+## 20. Important architectural decisions (log)
 
 | # | Decision | Why |
 |---|----------|-----|
@@ -515,6 +545,8 @@ Explicitly deferred: payments, SMS/WhatsApp, student dashboard, substitution.
 | AD-2 | Supabase Auth + cookies, no custom crypto | Avoids inventing password/session security |
 | AD-3 | `fee_payment_records` naming; no `transactions` vocabulary | Makes "record vs processing" unambiguous in code and schema |
 | AD-4 | Attendance session/record split | Correct grain for daily class attendance, % views, and edits |
+| AD-17 | Class-scoped exams with class-based relevance | Teacher/parent visibility follows class membership — simple, matches school reality |
+| AD-18 | exam_schedules separate from marks config (1:1) | Room/invigilator edits never touch marks configuration |
 | AD-15 | LEAVE excused from the percentage denominator | One documented rule; on-leave students neither present nor penalised |
 | AD-16 | School-local dates via schools.timezone; ≤ today+1d | Server never trusts its own timezone; future marks rejected |
 | AD-5 | Marks locked via `exam_subjects.is_locked`; publish is explicit + audited | Prevents silent post-publish edits; parents only see published |

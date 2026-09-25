@@ -147,18 +147,24 @@ Percentage rule: `present ÷ (present + absent)`; LEAVE excused; null when no
 counted days. Dates are school-local (`schools.timezone`); the server never
 derives the date from its own timezone.
 
-## /exams — Exams
+## /exams — Exams — ✅ implemented (Phase 5)
 
 | Method | Endpoint | Auth | Notes |
 |--------|----------|------|-------|
-| GET | `/exams` | session | `?classId&academicYearId&status`; parents see linked children's class exams only. |
-| POST | `/exams` | admin ＋audit | `{ name, classId, startsOn, endsOn }` + nested `subjects: [{ subjectId, maxMarks, passingMarks, examDate, startTime, endTime }]` in one transaction. |
-| GET | `/exams/:id` | admin / teacher:assigned / parent:linked | Includes `exam_subjects` + schedules. |
-| PATCH | `/exams/:id` | admin ＋audit | Date/status changes; blocked transitions after `COMPLETED` without explicit reopen (audited). |
-| POST | `/exams/:id/subjects` | admin ＋audit | Add subject instance. |
-| PATCH | `/exam-subjects/:id` | admin ＋audit | Marks config / schedule; rejected when `is_locked`. |
-| POST | `/exam-subjects/:id/lock` | admin ＋audit | Freezes marks entry. |
-| POST | `/exam-subjects/:id/publish` | admin ＋audit | Makes marks visible to parents; triggers result notifications (queued). |
+| GET | `/exams` | admin / teacher / parent | Auto-scoped list: admin → school; teacher → exams whose class contains an assigned section; parent → linked children's classes. `?academicYearId&classId&page&limit`. 404 on out-of-scope classId. |
+| POST | `/exams` | admin ＋audit | `{ name, academicYearId, classId, startsOn, endsOn, subjects?: [{ subjectId, maxMarks, passingMarks, examDate?, startTime?, endTime? }] }` in one batch. 404 cross-tenant class/year; 409 invalid config/duplicate name. |
+| GET | `/exams/:id` | admin / teacher:assigned-class / parent:linked-child-class | Detail with subjects + room/invigilator schedules. 404 unless authorized. |
+| PATCH | `/exams/:id` | admin ＋audit | Name/window; subject dates re-validated against the new window (409). |
+| POST | `/exams/:id/activate` | admin ＋audit | Explicit, audited activation. |
+| POST | `/exams/:id/deactivate` | admin ＋audit | Explicit, audited deactivation. |
+| POST | `/exams/:id/subjects` | admin ＋audit | Add subject config: `{ subjectId, maxMarks, passingMarks, examDate?, startTime?, endTime? }`; 409 on dup/invalid. |
+| GET | `/exams/children/:studentId` | admin / parent:linked | Exam schedule for one linked child (grouped with subjects). 404 unless linked. |
+| PATCH | `/exam-subjects/:id` | admin ＋audit | Update marks config / schedule date-time; re-validated (409). |
+| DELETE | `/exam-subjects/:id` | admin ＋audit | Remove subject from exam. |
+| PUT | `/exam-subjects/:id/schedule` | admin ＋audit | Upsert 1:1 room/invigilator; invigilator tenant-verified (404). |
+| DELETE | `/exam-subjects/:id/schedule` | admin ＋audit | Remove the schedule row (date/time config untouched). |
+
+Marks entry/results are Phase 6 — this phase is configuration + schedules only.
 
 ## /marks · /grades — Marks / Grades
 

@@ -126,3 +126,36 @@ export interface AcademicYearDto {
   endsOn: string;
   isCurrent: boolean;
 }
+
+export interface ExamSubjectDto {
+  id: string;
+  examId: string;
+  subjectId: string;
+  maxMarks: number;
+  passingMarks: number;
+  examDate: string | null;
+  startTime: string | null;
+  endTime: string | null;
+  subjects?: { name: string; code: string | null } | null;
+}
+
+export interface ExamScheduleDto {
+  id: string;
+  examSubjectId: string;
+  room: string | null;
+  invigilatorId: string | null;
+  teachers?: { displayName: string } | null;
+}
+
+export interface ExamDto {
+  id: string;
+  academicYearId: string;
+  classId: string;
+  name: string;
+  startsOn: string;
+  endsOn: string;
+  isActive: boolean;
+  academicYears?: { name: string } | null;
+  classes?: { name: string } | null;
+  subjects?: ExamSubjectDto[];
+}

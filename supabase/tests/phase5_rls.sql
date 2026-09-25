@@ -1,0 +1,71 @@
+-- SIMPLEIN SCHOOL ERP · Phase 5 RLS verification (LIVE DATABASE ONLY).
+-- Run against a staging Supabase project AFTER applying migration 0005, as
+-- authenticated users of two schools. No local Postgres tooling exists in
+-- this environment, so these checks have NOT been executed here — the
+-- equivalent server-boundary logic IS unit-tested in
+-- lib/services/exams.test.ts (23 tests, passing).
+--
+-- Setup: school A with admin(A); teacher T (assigned sec7a, class c7);
+-- parent P (linked to student s1 in class c7 via student_parents, NOT to s2
+-- in class c8); school B with an equivalent set. Authenticate each block
+-- with that user's JWT.
+
+-- A. Tenant isolation — School A exams: A→A allowed, A→B denied --------------
+-- As admin(A):
+-- SELECT id, name, class_id FROM public.exams;
+--   -- expect: only school-A exams
+-- SELECT id FROM public.exam_subjects;
+--   -- expect: only school-A subject configs
+-- SELECT * FROM public.exams WHERE id = '<school-B-exam-id>';   -- expect: 0 rows
+-- SELECT * FROM public.exam_subjects WHERE id = '<school-B-es>'; -- expect: 0 rows
+-- UPDATE public.exams SET name = 'hijack' WHERE id = '<school-B-exam-id>';
+--   -- expect: 0 rows affected
+
+-- B. Teacher scope (assigned sec7a / class c7 only) ------------------------------
+-- As teacher T (school A):
+-- SELECT id, name, class_id FROM public.exams;
+--   -- expect: class-7 exams ONLY (not class-8)
+-- SELECT * FROM public.exams WHERE id = '<class-8-exam-id>';  -- expect: 0 rows
+-- SELECT * FROM public.exam_subjects WHERE exam_id = '<class-8-exam-id>';
+--   -- expect: 0 rows (subject configs mirror exam visibility)
+-- INSERT INTO public.exams (school_id, academic_year_id, class_id, name, starts_on, ends_on)
+--   VALUES ('<A>', '<A-year>', '<c7>', 'X', CURRENT_DATE, CURRENT_DATE);
+--   -- expect: RLS violation (admin-only writes)
+-- INSERT INTO public.exams ... VALUES ('<B>', ...);  -- expect: RLS violation
+
+-- C. Parent scope (linked to s1 in class c7 only) ---------------------------------
+-- As parent P (school A):
+-- SELECT id, name, class_id FROM public.exams;
+--   -- expect: class-7 exams ONLY
+-- SELECT * FROM public.exams WHERE id = '<class-8-exam-id>';  -- expect: 0 rows
+-- SELECT * FROM public.exam_subjects WHERE exam_id = '<class-8-exam-id>';
+--   -- expect: 0 rows
+-- INSERT INTO public.exams (...) VALUES (...);
+--   -- expect: RLS violation (parents are read-only)
+
+-- D. Data integrity (as admin A; triggers must RAISE) ------------------------------
+-- INSERT INTO public.exams (school_id, academic_year_id, class_id, name, starts_on, ends_on)
+--   VALUES ('<A>', '<A-year>', '<school-B-class>', CURRENT_DATE, CURRENT_DATE);
+--   -- expect: cross-tenant reference exception (class)
+-- INSERT INTO public.exam_subjects (school_id, exam_id, subject_id, max_marks, passing_marks)
+--   VALUES ('<A>', '<A-exam>', '<school-B-subject>', 100, 33);
+--   -- expect: cross-tenant reference exception (subject)
+-- INSERT INTO public.exam_schedules (school_id, exam_subject_id, invigilator_id)
+--   VALUES ('<A>', '<A-es>', '<school-B-teacher>');
+--   -- expect: cross-tenant reference exception (invigilator)
+-- INSERT INTO public.exams (...) VALUES ('<A>', '<A-year>', '<c7>', 'Unit Test 1', ...);
+--   -- expect: duplicate key (UNIQUE school+year+class+name)
+-- INSERT INTO public.exam_subjects (..., max_marks, passing_marks) VALUES (..., 100, 101);
+--   -- expect: CHECK violation (passing_marks <= max_marks)
+-- INSERT INTO public.exam_subjects (..., max_marks, start_time, end_time)
+--   VALUES (..., 100, '11:30', '09:30');
+--   -- expect: service-level rejection (end > start; app-validated)
+-- UPDATE public.exams SET school_id = '<B>' WHERE id = '<A-exam>';
+--   -- expect: school_id is immutable
+
+-- E. Modification authorization -------------------------------------------------------
+-- As teacher T: any INSERT/UPDATE/DELETE on exams/exam_subjects/exam_schedules →
+--   expect RLS violations (admin-only).
+-- As parent P: same → RLS violations.
+-- As admin(A): INSERT/UPDATE on school-A exams → 1 row (ALLOWED).
+-- As admin(B): UPDATE school-A rows → 0 rows (DENIED).
