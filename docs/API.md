@@ -132,15 +132,20 @@ change/reset endpoints remain roadmap items (Supabase-owned flows).
 | POST | `/academic-years` | admin ＋audit | `{ name, startsOn, endsOn, isCurrent }`; single-current enforced. |
 | POST | `/academic-years/:id/current` | admin ＋audit | Switch current year. |
 
-## /attendance — Attendance
+## /attendance — Attendance — ✅ implemented (Phase 4)
 
 | Method | Endpoint | Auth | Notes |
 |--------|----------|------|-------|
-| GET | `/attendance/sections/:sectionId/days/:date` | admin / teacher:assigned | Session + records; 404 if section not assigned (teacher). |
-| PUT | `/attendance/sections/:sectionId/days/:date` | admin / teacher:assigned ＋audit | **Upsert** `{ records: [{ studentId, status, remark? }] }`; idempotent; bumps `version`. `PRESENT|ABSENT|LEAVE`. |
-| PATCH | `/attendance/records/:id` | admin / teacher:assigned ＋audit | Single correction with before/after audit. |
-| GET | `/attendance/students/:id` | admin / teacher:assigned / parent:linked | History `?from&to&page`; includes `percentage` summary. |
-| GET | `/attendance/sections/:sectionId/report` | admin / teacher:assigned | `?from&to` class report: per-student % + counts. Paginated. |
+| GET | `/attendance/sections` | admin / teacher | Sections the caller may view/mark: admin → all active; teacher → assigned (class-teacher ∪ subject assignee). |
+| GET | `/attendance/sections/:sectionId?date=` | admin / teacher:assigned | Marking-screen payload: section + academic year + enrolled roster (enrollment model, pointer fallback) + existing session/records. Date validated (school-local, no future). 404 on cross-tenant/out-of-scope. |
+| POST | `/attendance/sections/:sectionId` → `/save` | admin / teacher:assigned ＋audit | Save/upsert `{ date, records: [{ studentId, status: PRESENT\|ABSENT\|LEAVE, remark? }] }`. Idempotent (UNIQUE section+date; records UNIQUE session+student). Validates per-student enrollment for the applicable year (409 otherwise). Audits old→new diffs. |
+| GET | `/attendance/sections/:sectionId/summary?date=` | admin / teacher:assigned | One-date section summary: present/absent/leave counts + percentage (server-side). |
+| GET | `/attendance/students/:studentId?from&to&page&limit` | admin / teacher:assigned / parent:linked | Daily history joined to session dates; paginated. 404 unless authorized (parent: linked children only). |
+| GET | `/attendance/students/:studentId/summary?from&to` | admin / teacher:assigned / parent:linked | Counts + percentage (LEAVE excused — excluded from denominator). |
+
+Percentage rule: `present ÷ (present + absent)`; LEAVE excused; null when no
+counted days. Dates are school-local (`schools.timezone`); the server never
+derives the date from its own timezone.
 
 ## /exams — Exams
 

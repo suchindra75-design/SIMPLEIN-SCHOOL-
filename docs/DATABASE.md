@@ -156,21 +156,33 @@ sections. **RLS:** members read; admin writes.
 - `parent_can_access_student(St)` — admin OR `student_parents` link.
 - Marks gating on publish flags lands with the Exams module.
 
-## 15. attendance_sessions + attendance_records
+## 15. attendance_sessions + attendance_records — ✅ implemented (Phase 4)
 
-**Purpose:** daily attendance with auditable grain.
-**`attendance_sessions`:** one row per section per day. `id`, `school_id`,
-`section_id → sections`, `academic_year_id`, `date DATE`, `marked_by → users`,
-`status (DRAFT|SUBMITTED)`, `version INT`, timestamps.
-`UNIQUE(section_id, date)`. **Index:** `(school_id, section_id, date DESC)`.
-**`attendance_records`:** one row per student per session.
-`id`, `school_id`, `session_id → attendance_sessions ON DELETE CASCADE`,
-`student_id → students`, `status (PRESENT|ABSENT|LEAVE)`, `remark`,
-`updated_by → users`, timestamps. `UNIQUE(session_id, student_id)`.
-**Index:** `(school_id, student_id, session_id)` (student history); percentage =
-`present / (present+absent+leave)` view over joined sessions (LEAVE excluded from
-denominator per school policy flag — configurable, default excluded).
-Edits bump session `version` + write `audit_logs` with before/after.
+**Purpose:** daily attendance with an auditable grain. One session per
+section per school-day; one record per student per session.
+**`attendance_sessions`:** `id`, `school_id`, `academic_year_id → academic_years`,
+`section_id → sections ON DELETE CASCADE`, `attendance_date DATE` (school-local),
+`status (DRAFT|SUBMITTED) DEFAULT 'SUBMITTED'`, `created_by → users NULL`,
+`updated_by → users NULL`, timestamps.
+**Unique:** `(section_id, attendance_date)` — duplicate-session prevention at
+the DB. **Indexes:** `(school_id, attendance_date DESC)`,
+`(school_id, section_id, attendance_date DESC)`.
+**`attendance_records`:** `id`, `school_id`, `attendance_session_id →
+attendance_sessions ON DELETE CASCADE`, `student_id → students`,
+`status attendance_status enum (PRESENT|ABSENT|LEAVE) NOT NULL`, `remark`,
+`updated_by → users NULL`, timestamps. **Unique:** `(attendance_session_id, student_id)`.
+**Indexes:** `(attendance_session_id)`, `(school_id, student_id, attendance_session_id)`
+(student history + summary aggregation).
+**Tenant triggers:** session→section/year and record→student cross-school
+references rejected; `school_id` immutable. **RLS:** same-school reads;
+teachers additionally scoped via `teacher_can_access_section()`; parents via
+`parent_can_access_student()` (linked children only); writes admin + assigned
+teachers only; parents read-only; STUDENT dormant (no policies).
+**Percentage rule (one consistent rule):** PRESENT counts fully, ABSENT counts
+against, LEAVE is excused (excluded from the denominator);
+percentage = present ÷ (present + absent), null when no counted days.
+Dates are school-local (schools.timezone); enrollment context from
+`student_enrollments` (pointer fallback documented).
 
 ## 16. exams · exam_subjects · exam_schedules
 

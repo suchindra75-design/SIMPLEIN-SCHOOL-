@@ -2,12 +2,14 @@ import { describe, expect, it } from "vitest";
 import type { SessionContext } from "@/lib/auth/session";
 import {
   ForbiddenError,
-  NotFoundError,
   TenantBoundaryError,
 } from "@/lib/auth/session";
 import { createFakeDb, type Row } from "@/lib/test/fake-db";
-import type { DbClient } from "@/lib/services/errors";
-import { ConflictError } from "@/lib/services/errors";
+import {
+  ConflictError,
+  NotFoundError,
+  type DbClient,
+} from "@/lib/services/errors";
 import { addTeacherAssignment, createTeacher } from "@/lib/services/teachers";
 import { linkChild, listChildren } from "@/lib/services/parents";
 import {

@@ -423,7 +423,7 @@ attendance happy paths. Tenant/RBAC suites block merges on failure.
 1. **Foundation gate:** docs + repo skeleton + CI green. ✅ done.
 2. Auth + users + school settings + academic years; RLS policies + tenant tests. ✅ done (Phase 2).
 3. Students/parents/teachers + classes/sections/subjects + Excel import. ✅ done (Phase 3).
-4. Attendance + homework + notices + notifications inbox.
+4. Attendance. ✅ done (Phase 4). Homework + notices + notifications inbox: next.
 5. Exams + marks + grading + report-card PDF.
 6. Timetable + fee tracking + documents hardening + audit coverage pass.
 7. Dashboard shells per role (child selector, "My Classes"), pagination +
@@ -465,7 +465,49 @@ Explicitly deferred: payments, SMS/WhatsApp, student dashboard, substitution.
   the isolated service-role client after ctx authorization; passwords never
   logged.
 
-## 18. Important architectural decisions (log)
+## 18. Phase 4: attendance (implemented)
+
+- **Authorization:** teachers mark/read ONLY their assigned sections
+  (class-teacher ∪ `teacher_subjects` — existing scope helpers, no duplicate
+  mechanism); parents read ONLY linked children (`student_parents`); admins
+  only their own school. Enforced in BOTH services
+  (`assertAttendanceSectionAccess`, `assertStudentAttendanceAccess` — 404
+  boundary, never client-supplied ids) and RLS
+  (`teacher_can_access_section()` / `parent_can_access_student()` inside the
+  attendance policies). Parents are read-only; STUDENT dormant (no policies).
+- **Enrollment context:** attendance resolves the applicable academic year
+  for the date (year containing the date, else the school's current year —
+  documented V1 rule) and loads the roster from `student_enrollments`
+  (academic-year aware). Fallback (documented): when a section has no
+  enrollment rows for the year (students created before any year existed),
+  the students' current `section_id` pointer is used. No promotion logic yet.
+- **Percentage rule (ONE consistent rule):** PRESENT counts fully, ABSENT
+  counts against, LEAVE is excused (excluded from the denominator);
+  percentage = present ÷ (present + absent), rounded to 2 decimals; null
+  when there are no counted days (never a fake 100%). Implemented once in
+  `lib/services/attendance/calc.ts` (pure, unit-tested) and used by student
+  summary, section summary, and the parent view.
+- **Timezone/date handling:** dates are SCHOOL-LOCAL calendar dates;
+  `todayInSchoolTz()` derives "today" from `schools.timezone` (server-side;
+  the server never uses its own local timezone). The UI date picker defaults
+  to it and caps at it. The server validates YYYY-MM-DD format, ≥ 2000-01-01,
+  and ≤ school-today + 1 day (minor device-clock skew tolerance; future marks
+  rejected).
+- **Transactional save strategy (honest limitation):** the Supabase JS client
+  over PostgREST has no multi-statement transaction. Save = (1) session
+  upsert (UNIQUE section+date dedupes; reopen just updates), (2) ONE batched
+  records upsert (UNIQUE session+student; idempotent). The partial-failure
+  window between (1) and (2) is tiny and a retry converges without
+  duplicates — never presented as atomic; documented here and in code.
+- **Audit:** one audit row per save (`attendance.created` / `attendance.updated`)
+  with metadata `{ sectionId, date, total, changed: [{ studentId, from, to }] }`
+  — actor/school come from the session context; old/new statuses are
+  preserved for corrections. No secrets logged.
+- **Performance:** indexed section/date and student/session queries; rosters
+  and records fetched in single batched queries (no N+1); summaries computed
+  server-side; history paginated.
+
+## 19. Important architectural decisions (log)
 
 | # | Decision | Why |
 |---|----------|-----|
@@ -473,6 +515,8 @@ Explicitly deferred: payments, SMS/WhatsApp, student dashboard, substitution.
 | AD-2 | Supabase Auth + cookies, no custom crypto | Avoids inventing password/session security |
 | AD-3 | `fee_payment_records` naming; no `transactions` vocabulary | Makes "record vs processing" unambiguous in code and schema |
 | AD-4 | Attendance session/record split | Correct grain for daily class attendance, % views, and edits |
+| AD-15 | LEAVE excused from the percentage denominator | One documented rule; on-leave students neither present nor penalised |
+| AD-16 | School-local dates via schools.timezone; ≤ today+1d | Server never trusts its own timezone; future marks rejected |
 | AD-5 | Marks locked via `exam_subjects.is_locked`; publish is explicit + audited | Prevents silent post-publish edits; parents only see published |
 | AD-6 | STUDENT role dormant in matrix | Authorization architecture complete without building student UI |
 | AD-7 | Private buckets + signed URLs only | No uncontrolled public document URLs, ever |

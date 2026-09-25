@@ -1,0 +1,68 @@
+-- SIMPLEIN SCHOOL ERP · Phase 4 RLS verification (LIVE DATABASE ONLY).
+-- Run against a staging Supabase project AFTER applying migration 0004, as
+-- authenticated users of two schools. No local Postgres tooling exists in
+-- this environment, so these checks have NOT been executed here — the
+-- equivalent server-boundary logic IS unit-tested in
+-- lib/services/attendance/attendance.test.ts (22 tests, passing).
+--
+-- Setup: school A with admin(A); teacher T (class teacher of sec7a + Math
+-- assignee in sec7a, NOT assigned sec7b); parent P (linked to student s1 in
+-- sec7a via student_parents, NOT to s2); school B with an equivalent set.
+-- Authenticate each block with that user's JWT.
+
+-- A. Tenant isolation — School A attendance: A→A allowed, A→B denied ---------
+-- As admin(A):
+-- SELECT id, section_id, attendance_date FROM public.attendance_sessions;
+--   -- expect: only school-A sessions
+-- SELECT id FROM public.attendance_records;
+--   -- expect: only school-A records
+-- SELECT * FROM public.attendance_sessions WHERE id = '<school-B-session-id>';
+--   -- expect: 0 rows
+-- UPDATE public.attendance_sessions SET status = 'DRAFT'
+--   WHERE id = '<school-B-session-id>';  -- expect: 0 rows affected
+
+-- B. Teacher scope (assigned 7A only) ------------------------------------------
+-- As teacher T (school A):
+-- SELECT id FROM public.attendance_sessions;
+--   -- expect: sec7a sessions ONLY (not sec7b)
+-- SELECT * FROM public.attendance_records WHERE student_id = '<s2-in-sec7b>';
+--   -- expect: 0 rows
+-- INSERT INTO public.attendance_sessions
+--   (school_id, academic_year_id, section_id, attendance_date)
+--   VALUES ('<A>', '<A-year>', '<sec7b>', CURRENT_DATE);
+--   -- expect: RLS violation (section not assigned to T)
+-- UPDATE public.attendance_records SET status = 'PRESENT'
+--   WHERE id = '<record-in-sec7b>';  -- expect: 0 rows affected
+-- INSERT INTO public.attendance_sessions ... VALUES ('<B>', ...);
+--   -- expect: RLS violation (cross-school)
+
+-- C. Parent scope (linked to Rahul only) -----------------------------------------
+-- As parent P (school A):
+-- SELECT id FROM public.attendance_records;
+--   -- expect: Rahul's records ONLY
+-- SELECT * FROM public.attendance_records WHERE student_id = '<s2>';
+--   -- expect: 0 rows
+-- SELECT * FROM public.attendance_records WHERE student_id = '<school-B-student>';
+--   -- expect: 0 rows
+-- INSERT INTO public.attendance_records (...) VALUES (...);
+--   -- expect: RLS violation (parents are read-only)
+
+-- D. Data integrity (as admin A; triggers must RAISE) ------------------------------
+-- INSERT INTO public.attendance_sessions (school_id, academic_year_id, section_id, attendance_date)
+--   VALUES ('<A>', '<A-year>', '<school-B-section>', CURRENT_DATE);
+--   -- expect: cross-tenant reference exception (section)
+-- INSERT INTO public.attendance_records (school_id, attendance_session_id, student_id, status)
+--   VALUES ('<A>', '<A-session>', '<school-B-student>', 'PRESENT');
+--   -- expect: cross-tenant reference exception (student)
+-- INSERT INTO public.attendance_sessions (...) VALUES ('<A>', '<A-year>', '<sec7a>', '2026-09-24');
+--   -- expect: duplicate key (UNIQUE section_id+attendance_date)
+-- INSERT INTO public.attendance_records (..., status) VALUES (..., 'LATE');
+--   -- expect: invalid input value for enum attendance_status
+-- UPDATE public.attendance_sessions SET school_id = '<B>' WHERE id = '<A-session>';
+--   -- expect: school_id is immutable
+
+-- E. Modification authorization -------------------------------------------------------
+-- As teacher T: UPDATE own sec7a session/records → 1 row affected (ALLOWED).
+-- As parent P: any UPDATE on attendance tables → 0 rows / RLS violation (DENIED).
+-- As admin(A): UPDATE any school-A session/records → 1 row (ALLOWED).
+-- As admin(B): UPDATE school-A rows → 0 rows (DENIED).
