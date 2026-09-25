@@ -1,0 +1,256 @@
+# SIMPLEIN SCHOOL ERP — V1 API Design
+
+Base path: **`/api/v1`**. REST + JSON. This document is the normative V1
+contract; generated OpenAPI (`openapi/openapi.json` + Swagger UI) is a roadmap
+item before pilot (see `ARCHITECTURE.md` §8, §16).
+
+## Conventions (apply to every module)
+
+- **Auth:** session cookie (Supabase). Unauthenticated → `401 UNAUTHENTICATED`.
+- **Tenant scope:** derived server-side from session (`users.school_id`);
+  endpoints accept NO `schoolId` param. Cross-school id → `404 NOT_FOUND`
+  (never 403-with-existence, to avoid an existence oracle).
+- **Authorization:** each endpoint lists minimum permission, e.g.
+  `admin` · `teacher:assigned` · `parent:linked` · `self`. Backend-enforced;
+  frontend gates are UX only.
+- **Envelope:** success `{ "data": T }`, lists add
+  `"meta": { "page": 1, "limit": 20, "total": 137 }`. Errors:
+  `{ "error": { "code": "NOT_FOUND", "message": "Student not found" } }`.
+  Stable codes: `UNAUTHENTICATED | FORBIDDEN | NOT_FOUND | VALIDATION_ERROR |
+  CONFLICT | RATE_LIMITED | INTERNAL`. Validation failures → `422`.
+- **Pagination:** `GET` lists accept `?page&limit` (default 20, cap 100).
+- **Idempotency:** bulk writes (attendance, marks) accept `Idempotency-Key`.
+- **Audit:** mutating endpoints marked `＋audit` append to `audit_logs`.
+- **Validation:** Zod schemas in `lib/validation/<module>.ts`, shared UI + API.
+
+Permission shorthands: `admin` = SCHOOL_ADMIN of own school;
+`teacher:assigned` = TEACHER with class_teacher/teacher_subjects link to the
+target section; `parent:linked` = PARENT with `student_parents` link to the
+target student; `published` = result/mark data gated on publish flags.
+
+---
+
+## /auth — Authentication — ✅ implemented (Phase 2)
+
+UI-driven login uses the `loginAction` server action (`/login` page); the
+REST surface below serves session context and logout. Password
+change/reset endpoints remain roadmap items (Supabase-owned flows).
+
+| Method | Endpoint | Auth | Notes |
+|--------|----------|------|-------|
+| GET | `/auth/session` | session | Returns `{ authUserId, profile, school, roles }`. 401 anonymous; 403 inactive/unprovisioned. |
+| POST | `/auth/logout` | session | Server-side `signOut()`, clears cookies. |
+| GET | `/schools/current` | session | Caller's own school (tenant from session; no `schoolId` param). ✅ |
+| GET | `/users/me` | session | Caller's own profile + role grants. ✅ |
+| POST | `/onboarding/school` | `ONBOARDING_SECRET` bearer (no user session) | Creates school + first admin (transactional, best-effort rollback). 409 on duplicate slug/email. Zod-validated. ✅ |
+
+## /schools — School / Tenant (remaining rows = roadmap)
+
+| Method | Endpoint | Auth | Notes |
+|--------|----------|------|-------|
+| GET | `/schools/current` | session | Caller's own school profile + branding. |
+| PATCH | `/schools/current` | admin ＋audit | Name, address, contacts, branding colors, logo `documentId`. |
+| GET | `/schools/current/academic-years` | session | Ordered years. |
+| POST | `/schools/current/academic-years` | admin ＋audit | Enforces single `is_current`. |
+| PATCH | `/schools/current/academic-years/:id` | admin ＋audit | Rollover sets new current (transactional). |
+| GET | `/schools/current/settings` | admin | Notification prefs, attendance/grading defaults. |
+| PATCH | `/schools/current/settings` | admin ＋audit | Validated settings patch. |
+
+## /users — Users — ✅ implemented (Phase 3)
+
+| Method | Endpoint | Auth | Notes |
+|--------|----------|------|-------|
+| GET | `/users` | admin | Paginated directory; `?role&isActive&search`. |
+| POST | `/users` | admin ＋audit | Creates Auth identity + profile + role (TEACHER/PARENT only) + links existing same-school teacher/parent profile. SCHOOL_ADMIN grant refused. Temp password never logged/returned. |
+| GET | `/users/:id` | admin | Same-school only (404 otherwise). |
+| PATCH | `/users/:id` | admin ＋audit | Contact fields (name/phone). Status/roles via dedicated routes. |
+| POST | `/users/:id/disable` | admin ＋audit | `is_active=false` + Auth ban (best-effort); cannot disable self. |
+| POST | `/users/:id/enable` | admin ＋audit | Re-activates + un-bans. |
+| POST | `/users/:id/roles` | admin ＋audit | Grants TEACHER/PARENT only. |
+
+## /students — Student Management — ✅ implemented (Phase 3)
+
+| Method | Endpoint | Auth | Notes |
+|--------|----------|------|-------|
+| GET | `/students` | admin / teacher:assigned / parent:linked | `?search&classId&sectionId&status&page&limit`; teachers pre-scoped to assigned sections (out-of-scope filter → 404); parents to linked children. Server-side, paginated. |
+| POST | `/students` | admin ＋audit | `admissionNo` unique per school (409); section∈class enforced; enrollment snapshot synced. |
+| GET | `/students/:id` | admin / teacher:assigned / parent:linked | Includes linked parents. 404 unless authorized. |
+| PATCH | `/students/:id` | admin ＋audit | Profile/placement/status; placement change re-syncs enrollment. |
+| POST | `/students/import` | admin ＋audit | Multipart `{ file, mapping? }` → preview; JSON `{ rows }` → confirm. ≤200 rows / 2 MB. Format: `docs/STUDENT_IMPORT.md`. |
+| GET | `/students/:id/parents` | admin / teacher:assigned / parent:linked | Linked parents (same scope as student read). |
+| POST | `/students/:id/parents` | admin ＋audit | `{ parentId, relation, isPrimary }`; same-school enforced + trigger. |
+| GET | `/students/:id/documents` | — | Roadmap (documents module). |
+| POST | `/students/:id/documents` | — | Roadmap (documents module). |
+| DELETE | `/students/:id/documents/:docId` | — | Roadmap (documents module). |
+
+## /parents — Parent Management — ✅ implemented (Phase 3)
+
+| Method | Endpoint | Auth | Notes |
+|--------|----------|------|-------|
+| GET | `/parents` | admin / teacher | Paginated; `?search&isActive`. Teachers: contact need. |
+| POST | `/parents` | admin ＋audit | Contact profile (login linked later via `/users`). |
+| GET | `/parents/:id` | admin / teacher / self-parent | Parents read own row only. |
+| PATCH | `/parents/:id` | admin ＋audit | Contact fields + active flag. |
+| GET | `/parents/:id/children` | admin / self-parent | Linked students with class/section. |
+| POST | `/parents/:id/children` | admin ＋audit | `{ studentId, relation, isPrimary }` — same-school only (trigger backstops; cross-school links forbidden in V1). |
+| DELETE | `/parents/:id/children/:studentId` | admin ＋audit | Unlink (audited; history preserved in audit log). |
+| GET | `/parents/me/children` | parent:linked | Roadmap (child-selector endpoint; same data reachable today via dashboard scope). |
+
+## /teachers — Teacher Management — ✅ implemented (Phase 3)
+
+| Method | Endpoint | Auth | Notes |
+|--------|----------|------|-------|
+| GET | `/teachers` | admin / teacher | Paginated directory; `?search&isActive`. |
+| POST | `/teachers` | admin ＋audit | Profile (`employeeNo` unique per school, 409 on clash). Login linked later via `/users`. |
+| GET | `/teachers/:id` | admin / teacher / scoped-parent | Parents: only teachers of linked children's sections. |
+| PATCH | `/teachers/:id` | admin ＋audit | Contact/qualification/active flag. |
+| GET | `/teachers/:id/assignments` | admin / self-teacher | Subject assignments with names. |
+| POST | `/teachers/:id/assignments` | admin ＋audit | `{ subjectId, sectionId, academicYearId? }` → `teacher_subjects`; every id tenant-verified. |
+| DELETE | `/teachers/:id/assignments/:assignmentId` | admin ＋audit | |
+| GET | `/teachers/me/sections` | teacher | Roadmap endpoint; live data served today by the teacher dashboard scope. |
+
+## /classes · /sections · /subjects · /academic-years — ✅ implemented (Phase 3)
+
+| Method | Endpoint | Auth | Notes |
+|--------|----------|------|-------|
+| GET | `/classes` | session | School list with sections (no year binding — §Phase 3 decision). |
+| POST | `/classes` | admin ＋audit | `{ name, orderIndex }`; name unique per school. |
+| GET | `/classes/:id` | session | With sections + class teachers. |
+| PATCH | `/classes/:id` | admin ＋audit | Rename/reorder/active. |
+| GET | `/classes/:id/sections` | session | |
+| POST | `/classes/:id/sections` | admin ＋audit | `{ name, orderIndex, classTeacherId?, room? }`; teacher tenant-verified. |
+| GET | `/sections/:id` | session | With class + class teacher. |
+| PATCH | `/sections/:id` | admin ＋audit | Incl. class-teacher assignment (drives teacher authz). |
+| GET | `/sections/:id/students` | — | Roadmap (classmate roster; privacy-reviewed when built). |
+| GET | `/subjects` | session | School catalogue. |
+| POST | `/subjects` | admin ＋audit | `{ name, code?, orderIndex }`; name unique per school. |
+| PATCH | `/subjects/:id` | admin ＋audit | Incl. active flag. |
+| GET | `/classes/:id/subjects` | session | Subjects linked to the class. |
+| POST | `/classes/:id/subjects` | admin ＋audit | `{ subjectId }` → `class_subjects`. |
+| DELETE | `/classes/:id/subjects?subjectId=` | admin ＋audit | Unlink (exam-reference guard lands with Exams). |
+| GET | `/academic-years` | session | Ordered years. |
+| POST | `/academic-years` | admin ＋audit | `{ name, startsOn, endsOn, isCurrent }`; single-current enforced. |
+| POST | `/academic-years/:id/current` | admin ＋audit | Switch current year. |
+
+## /attendance — Attendance
+
+| Method | Endpoint | Auth | Notes |
+|--------|----------|------|-------|
+| GET | `/attendance/sections/:sectionId/days/:date` | admin / teacher:assigned | Session + records; 404 if section not assigned (teacher). |
+| PUT | `/attendance/sections/:sectionId/days/:date` | admin / teacher:assigned ＋audit | **Upsert** `{ records: [{ studentId, status, remark? }] }`; idempotent; bumps `version`. `PRESENT|ABSENT|LEAVE`. |
+| PATCH | `/attendance/records/:id` | admin / teacher:assigned ＋audit | Single correction with before/after audit. |
+| GET | `/attendance/students/:id` | admin / teacher:assigned / parent:linked | History `?from&to&page`; includes `percentage` summary. |
+| GET | `/attendance/sections/:sectionId/report` | admin / teacher:assigned | `?from&to` class report: per-student % + counts. Paginated. |
+
+## /exams — Exams
+
+| Method | Endpoint | Auth | Notes |
+|--------|----------|------|-------|
+| GET | `/exams` | session | `?classId&academicYearId&status`; parents see linked children's class exams only. |
+| POST | `/exams` | admin ＋audit | `{ name, classId, startsOn, endsOn }` + nested `subjects: [{ subjectId, maxMarks, passingMarks, examDate, startTime, endTime }]` in one transaction. |
+| GET | `/exams/:id` | admin / teacher:assigned / parent:linked | Includes `exam_subjects` + schedules. |
+| PATCH | `/exams/:id` | admin ＋audit | Date/status changes; blocked transitions after `COMPLETED` without explicit reopen (audited). |
+| POST | `/exams/:id/subjects` | admin ＋audit | Add subject instance. |
+| PATCH | `/exam-subjects/:id` | admin ＋audit | Marks config / schedule; rejected when `is_locked`. |
+| POST | `/exam-subjects/:id/lock` | admin ＋audit | Freezes marks entry. |
+| POST | `/exam-subjects/:id/publish` | admin ＋audit | Makes marks visible to parents; triggers result notifications (queued). |
+
+## /marks · /grades — Marks / Grades
+
+| Method | Endpoint | Auth | Notes |
+|--------|----------|------|-------|
+| GET | `/exam-subjects/:id/marks` | admin / teacher:assigned | Entry grid: students × current marks; paginated for large sections. |
+| PUT | `/exam-subjects/:id/marks` | admin / teacher:assigned ＋audit | Bulk upsert `[{ studentId, marksObtained?, isAbsent? }]`; validates `≤ max_marks`; rejected if locked; `version` checked. |
+| PATCH | `/marks/:id` | admin / teacher:assigned ＋audit | Single edit with before/after audit. |
+| GET | `/students/:id/results` | admin / teacher:assigned / parent:linked+published | **Published only** for parents; includes per-subject marks, %, grade, overall. |
+| GET | `/grading-systems` | admin | School's systems + rules. |
+| POST | `/grading-systems` | admin ＋audit | `{ name, rules: [{ min, max, grade, gradePoint? }] }`; bands validated non-overlapping. |
+| PATCH | `/grading-systems/:id` | admin ＋audit | Defended against edits after results published on it (`409` unless new version created). |
+
+## /report-cards — Report Cards
+
+| Method | Endpoint | Auth | Notes |
+|--------|----------|------|-------|
+| POST | `/exams/:id/report-cards/generate` | admin ＋audit | Queued generation of snapshots (marks + grade + attendance %) for the class; idempotent per `(exam, student)`. |
+| GET | `/exams/:id/report-cards` | admin / teacher:assigned | List with `status`; paginated. |
+| GET | `/students/:id/report-cards` | admin / teacher:assigned / parent:linked+published | Published only for parents. |
+| GET | `/report-cards/:id` | admin / teacher:assigned / parent:linked+published | JSON payload (branding + student + marks + grades + attendance + remarks). |
+| GET | `/report-cards/:id/pdf` | admin / teacher:assigned / parent:linked+published | Redirects to short-lived **signed URL** of the branded PDF (never a public URL). |
+
+## /timetable — Timetable
+
+| Method | Endpoint | Auth | Notes |
+|--------|----------|------|-------|
+| GET | `/timetable/sections/:sectionId` | admin / teacher:assigned / parent:linked | Weekly grid `?academicYearId`. |
+| PUT | `/timetable/sections/:sectionId` | admin ＋audit | Replace week's slots; teacher-conflict guard (`409` on double-booking). |
+| GET | `/timetable/teachers/:teacherId` | admin / self(teacher) | Teacher's weekly grid across sections. |
+| GET | `/timetable/me` | teacher / parent:linked | Caller-scoped: teacher's own grid / linked children's grids. |
+
+## /homework — Homework
+
+| Method | Endpoint | Auth | Notes |
+|--------|----------|------|-------|
+| GET | `/homework` | admin / teacher:assigned / parent:linked | `?sectionId&subjectId&from&dueBefore`; auto-scoped to caller's sections/children. |
+| POST | `/homework` | admin / teacher:assigned ＋audit | `{ sectionId, subjectId, title, description, dueDate }` + optional attachment ids; queues parent notifications. |
+| GET | `/homework/:id` | admin / teacher:assigned / parent:linked | Includes attachment metadata. |
+| PATCH | `/homework/:id` | author-teacher / admin ＋audit | Edit window policy: teachers edit own until due date; admins always (audited). |
+| DELETE | `/homework/:id` | author-teacher / admin ＋audit | Soft-delete (parents keep inbox copy marked withdrawn). |
+| POST | `/homework/:id/attachments` | author-teacher / admin | Validated upload → `homework_attachments`. |
+
+## /notices — Notices
+
+| Method | Endpoint | Auth | Notes |
+|--------|----------|------|-------|
+| GET | `/notices` | session | Feed auto-filtered: school-wide + caller's classes/sections; `?category`. |
+| POST | `/notices` | admin (+ teacher:assigned for CLASS scope, policy-flagged) ＋audit | `{ title, body, category, audience: {type, classId?, sectionId?}, expiresAt? }`; queues notifications. |
+| GET | `/notices/:id` | session (in-audience) | 404 outside audience. |
+| PATCH | `/notices/:id` | author / admin ＋audit | |
+| DELETE | `/notices/:id` | author / admin ＋audit | Soft-delete; inbox copies marked withdrawn. |
+
+## /notifications — Notifications (internal)
+
+| Method | Endpoint | Auth | Notes |
+|--------|----------|------|-------|
+| GET | `/notifications` | session | Own inbox; `?unreadOnly&type&page`. |
+| GET | `/notifications/unread-count` | session | Badge number. |
+| POST | `/notifications/:id/read` | self | Idempotent mark-read. |
+| POST | `/notifications/read-all` | self | |
+| GET | `/notifications/preferences` | self | Non-critical opt-outs. |
+| PATCH | `/notifications/preferences` | self | Attendance/result categories mandatory (reject opt-out). |
+
+## /fees — Fee Tracking (records only, NO processing)
+
+> No endpoint accepts card/UPI/wallet data, initiates transfers, or issues
+> refunds. All amounts are staff-recorded receipts; corrections are new
+> superseding records.
+
+| Method | Endpoint | Auth | Notes |
+|--------|----------|------|-------|
+| GET | `/fee-structures` | admin / parent:linked | `?academicYearId&classId`; parents see structures assigned to linked children. |
+| POST | `/fee-structures` | admin ＋audit | `{ name, academicYearId, classId?, dueDate, components: [{ name, amount }] }`. |
+| PATCH | `/fee-structures/:id` | admin ＋audit | Blocked if assignments have verified records (`409`; create new structure instead). |
+| POST | `/fee-structures/:id/assign` | admin ＋audit | `{ studentIds[], totalAmount?, dueDate? }` bulk assign (concession via per-student total snapshot). |
+| GET | `/students/:id/fee-summary` | admin / parent:linked | `{ total, paid (verified), due, dueDate, status }` from `student_fee_balances` view. |
+| GET | `/students/:id/fee-history` | admin / parent:linked | Verified + pending records timeline with receipt links. |
+| POST | `/fee-assignments/:id/records` | admin ＋audit | `{ amount, paidOn, mode, referenceNo?, receiptDocumentId? }` — staff-recorded receipt. |
+| POST | `/fee-payment-records/:id/verify` | admin (maker≠checker) ＋audit | Second-person verification; void path requires reason. |
+| POST | `/fee-payment-records/:id/void` | admin ＋audit | `{ reason }`; record retained with `is_voided=true` (never hard-deleted). |
+| GET | `/fees/defaulters` | admin | `?dueBefore&classId&page` — outstanding balances list. Paginated. |
+
+## /documents — File metadata & access
+
+| Method | Endpoint | Auth | Notes |
+|--------|----------|------|-------|
+| POST | `/documents/upload-url` | session (writer roles) | Returns direct-to-Storage signed upload URL after mime/size pre-validation. |
+| POST | `/documents/confirm` | session (writer roles) | Registers `documents` row post-upload (checksum-verified). |
+| GET | `/documents/:id` | owner-record permission | Returns short-lived **signed download URL** after RBAC + tenant/link check. No public passthrough. |
+| DELETE | `/documents/:id` | admin ＋audit | Soft-delete; janitor purges Storage after retention (fee receipts immutable once verified — `409`). |
+
+## Error & status codes (summary)
+
+`200` read/update · `201` create · `204` unlink/mark-read where no body ·
+`400` malformed · `401` unauthenticated/inactive · `403` forbidden (same-school
+role failure) · `404` not found **or cross-tenant** · `409` conflict
+(duplicate admission no, locked marks, double-booked teacher, immutable fee
+structure) · `422` Zod validation · `429` rate-limited · `500` internal
+(envelope only, details server-logged).
