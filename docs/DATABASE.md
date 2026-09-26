@@ -295,14 +295,29 @@ NOT NULL` — a teacher cannot hold two sections in the same year/day/period.
 **Tenant triggers:** section/subject/teacher/year cross-school references
 rejected; `school_id` immutable. **RLS:** members read; admin writes.
 
-## 21. homework (+ homework_attachments)
+## 21. homework (+ homework_attachments) — ✅ implemented (Phase 9)
 
-**`homework`:** `id`, `school_id`, `section_id → sections`, `subject_id → subjects`,
-`teacher_id → teachers`, `title`, `description`, `assigned_on DATE`, `due_date DATE`,
-timestamps. **Index:** `(school_id, section_id, due_date)` (parent "due this week" feed).
-**`homework_attachments`:** `homework_id → homework ON DELETE CASCADE`,
-`document_id → documents`, PK `(homework_id, document_id)`.
-Parent visibility: homework for linked child's section only (join through `student_parents`).
+**`homework`:** per section+subject+creator with due dates.
+`id`, `school_id`, `academic_year_id → academic_years`, `section_id → sections
+ON DELETE CASCADE`, `subject_id → subjects`, `teacher_id → teachers` (creator/
+author), `title TEXT CHECK (1–200)`, `description TEXT CHECK (1–5000)`,
+`assigned_on DATE DEFAULT CURRENT_DATE`, `due_date DATE`,
+`is_active BOOL DEFAULT true` (soft-delete — history preserved; the draft's
+"status" field is realized as this flag), timestamps.
+**Constraint:** `CHECK (due_date >= assigned_on)` (DB-enforced).
+**Indexes:** `(school_id, section_id, due_date DESC)`, `(school_id, teacher_id)`.
+**`homework_attachments`:** own storage metadata (the full documents registry
+lands later). `id`, `school_id`, `homework_id → homework ON DELETE CASCADE`,
+`bucket TEXT`, `path TEXT` (tenant-prefixed, private
+`homework-attachments` bucket), `original_name`, `mime`, `bytes INT CHECK (> 0)`,
+`uploaded_by → users`, timestamps. **Unique:** `(bucket, path)`.
+**Index:** `(homework_id)`, `(school_id)`.
+**Tenant triggers:** homework→section/subject/teacher/year and attachments→
+homework cross-school references rejected; `school_id` immutable.
+**RLS:** admins full; teachers assigned sections (subject-level creation
+check is service-enforced); parents linked children's sections (read-only,
+attachment downloads via signed URLs); storage RLS: members read own-school
+prefix; admins + teachers write.
 
 ## 22. notices + notice_audience
 

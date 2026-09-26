@@ -1,0 +1,79 @@
+-- SIMPLEIN SCHOOL ERP · Phase 9 RLS verification (LIVE DATABASE ONLY).
+-- Run against a staging Supabase project AFTER applying migration 0009, as
+-- authenticated users of two schools. No local Postgres tooling exists in
+-- this environment, so these checks have NOT been executed here — the
+-- equivalent server-boundary logic IS unit-tested in
+-- lib/services/homework.test.ts (19 tests, passing).
+--
+-- Setup: school A with admin(A); teacher T (class teacher of sec7a) + T2
+-- (Math assignee in sec7a only, NOT class teacher); parent P (linked to
+-- student s1 in sec7a via student_parents, NOT to s2 in sec7b); school B with
+-- an equivalent set. Authenticate each block with that JWT.
+
+-- A. Tenant isolation — School A homework: A→A allowed, A→B denied -------------
+-- As admin(A):
+-- SELECT id, section_id, title FROM public.homework;
+--   -- expect: only school-A homework
+-- SELECT * FROM public.homework WHERE id = '<school-B-homework-id>'; -- expect: 0 rows
+-- SELECT id FROM public.homework_attachments;  -- expect: only school-A rows
+-- UPDATE public.homework SET title = 'x' WHERE id = '<school-B-homework-id>';
+--   -- expect: 0 rows affected
+
+-- B. Teacher scope (assigned sec7a; T = class teacher → all subjects) ---------------
+-- As teacher T (school A):
+-- SELECT id, section_id FROM public.homework;
+--   -- expect: RLS exposes same-school rows; the SERVICE scopes to sec7a only
+-- INSERT INTO public.homework (school_id, academic_year_id, section_id, subject_id, teacher_id, title, description, due_date)
+--   VALUES ('<A>', '<A-year>', '<sec7a>', '<A-subject>', '<T>', 'HW', 'Desc', CURRENT_DATE + 7);
+--   -- expect: 1 row (class teacher, allowed)
+-- INSERT ... VALUES ('<A>', '<A-year>', '<sec7b>', ...);
+--   -- expect: RLS violation (section not assigned to T)
+-- INSERT ... VALUES ('<B>', ...);
+--   -- expect: RLS violation (cross-school)
+
+-- As teacher T2 (Math assignee, not class teacher):
+-- INSERT INTO public.homework (..., section_id, subject_id, ...) VALUES (..., '<sec7a>', '<sub-m>', ...);
+--   -- expect: 1 row (assigned Math in sec7a)
+-- INSERT INTO public.homework (..., section_id, subject_id, ...) VALUES (..., '<sec7a>', '<sub-e>', ...);
+--   -- expect: RLS violation (English not assigned to T2)
+
+-- C. Parent scope (linked to s1 in sec7a only) ------------------------------------------
+-- As parent P (school A):
+-- SELECT id, section_id FROM public.homework;
+--   -- expect: RLS exposes sec7a rows only (sec7b/unlinked invisible)
+-- SELECT * FROM public.homework WHERE section_id = '<sec7b>';  -- expect: 0 rows
+-- INSERT/UPDATE/DELETE on public.homework → expect: RLS violations (read-only)
+-- SELECT id FROM public.homework_attachments;  -- expect: sec7a attachments only
+
+-- D. Storage (private homework-attachments bucket) ---------------------------------------
+-- As admin/teacher: upload under schools/<A>/homework/<hw-id>/ → ALLOWED.
+-- As parent P: signed-URL download of sec7a attachment → ALLOWED.
+-- Any user: direct public URL → does not exist (bucket private; signed only).
+-- As admin(B): school-A attachment paths → 0 objects.
+
+-- E. Data integrity (as admin A; triggers must RAISE) --------------------------------------
+-- INSERT INTO public.homework (school_id, academic_year_id, section_id, subject_id, teacher_id, title, description, due_date)
+--   VALUES ('<A>', '<A-year>', '<school-B-section>', '<A-subject>', '<T>', 'X', 'X', CURRENT_DATE);
+--   -- expect: cross-tenant reference exception (section)
+-- INSERT ... VALUES ('<A>', '<A-year>', '<sec7a>', '<school-B-subject>', ...);
+--   -- expect: cross-tenant reference exception (subject)
+-- INSERT ... VALUES ('<A>', '<A-year>', '<sec7a>', '<A-subject>', '<school-B-teacher>', ...);
+--   -- expect: cross-tenant reference exception (teacher)
+-- INSERT INTO public.homework (..., assigned_on, due_date) VALUES (..., '2026-10-05', '2026-10-01');
+--   -- expect: CHECK violation (due_date >= assigned_on)
+-- INSERT INTO public.homework (..., title) VALUES (..., '');
+--   -- expect: CHECK violation (title length)
+-- INSERT INTO public.homework_attachments (school_id, homework_id, bucket, path, original_name, mime, bytes)
+--   VALUES ('<A>', '<school-B-homework>', 'homework-attachments', 'schools/<A>/x.pdf', 'x.pdf', 'application/pdf', 100);
+--   -- expect: cross-tenant reference exception (homework)
+-- INSERT INTO public.homework_attachments (..., bytes) VALUES (..., 0);
+--   -- expect: CHECK violation (bytes > 0)
+-- UPDATE public.homework SET school_id = '<B>' WHERE id = '<A-hw>';
+--   -- expect: school_id is immutable
+
+-- F. Modification authorization -------------------------------------------------------------
+-- As teacher T: UPDATE/DELETE own sec7a homework → 1 row (ALLOWED); other
+--   teachers' homework → service 404 (authorship boundary).
+-- As parent P: any INSERT/UPDATE/DELETE → RLS violations.
+-- As admin(A): INSERT/UPDATE/DELETE own-school homework → 1 row (ALLOWED).
+-- As admin(B): UPDATE school-A rows → 0 rows (DENIED).

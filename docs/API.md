@@ -217,16 +217,17 @@ Conflict rules: section overlap blocked by `UNIQUE(section, day, period)`;
 teacher double-booking by a service pre-check + partial
 `UNIQUE(year, teacher, day, period)`; periods are fully configurable per school.
 
-## /homework — Homework
+## /homework — Homework — ✅ implemented (Phase 9)
 
 | Method | Endpoint | Auth | Notes |
 |--------|----------|------|-------|
-| GET | `/homework` | admin / teacher:assigned / parent:linked | `?sectionId&subjectId&from&dueBefore`; auto-scoped to caller's sections/children. |
-| POST | `/homework` | admin / teacher:assigned ＋audit | `{ sectionId, subjectId, title, description, dueDate }` + optional attachment ids; queues parent notifications. |
-| GET | `/homework/:id` | admin / teacher:assigned / parent:linked | Includes attachment metadata. |
-| PATCH | `/homework/:id` | author-teacher / admin ＋audit | Edit window policy: teachers edit own until due date; admins always (audited). |
-| DELETE | `/homework/:id` | author-teacher / admin ＋audit | Soft-delete (parents keep inbox copy marked withdrawn). |
-| POST | `/homework/:id/attachments` | author-teacher / admin | Validated upload → `homework_attachments`. |
+| GET | `/homework` | admin / teacher:assigned / parent:linked | `?sectionId&subjectId&dueFrom&dueBefore&includeInactive&page&limit`; auto-scoped to caller's sections/children; includes attachment metadata. |
+| POST | `/homework/sections/:sectionId` | admin / teacher:assigned-subject ＋audit | `{ subjectId, title, description, assignedOn?, dueDate }`; teacher scope = class teacher (all subjects) or subject assignee; 409 invalid dates; 404 cross-tenant. Audited. |
+| GET | `/homework/:id` | admin / teacher:assigned / parent:linked | Includes attachments. 404 unless authorized. |
+| PATCH | `/homework/:id` | author-teacher / admin ＋audit | Title/description/dates; merged date-range validated (409); teachers edit/delete only their OWN homework (authorship boundary). |
+| DELETE | `/homework/:id` | author-teacher / admin ＋audit | SOFT-delete (`is_active=false`, history preserved, restorable by admin). |
+| POST | `/homework/:id/attachments` | author-teacher / admin ＋audit | Multipart `{ file }`: ≤10 MB, PDF/images/Office (macro-enabled blocked); stored privately (tenant-prefixed path); orphan cleaned on failure. |
+| GET | `/homework/:id/attachments/:attachmentId` | admin / teacher:assigned / parent:linked | Short-lived **signed URL** (never a public URL). |
 
 ## /notices — Notices
 

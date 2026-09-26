@@ -427,7 +427,8 @@ attendance happy paths. Tenant/RBAC suites block merges on failure.
 5. Exams + exam schedules. ✅ done (Phase 5).
 6. Marks + grades. ✅ done (Phase 6).
 7. Report cards + PDF. ✅ done (Phase 7).
-8. Timetable. ✅ done (Phase 8). Fee tracking + documents hardening + audit coverage pass: next.
+8. Timetable. ✅ done (Phase 8).
+9. Homework + attachments. ✅ done (Phase 9). Fee tracking + documents hardening + audit coverage pass: next.
 8. Dashboard shells per role (child selector, "My Classes"), pagination +
    performance pass, OpenAPI generation, pilot readiness (backups, monitoring).
 
@@ -634,7 +635,36 @@ Explicitly deferred: payments, SMS/WhatsApp, student dashboard, substitution.
   weekly views; parent child selector). Functional, consistent with the
   existing design system.
 
-## 23. Important architectural decisions (log)
+## 23. Phase 9: homework (implemented)
+
+- **Model:** `homework` per section+subject+creator with due dates
+  (`CHECK due_date >= assigned_on` at the DB; soft-delete via `is_active` —
+  history preserved, restorable by admins) + `homework_attachments` holding
+  their own storage metadata (the full documents registry lands later).
+- **Attachment storage:** private `homework-attachments` bucket, tenant-
+  prefixed paths (`schools/{school_id}/homework/{homework_id}/…`); storage RLS
+  = members read own-school prefix, admins + teachers write; downloads only
+  via short-lived signed URLs after the same scope check as the homework read.
+  Upload validation: ≤10 MB, PDF/images/Office allowlist, macro-enabled and
+  executable formats blocked; orphan files cleaned on failed saves.
+- **Authorization:** teachers create ONLY for authorized sections (existing
+  scope helpers) and subjects (class teacher → all subjects of the section;
+  subject assignee → their subject; otherwise 404) and edit/delete ONLY their
+  OWN homework (authorship boundary, not section-level); admin full within
+  own school; parent read-only, linked children's sections only (404
+  otherwise). No client-supplied school/teacher/parent ids trusted.
+- **Tenant safety:** tenant triggers reject cross-school section/subject/
+  teacher/year/homework references; `school_id` immutable; cross-tenant ids
+  → 404 before any write.
+- **Audit:** homework created/updated/deleted/restored + attachment adds —
+  one append-only row per mutation with the session actor/school.
+- **UI:** /admin/homework (filters + create/edit/delete/restore +
+  attachments), /teacher/homework (section selector → own homework +
+  attachments), /parent/homework (child selector → child's section homework
+  + secure attachment links). Functional, consistent with the existing
+  design system.
+
+## 24. Important architectural decisions (log)
 
 | # | Decision | Why |
 |---|----------|-----|
@@ -644,6 +674,8 @@ Explicitly deferred: payments, SMS/WhatsApp, student dashboard, substitution.
 | AD-4 | Attendance session/record split | Correct grain for daily class attendance, % views, and edits |
 | AD-22 | pdf-lib templating for report-card PDFs | No headless browser; deterministic; Vercel Node runtime; logo embedding deferred to documents module |
 | AD-23 | Section × day × period slots; DB-enforced overlap + teacher-clash guards | Conflicts prevented at the DB (partial unique index), not just app code; periods configurable |
+| AD-24 | Homework authorship boundary (not section-level) for edits/deletes | A teacher never touches another teacher's homework, even in the same section |
+| AD-25 | homework_attachments own their storage metadata | Documents registry lands later without re-modeling attachments |
 | AD-19 | Lock/publish states on exam_subjects; publish = explicit + audited | Teacher edits die at lock; parents see published only — enforced in service AND RLS |
 | AD-20 | Grade = pure function over school-defined bands; no hard-coded letters | Configurable per school; CGPA-extensible; one tested implementation |
 | AD-21 | Absent subjects: 0 obtained, full max (counts against) | Consistent with the attendance absence philosophy; documented rule |
