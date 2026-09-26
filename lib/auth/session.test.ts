@@ -51,6 +51,7 @@ function schoolRow(overrides: Partial<SchoolRow> = {}): SchoolRow {
     slug: "school-a",
     timezone: "Asia/Kolkata",
     logo_path: null,
+    primary_color: null,
     is_active: true,
     ...overrides,
   };

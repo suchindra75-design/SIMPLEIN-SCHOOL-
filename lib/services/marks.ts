@@ -430,13 +430,20 @@ export function calculateResult(
 ): Omit<StudentResultDto, "published"> {
   // Documented rule: absent subjects contribute 0 to the total but their full
   // max to maxTotal (absence counts against — consistent with attendance).
+  // When NO marks exist at all (nothing assessed), percentage/grade are null
+  // — "not yet assessed", never a misleading 0%.
+  const hasAnyMarks = subjectRows.some(
+    (s) => !s.isAbsent && s.marksObtained !== null,
+  );
   const totalObtained = subjectRows.reduce(
     (sum, s) => sum + (s.isAbsent || s.marksObtained === null ? 0 : s.marksObtained),
     0,
   );
   const maxTotal = subjectRows.reduce((sum, s) => sum + s.maxMarks, 0);
   const percentage =
-    maxTotal > 0 ? Math.round((totalObtained / maxTotal) * 10000) / 100 : null;
+    !hasAnyMarks || maxTotal === 0
+      ? null
+      : Math.round((totalObtained / maxTotal) * 10000) / 100;
   const overall = percentage === null ? { grade: null } : gradeFor(percentage, rules);
   return {
     studentId: student.id,

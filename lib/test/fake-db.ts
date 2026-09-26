@@ -23,6 +23,21 @@ export interface FakeDb {
   /** Targeted failure: fires only for the given table+op (e.g. an INSERT that
    *  violates a UNIQUE constraint later in a multi-query service call). */
   failOn: { table: string; op: RecordedCall["op"]; code: string; message: string } | null;
+  /** Minimal storage stand-in: upload/sign/remove succeed; uploads recorded. */
+  storage: {
+    from(bucket: string): {
+      upload(
+        path: string,
+        bytes: unknown,
+        opts?: { contentType?: string; upsert?: boolean },
+      ): Promise<{ data: { path: string } | null; error: null }>;
+      createSignedUrl(
+        path: string,
+        expires: number,
+      ): Promise<{ data: { signedUrl: string } | null; error: null }>;
+      remove(paths: string[]): Promise<{ error: null }>;
+    };
+  };
   callsTo(table: string, op?: RecordedCall["op"]): RecordedCall[];
 }
 
@@ -255,6 +270,40 @@ export function createFakeDb(seed: Record<string, Row[]> = {}): FakeDb {
     calls: [],
     failNext: null,
     failOn: null,
+    storage: {
+      from(bucket: string) {
+        return {
+          async upload(
+            path: string,
+            _bytes: unknown,
+            _opts?: { contentType?: string; upsert?: boolean },
+          ) {
+            db.calls.push({
+              table: `storage:${bucket}`,
+              op: "insert",
+              filters: [],
+              payload: { path },
+            });
+            return { data: { path }, error: null };
+          },
+          async createSignedUrl(path: string, _expires: number) {
+            return {
+              data: { signedUrl: `https://signed.test/${bucket}/${path}` },
+              error: null,
+            };
+          },
+          async remove(paths: string[]) {
+            db.calls.push({
+              table: `storage:${bucket}`,
+              op: "delete",
+              filters: [],
+              payload: { paths },
+            });
+            return { error: null };
+          },
+        };
+      },
+    },
     from(table: string) {
       return new FakeQuery(db, table);
     },

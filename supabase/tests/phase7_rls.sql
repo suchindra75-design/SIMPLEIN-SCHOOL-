@@ -1,0 +1,61 @@
+-- SIMPLEIN SCHOOL ERP · Phase 7 RLS verification (LIVE DATABASE ONLY).
+-- Run against a staging Supabase project AFTER applying migration 0007, as
+-- authenticated users of two schools. No local Postgres tooling exists in
+-- this environment, so these checks have NOT been executed here — the
+-- equivalent server-boundary logic IS unit-tested in
+-- lib/services/report-cards/report-cards.test.ts (15 tests, passing).
+--
+-- Setup: school A with admin(A); teacher T (class teacher of sec7a, class c7);
+-- parent P (linked to student s1 in class c7 via student_parents, NOT to s2);
+-- school B with an equivalent set. Authenticate each block with that JWT.
+
+-- A. Tenant isolation — School A report cards: A→A allowed, A→B denied -------
+-- As admin(A):
+-- SELECT id, exam_id, student_id, status FROM public.report_cards;
+--   -- expect: only school-A snapshots
+-- SELECT * FROM public.report_cards WHERE id = '<school-B-rc-id>'; -- expect: 0 rows
+-- UPDATE public.report_cards SET remarks = 'x' WHERE id = '<school-B-rc-id>';
+--   -- expect: 0 rows affected
+
+-- B. Teacher scope (assigned sec7a only; student-level) ---------------------------
+-- As teacher T (school A):
+-- SELECT id, student_id FROM public.report_cards;
+--   -- expect: snapshots of students in sec7a ONLY (not sec7b)
+-- SELECT * FROM public.report_cards WHERE student_id = '<s2-in-sec7b>';
+--   -- expect: 0 rows
+-- INSERT INTO public.report_cards (school_id, exam_id, student_id)
+--   VALUES ('<A>', '<A-exam>', '<s1>');  -- expect: RLS violation (admin-only writes)
+
+-- C. Parent scope (linked to s1; PUBLISHED snapshots only) --------------------------
+-- As parent P (school A):
+-- SELECT id, student_id, status FROM public.report_cards;
+--   -- expect: s1's snapshots with status='PUBLISHED' ONLY
+-- SELECT * FROM public.report_cards WHERE student_id = '<s2>';   -- expect: 0 rows
+-- SELECT * FROM public.report_cards
+--   WHERE student_id = '<s1>' AND status = 'DRAFT';              -- expect: 0 rows
+-- INSERT/UPDATE/DELETE on public.report_cards → expect: RLS violation (read-only)
+
+-- D. Storage (private report-cards bucket) --------------------------------------------
+-- As admin(A): list objects under schools/<A>/report-cards/ → own-school PDFs only.
+-- As teacher/parent P/T: signed-URL download of an own-school PDF → ALLOWED.
+-- Any user: direct public URL → does not exist (bucket private; signed only).
+-- As admin(B): school-A PDF paths → 0 objects (policy filters to own school).
+
+-- E. Data integrity (as admin A; triggers must RAISE) ---------------------------------
+-- INSERT INTO public.report_cards (school_id, exam_id, student_id)
+--   VALUES ('<A>', '<school-B-exam>', '<s1>');   -- cross-tenant reference (exam)
+-- INSERT INTO public.report_cards (school_id, exam_id, student_id)
+--   VALUES ('<A>', '<A-exam>', '<school-B-student>');  -- cross-tenant (student)
+-- INSERT INTO public.report_cards (school_id, exam_id, student_id, grading_system_id)
+--   VALUES ('<A>', '<A-exam>', '<s1>', '<school-B-system>');  -- cross-tenant (grading)
+-- INSERT INTO public.report_cards (school_id, exam_id, student_id)
+--   VALUES ('<A>', '<A-exam>', '<s1>');  -- twice → duplicate key (UNIQUE exam+student)
+-- INSERT INTO public.report_cards (..., status) VALUES (..., 'FINAL');
+--   -- expect: CHECK violation (status IN ('DRAFT','PUBLISHED'))
+-- UPDATE public.report_cards SET school_id = '<B>' WHERE id = '<A-rc>';
+--   -- expect: school_id is immutable
+
+-- F. Modification authorization ---------------------------------------------------------
+-- As teacher T / parent P: any INSERT/UPDATE/DELETE on report_cards → RLS violations.
+-- As admin(A): INSERT/UPDATE own-school snapshots → 1 row (ALLOWED).
+-- As admin(B): UPDATE school-A rows → 0 rows (DENIED).

@@ -29,7 +29,7 @@ function ctx(roles: SessionContext["roles"]): SessionContext {
       name: "A",
       slug: "a",
       timezone: "Asia/Kolkata",
-      logoPath: null,
+      logoPath: null, primaryColor: null,
       isActive: true,
     },
     roles,

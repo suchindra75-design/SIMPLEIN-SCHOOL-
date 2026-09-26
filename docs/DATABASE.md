@@ -252,16 +252,28 @@ unit-tested with boundary fixtures — shared by marks entry and results (no
 duplicated logic). Boundary rule: a percentage on a shared boundary resolves
 to the HIGHER band (90 → 90–100, not 80–89.99).
 
-## 19. report_cards
+## 19. report_cards — ✅ implemented (Phase 7)
 
-**Purpose:** generated result snapshot per student per exam (immutable once published).
-Fields: `id`, `school_id`, `exam_id → exams`, `student_id → students`,
-`grading_system_id → grading_systems`, `total_obtained/max NUMERIC`,
-`percentage NUMERIC`, `cgpa NUMERIC NULL`, `overall_grade`, `attendance_percentage NUMERIC NULL`,
-`remarks`, `pdf_document_id → documents NULL`, `status (DRAFT|PUBLISHED)`,
-`published_by → users NULL`, `published_at NULL`, timestamps.
-`UNIQUE(exam_id, student_id)`. Published rows immutable (trigger rejects UPDATE
-except status-transition bookkeeping, which itself is audited).
+**Purpose:** generated result SNAPSHOT per (exam × student) — marks/grades/
+attendance totals frozen at generation. The LIVE result publish state stays
+on `exam_subjects` (§17) and is re-checked in the service; `status` here is
+the generation-time snapshot.
+Fields: `id`, `school_id`, `exam_id → exams ON DELETE CASCADE`, `student_id →
+students`, `grading_system_id → grading_systems ON DELETE SET NULL`,
+`total_obtained/max_total NUMERIC(8,2)`, `percentage NUMERIC(5,2) NULL`,
+`cgpa NUMERIC(4,2) NULL`, `overall_grade TEXT NULL`, `attendance_percentage
+NUMERIC(5,2) NULL`, `remarks TEXT NULL`, `pdf_path TEXT NULL` (private
+`report-cards` bucket, signed access only), `status (DRAFT|PUBLISHED)`,
+`published_by/published_at NULL`, `generated_by → users NULL`, timestamps.
+**Unique:** `(exam_id, student_id)` — one snapshot; regeneration updates it.
+**Indexes:** `(school_id, exam_id)`, `(school_id, student_id)`.
+**Constraints:** `CHECK status IN ('DRAFT','PUBLISHED')`; tenant triggers
+reject cross-school exam/student/grading_system references; `school_id`
+immutable.
+**RLS:** admins full (own school); teachers see snapshots of students in
+assigned sections (student-level scope, mirrored by RLS via the exam→sections
+join); parents see PUBLISHED snapshots of linked children only
+(`parent_can_access_student` + status check); writes admin-only.
 
 ## 20. timetable_slots
 

@@ -36,6 +36,7 @@ export function assertSameSchool(ctx: TenantContext, rowSchoolId: string): void 
         slug: "",
         timezone: "",
         logoPath: null,
+        primaryColor: null,
         isActive: true,
       },
       roles: ctx.roles,

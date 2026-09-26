@@ -207,3 +207,19 @@ export interface GradingSystemDto {
     remarkTemplate: string | null;
   }[];
 }
+
+export interface ReportCardDto {
+  id: string;
+  examId: string;
+  studentId: string;
+  status: string;
+  totalObtained: number;
+  maxTotal: number;
+  percentage: number | null;
+  cgpa: number | null;
+  overallGrade: string | null;
+  attendancePercentage: number | null;
+  remarks: string | null;
+  pdfPath: string | null;
+  createdAt: string;
+}

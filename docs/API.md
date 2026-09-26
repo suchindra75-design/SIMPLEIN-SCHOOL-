@@ -189,15 +189,18 @@ published only). Grades are server-side from the school's configurable
 percentage bands (CGPA-extensible via grade points); boundary percentages
 resolve to the higher band.
 
-## /report-cards — Report Cards
+## /report-cards — Report Cards — ✅ implemented (Phase 7)
 
 | Method | Endpoint | Auth | Notes |
 |--------|----------|------|-------|
-| POST | `/exams/:id/report-cards/generate` | admin ＋audit | Queued generation of snapshots (marks + grade + attendance %) for the class; idempotent per `(exam, student)`. |
-| GET | `/exams/:id/report-cards` | admin / teacher:assigned | List with `status`; paginated. |
-| GET | `/students/:id/report-cards` | admin / teacher:assigned / parent:linked+published | Published only for parents. |
-| GET | `/report-cards/:id` | admin / teacher:assigned / parent:linked+published | JSON payload (branding + student + marks + grades + attendance + remarks). |
-| GET | `/report-cards/:id/pdf` | admin / teacher:assigned / parent:linked+published | Redirects to short-lived **signed URL** of the branded PDF (never a public URL). |
+| GET | `/report-cards?examId=` | admin / teacher | Snapshots generated for an exam, with student names; teacher → students in assigned sections only. |
+| GET | `/report-cards/students/:studentId?examId=` | admin / teacher:assigned-student / parent:linked | JSON payload (preview): school branding + student info + subject marks + totals + percentage + attendance + remarks + status. Reuses the Phase 6 result calc + Phase 4 attendance summary — no duplicated math. Parents: PUBLISHED only (404 when unpublished/unlinked). |
+| POST | `/report-cards/students/:studentId` | admin ＋audit | Generate (or regenerate) the snapshot + PDF: `{ examId }`. Status = PUBLISHED when all subjects published, else DRAFT. PDF stored privately (tenant-prefixed path); orphan PDF cleaned on failure. |
+| GET | `/report-cards/:id/pdf` | admin / teacher:assigned-student / parent:linked | Returns a short-lived **signed URL** of the generated PDF (never a public URL). Parents: PUBLISHED only. |
+| PATCH | `/report-cards/:id` | admin ＋audit | Update remarks on the snapshot. |
+
+Marks/grades/attendance calculations are reused from their services — the
+report-card layer owns only snapshotting, PDF rendering, and access.
 
 ## /timetable — Timetable
 

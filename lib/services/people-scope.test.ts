@@ -54,7 +54,7 @@ function baseCtx(
       name: "School A",
       slug: "a",
       timezone: "Asia/Kolkata",
-      logoPath: null,
+      logoPath: null, primaryColor: null,
       isActive: true,
     },
     roles,

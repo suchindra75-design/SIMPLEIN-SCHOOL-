@@ -425,8 +425,9 @@ attendance happy paths. Tenant/RBAC suites block merges on failure.
 3. Students/parents/teachers + classes/sections/subjects + Excel import. ✅ done (Phase 3).
 4. Attendance. ✅ done (Phase 4).
 5. Exams + exam schedules. ✅ done (Phase 5).
-6. Marks + grades. ✅ done (Phase 6). Timetable + fee tracking + documents hardening + audit coverage pass: next.
-7. Report-card PDF + dashboard shells per role (child selector, "My Classes"), pagination +
+6. Marks + grades. ✅ done (Phase 6).
+7. Report cards + PDF. ✅ done (Phase 7). Timetable + fee tracking + documents hardening + audit coverage pass: next.
+8. Dashboard shells per role (child selector, "My Classes"), pagination +
    performance pass, OpenAPI generation, pilot readiness (backups, monitoring).
 
 Explicitly deferred: payments, SMS/WhatsApp, student dashboard, substitution.
@@ -575,7 +576,40 @@ Explicitly deferred: payments, SMS/WhatsApp, student dashboard, substitution.
   state), /parent/results (child + exam selector → published results).
   Functional, consistent with the existing design system.
 
-## 21. Important architectural decisions (log)
+## 21. Phase 7: report cards (implemented)
+
+- **Report-card layer:** `report_cards` is a generated SNAPSHOT per
+  (exam × student) — totals/percentage/grade/attendance frozen at generation
+  (UNIQUE exam+student; regeneration updates). The build path REUSES the
+  Phase 6 result calculation (`getStudentResult`) and Phase 4 attendance
+  summary (`getStudentSummary`) — ZERO duplicated math; this layer owns only
+  snapshotting, PDF rendering, remarks, and access.
+- **PDF approach (decision):** **pdf-lib templating** — pure JS, no headless
+  browser, runs in the Vercel Node runtime, deterministic output. A4 portrait
+  with StandardFonts (Helvetica — no external font files shipped). School
+  branding = name + primary color from `schools` (rendered in the PDF and the
+  on-screen view); the logo IMAGE is not embedded in V1 (`schools.logo_path`
+  records a storage path without a bucket reference — embedding lands with
+  the documents module), documented as deferred. Students/teachers also print
+  via the browser from the on-screen view.
+- **PDF security:** stored in the private `report-cards` bucket under
+  `schools/{school_id}/report-cards/{exam}/` (tenant-prefixed); storage RLS
+  mirrors the DB (members read own-school prefix; admins write); downloads
+  happen only via short-lived signed URLs after the same authorization as the
+  owning snapshot; orphan PDFs are cleaned on failed snapshot saves. Never
+  public URLs, never the service role.
+- **Access:** admin own school (generate/preview/download/remarks); teacher
+  reads report cards of students in assigned sections only (student-level
+  scope, enforced in the service list/detail paths AND RLS via the
+  exam→sections join); parent PUBLISHED snapshots of linked children only
+  (live publish state re-checked via `getStudentResult`; RLS adds the
+  status + link check). No cross-school access anywhere.
+- **UI:** /admin/report-cards (exam selector → generated cards + preview +
+  print/PDF), /teacher/report-cards (authorized students → preview + print),
+  /parent/report-cards (child + exam selector → published report cards).
+  Functional, consistent with the existing design system.
+
+## 22. Important architectural decisions (log)
 
 | # | Decision | Why |
 |---|----------|-----|
@@ -583,6 +617,7 @@ Explicitly deferred: payments, SMS/WhatsApp, student dashboard, substitution.
 | AD-2 | Supabase Auth + cookies, no custom crypto | Avoids inventing password/session security |
 | AD-3 | `fee_payment_records` naming; no `transactions` vocabulary | Makes "record vs processing" unambiguous in code and schema |
 | AD-4 | Attendance session/record split | Correct grain for daily class attendance, % views, and edits |
+| AD-22 | pdf-lib templating for report-card PDFs | No headless browser; deterministic; Vercel Node runtime; logo embedding deferred to documents module |
 | AD-19 | Lock/publish states on exam_subjects; publish = explicit + audited | Teacher edits die at lock; parents see published only — enforced in service AND RLS |
 | AD-20 | Grade = pure function over school-defined bands; no hard-coded letters | Configurable per school; CGPA-extensible; one tested implementation |
 | AD-21 | Absent subjects: 0 obtained, full max (counts against) | Consistent with the attendance absence philosophy; documented rule |

@@ -39,6 +39,7 @@ export interface School {
   slug: string;
   timezone: string;
   logoPath: string | null;
+  primaryColor: string | null;
   isActive: boolean;
 }
 
@@ -67,6 +68,7 @@ export interface SchoolRow {
   slug: string;
   timezone: string;
   logo_path: string | null;
+  primary_color: string | null;
   is_active: boolean;
 }
 
@@ -160,6 +162,7 @@ export function resolveSessionContext(
       slug: school.slug,
       timezone: school.timezone,
       logoPath: school.logo_path,
+      primaryColor: school.primary_color,
       isActive: school.is_active,
     },
     roles,
@@ -256,7 +259,7 @@ function adaptSupabase(client: SupabaseServerClient): SessionDataClient {
     async getSchool(schoolId: string) {
       const { data, error } = await client
         .from("schools")
-        .select("id, name, slug, timezone, logo_path, is_active")
+        .select("id, name, slug, timezone, logo_path, primary_color, is_active")
         .eq("id", schoolId)
         .maybeSingle();
       if (error !== null) throw error;
