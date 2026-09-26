@@ -46,6 +46,11 @@ import {
   setResultsPublished,
 } from "@/lib/services/marks";
 import {
+  createTimetableSlot,
+  deleteTimetableSlot,
+  updateTimetableSlot,
+} from "@/lib/services/timetable";
+import {
   createStudent,
   updateStudent,
 } from "@/lib/services/students";
@@ -822,6 +827,72 @@ export async function setResultsPublishedAction(
     const db = await createServerSupabaseClient();
     await setResultsPublished(db, ctx, examSubjectId, published);
     revalidatePath("/admin/marks");
+    return { success: true };
+  } catch (error) {
+    return err(error);
+  }
+}
+
+/* ------------------------------- timetable ------------------------------ */
+
+export async function createTimetableSlotAction(
+  sectionId: string,
+  _prev: ActionState,
+  form: FormData,
+): Promise<ActionState> {
+  try {
+    const ctx = await requireRole("SCHOOL_ADMIN");
+    const db = await createServerSupabaseClient();
+    const teacherRaw = str(form, "teacherId");
+    const subjectRaw = str(form, "subjectId");
+    await createTimetableSlot(db, ctx, sectionId, {
+      subjectId: subjectRaw === undefined ? null : subjectRaw,
+      teacherId: teacherRaw === undefined ? null : teacherRaw,
+      dayOfWeek: Number(str(form, "dayOfWeek") ?? 1),
+      periodIndex: Number(str(form, "periodIndex") ?? 0),
+      startsAt: str(form, "startsAt") ?? "",
+      endsAt: str(form, "endsAt") ?? "",
+      room: str(form, "room") ?? null,
+    });
+    revalidatePath(`/admin/timetable?sectionId=${sectionId}`);
+    return { success: true };
+  } catch (error) {
+    return err(error);
+  }
+}
+
+export async function updateTimetableSlotAction(
+  sectionId: string,
+  slotId: string,
+  _prev: ActionState,
+  form: FormData,
+): Promise<ActionState> {
+  try {
+    const ctx = await requireRole("SCHOOL_ADMIN");
+    const db = await createServerSupabaseClient();
+    const teacherRaw = str(form, "teacherId");
+    await updateTimetableSlot(db, ctx, slotId, {
+      teacherId: teacherRaw === undefined ? undefined : (teacherRaw || null),
+      startsAt: str(form, "startsAt"),
+      endsAt: str(form, "endsAt"),
+      room: str(form, "room"),
+    });
+    revalidatePath(`/admin/timetable?sectionId=${sectionId}`);
+    return { success: true };
+  } catch (error) {
+    return err(error);
+  }
+}
+
+export async function deleteTimetableSlotAction(
+  sectionId: string,
+  slotId: string,
+): Promise<ActionState> {
+  try {
+    const ctx = await requireRole("SCHOOL_ADMIN");
+    const db = await createServerSupabaseClient();
+    await deleteTimetableSlot(db, ctx, slotId);
+    revalidatePath(`/admin/timetable?sectionId=${sectionId}`);
     return { success: true };
   } catch (error) {
     return err(error);

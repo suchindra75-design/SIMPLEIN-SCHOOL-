@@ -223,3 +223,20 @@ export interface ReportCardDto {
   pdfPath: string | null;
   createdAt: string;
 }
+
+export interface TimetableSlotDto {
+  id: string;
+  academicYearId: string;
+  sectionId: string;
+  subjectId: string | null;
+  teacherId: string | null;
+  dayOfWeek: number;
+  periodIndex: number;
+  startsAt: string;
+  endsAt: string;
+  room: string | null;
+  subjects?: { name: string } | null;
+  teachers?: { displayName: string } | null;
+  sections?: { name: string } | null;
+  classes?: { name: string } | null;
+}

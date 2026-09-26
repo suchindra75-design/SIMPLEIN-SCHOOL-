@@ -202,14 +202,20 @@ resolve to the higher band.
 Marks/grades/attendance calculations are reused from their services — the
 report-card layer owns only snapshotting, PDF rendering, and access.
 
-## /timetable — Timetable
+## /timetable — Timetable — ✅ implemented (Phase 8)
 
 | Method | Endpoint | Auth | Notes |
 |--------|----------|------|-------|
-| GET | `/timetable/sections/:sectionId` | admin / teacher:assigned / parent:linked | Weekly grid `?academicYearId`. |
-| PUT | `/timetable/sections/:sectionId` | admin ＋audit | Replace week's slots; teacher-conflict guard (`409` on double-booking). |
-| GET | `/timetable/teachers/:teacherId` | admin / self(teacher) | Teacher's weekly grid across sections. |
-| GET | `/timetable/me` | teacher / parent:linked | Caller-scoped: teacher's own grid / linked children's grids. |
+| GET | `/timetable/sections/:sectionId` | admin / teacher:assigned / parent:linked-child-section | Weekly grid (day × period × subject/teacher/time/room). 404 unless authorized. |
+| POST | `/timetable/sections/:sectionId` | admin ＋audit | Create a slot: `{ subjectId, teacherId?, academicYearId?, dayOfWeek (1–7), periodIndex, startsAt, endsAt, room? }`. 409 on section overlap / teacher double-booking / invalid time range; 404 cross-tenant refs. |
+| PATCH | `/timetable/slots/:id` | admin ＋audit | Edit (teacher/time/room/day/period); clash check uses the slot's EFFECTIVE (merged) teacher, excluding itself (409). |
+| DELETE | `/timetable/slots/:id` | admin ＋audit | |
+| GET | `/timetable/teachers/:teacherId` | admin / self-teacher | Teacher's weekly grid across sections. 404 on cross-tenant/other teachers. |
+| GET | `/timetable/me` | teacher / parent | Caller-scoped: teacher's own entries / linked children's sections' entries. |
+
+Conflict rules: section overlap blocked by `UNIQUE(section, day, period)`;
+teacher double-booking by a service pre-check + partial
+`UNIQUE(year, teacher, day, period)`; periods are fully configurable per school.
 
 ## /homework — Homework
 

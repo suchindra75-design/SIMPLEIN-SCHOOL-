@@ -275,17 +275,25 @@ assigned sections (student-level scope, mirrored by RLS via the exam→sections
 join); parents see PUBLISHED snapshots of linked children only
 (`parent_can_access_student` + status check); writes admin-only.
 
-## 20. timetable_slots
+## 20. timetable_slots — ✅ implemented (Phase 8)
 
-**Purpose:** weekly class + teacher timetables (substitution deferred).
-Fields: `id`, `school_id`, `academic_year_id`, `section_id → sections ON DELETE CASCADE`,
-`day_of_week SMALLINT (1=Mon..7=Sun)`, `period_index INT`, `subject_id → subjects NULL`
-(NULL = non-teaching), `teacher_id → teachers NULL`, `room`, `starts_at/ends_at TIME`,
-timestamps. `UNIQUE(section_id, day_of_week, period_index)`;
-conflict guard partial index prevents double-booking a teacher
-(`UNIQUE(teacher_id, day_of_week, period_index)` scoped per year — enforced via
-unique index on `(academic_year_id, teacher_id, day_of_week, period_index)`).
-Parent/student view derives from `section_id`; teacher view from `teacher_id`.
+**Purpose:** weekly class + teacher timetables. Periods/names/times are fully
+configurable (no hard-coded school period structure); `subject_id`/`teacher_id`
+NULL = non-teaching slot.
+Fields: `id`, `school_id`, `academic_year_id → academic_years`, `section_id →
+sections ON DELETE CASCADE`, `subject_id → subjects ON DELETE SET NULL`,
+`teacher_id → teachers ON DELETE SET NULL`, `day_of_week SMALLINT (1=Mon..7=Sun)
+CHECK (1–7)`, `period_index INT CHECK (>= 0)`, `starts_at/ends_at TIME`,
+`room`, timestamps.
+**Unique:** `(section_id, day_of_week, period_index)` — section overlap
+prevented at the DB. **Teacher double-booking:** partial unique
+`(academic_year_id, teacher_id, day_of_week, period_index) WHERE teacher_id IS
+NOT NULL` — a teacher cannot hold two sections in the same year/day/period.
+**Constraint:** `CHECK (ends_at > starts_at)`.
+**Indexes:** `(school_id, section_id, day_of_week, period_index)`,
+`(school_id, teacher_id, day_of_week)`.
+**Tenant triggers:** section/subject/teacher/year cross-school references
+rejected; `school_id` immutable. **RLS:** members read; admin writes.
 
 ## 21. homework (+ homework_attachments)
 

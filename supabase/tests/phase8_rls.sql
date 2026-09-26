@@ -1,0 +1,65 @@
+-- SIMPLEIN SCHOOL ERP · Phase 8 RLS verification (LIVE DATABASE ONLY).
+-- Run against a staging Supabase project AFTER applying migration 0008, as
+-- authenticated users of two schools. No local Postgres tooling exists in
+-- this environment, so these checks have NOT been executed here — the
+-- equivalent server-boundary logic IS unit-tested in
+-- lib/services/timetable.test.ts (17 tests, passing).
+--
+-- Setup: school A with admin(A); teacher T (class teacher of sec7a) + T2
+-- (assigned sec7b); parent P (linked to student s1 in sec7a via
+-- student_parents, NOT to s2 in sec7b); school B with an equivalent set.
+-- Authenticate each block with that JWT.
+
+-- A. Tenant isolation — School A timetable: A→A allowed, A→B denied ------------
+-- As admin(A):
+-- SELECT id, section_id, day_of_week, period_index FROM public.timetable_slots;
+--   -- expect: only school-A slots
+-- SELECT * FROM public.timetable_slots WHERE id = '<school-B-slot-id>';
+--   -- expect: 0 rows
+-- UPDATE public.timetable_slots SET room = 'x' WHERE id = '<school-B-slot-id>';
+--   -- expect: 0 rows affected
+
+-- B. Teacher scope (assigned sec7a only) --------------------------------------------
+-- As teacher T (school A):
+-- SELECT id, section_id FROM public.timetable_slots;
+--   -- expect: RLS exposes same-school rows; the SERVICE scopes to sec7a only
+--   --        (verify via the app/API view, not raw SQL)
+-- INSERT INTO public.timetable_slots (school_id, academic_year_id, section_id, day_of_week, period_index, starts_at, ends_at)
+--   VALUES ('<A>', '<A-year>', '<sec7a>', 5, 0, '09:30', '10:10');
+--   -- expect: RLS violation (admin-only writes)
+-- INSERT INTO public.timetable_slots ... VALUES ('<B>', ...);
+--   -- expect: RLS violation (cross-school)
+
+-- C. Parent scope (linked to s1 in sec7a only) -----------------------------------------
+-- As parent P (school A): the SERVICE shows only sec7a's timetable (verify via
+-- the app/API view). INSERT/UPDATE/DELETE on timetable_slots → RLS violations.
+
+-- D. Conflict prevention (as admin A) ---------------------------------------------------
+-- INSERT INTO public.timetable_slots (school_id, academic_year_id, section_id, day_of_week, period_index, starts_at, ends_at)
+--   VALUES ('<A>', '<A-year>', '<sec7a>', 1, 0, '11:00', '11:40');
+--   -- twice (same section/day/period) → expect: duplicate key (UNIQUE section+day+period)
+-- INSERT INTO public.timetable_slots (school_id, academic_year_id, section_id, teacher_id, day_of_week, period_index, starts_at, ends_at)
+--   VALUES ('<A>', '<A-year>', '<sec7b>', '<T>', 1, 0, '11:00', '11:40');
+--   -- T already holds sec7a day1 p0 → expect: duplicate key (partial UNIQUE year+teacher+day+period)
+-- INSERT INTO public.timetable_slots (..., starts_at, ends_at) VALUES (..., '11:00', '10:10');
+--   -- expect: CHECK violation (ends_at > starts_at)
+-- INSERT INTO public.timetable_slots (..., day_of_week) VALUES (..., 9);
+--   -- expect: CHECK violation (day_of_week BETWEEN 1 AND 7)
+
+-- E. Data integrity (as admin A; triggers must RAISE) ------------------------------------
+-- INSERT INTO public.timetable_slots (school_id, academic_year_id, section_id, subject_id, teacher_id, day_of_week, period_index, starts_at, ends_at)
+--   VALUES ('<A>', '<A-year>', '<school-B-section>', '<A-subject>', NULL, 5, 0, '09:30', '10:10');
+--   -- expect: cross-tenant reference exception (section)
+-- INSERT ... VALUES ('<A>', '<school-B-year>', '<sec7a>', ...);
+--   -- expect: cross-tenant reference exception (academic year)
+-- INSERT ... VALUES ('<A>', '<A-year>', '<sec7a>', '<school-B-subject>', ...);
+--   -- expect: cross-tenant reference exception (subject)
+-- INSERT ... VALUES ('<A>', '<A-year>', '<sec7a>', '<A-subject>', '<school-B-teacher>', ...);
+--   -- expect: cross-tenant reference exception (teacher)
+-- UPDATE public.timetable_slots SET school_id = '<B>' WHERE id = '<A-slot>';
+--   -- expect: school_id is immutable
+
+-- F. Modification authorization -----------------------------------------------------------
+-- As teacher T / parent P: any INSERT/UPDATE/DELETE on timetable_slots → RLS violations.
+-- As admin(A): INSERT/UPDATE/DELETE own-school slots → 1 row (ALLOWED).
+-- As admin(B): UPDATE school-A rows → 0 rows (DENIED).

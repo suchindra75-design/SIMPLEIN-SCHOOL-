@@ -426,7 +426,8 @@ attendance happy paths. Tenant/RBAC suites block merges on failure.
 4. Attendance. ✅ done (Phase 4).
 5. Exams + exam schedules. ✅ done (Phase 5).
 6. Marks + grades. ✅ done (Phase 6).
-7. Report cards + PDF. ✅ done (Phase 7). Timetable + fee tracking + documents hardening + audit coverage pass: next.
+7. Report cards + PDF. ✅ done (Phase 7).
+8. Timetable. ✅ done (Phase 8). Fee tracking + documents hardening + audit coverage pass: next.
 8. Dashboard shells per role (child selector, "My Classes"), pagination +
    performance pass, OpenAPI generation, pilot readiness (backups, monitoring).
 
@@ -609,7 +610,31 @@ Explicitly deferred: payments, SMS/WhatsApp, student dashboard, substitution.
   /parent/report-cards (child + exam selector → published report cards).
   Functional, consistent with the existing design system.
 
-## 22. Important architectural decisions (log)
+## 22. Phase 8: timetable (implemented)
+
+- **Model:** `timetable_slots` — one row per section × day × period; periods,
+  names, and times are fully configurable (no hard-coded school period
+  structure); subject/teacher NULL = non-teaching slot.
+- **Conflict handling (documented):** section overlap blocked by
+  `UNIQUE(section_id, day_of_week, period_index)` (409); teacher double-
+  booking blocked by a service pre-check plus the DB partial unique index
+  `(academic_year_id, teacher_id, day_of_week, period_index) WHERE teacher_id
+  IS NOT NULL` (409); update checks evaluate the slot's EFFECTIVE (merged)
+  teacher excluding itself; time ranges validated `ends_at > starts_at` in
+  Zod, the service, and a DB CHECK.
+- **Tenant safety:** tenant triggers reject cross-school section/subject/
+  teacher/year references; `school_id` immutable; cross-tenant ids → 404
+  before any write; no client-supplied school/teacher/parent ids trusted.
+- **Authorization:** admin full management within own school (create/edit/
+  delete, audited); teacher views only their assigned sections' entries
+  (existing scope helpers; self-only for teacher timetables); parent views
+  only sections holding a linked child (404 otherwise); STUDENT dormant.
+- **UI:** /admin/timetable (class/section filter → weekly grid + entry
+  create/edit/delete), /teacher/timetable and /parent/timetable (simple
+  weekly views; parent child selector). Functional, consistent with the
+  existing design system.
+
+## 23. Important architectural decisions (log)
 
 | # | Decision | Why |
 |---|----------|-----|
@@ -618,6 +643,7 @@ Explicitly deferred: payments, SMS/WhatsApp, student dashboard, substitution.
 | AD-3 | `fee_payment_records` naming; no `transactions` vocabulary | Makes "record vs processing" unambiguous in code and schema |
 | AD-4 | Attendance session/record split | Correct grain for daily class attendance, % views, and edits |
 | AD-22 | pdf-lib templating for report-card PDFs | No headless browser; deterministic; Vercel Node runtime; logo embedding deferred to documents module |
+| AD-23 | Section × day × period slots; DB-enforced overlap + teacher-clash guards | Conflicts prevented at the DB (partial unique index), not just app code; periods configurable |
 | AD-19 | Lock/publish states on exam_subjects; publish = explicit + audited | Teacher edits die at lock; parents see published only — enforced in service AND RLS |
 | AD-20 | Grade = pure function over school-defined bands; no hard-coded letters | Configurable per school; CGPA-extensible; one tested implementation |
 | AD-21 | Absent subjects: 0 obtained, full max (counts against) | Consistent with the attendance absence philosophy; documented rule |
