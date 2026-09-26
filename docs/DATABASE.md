@@ -211,29 +211,46 @@ contains an assigned section (mirrored on subject/schedule tables via joins);
 parents see exams of linked children's classes; writes admin-only.
 Marks/results fields land in Phase 6 (this phase is configuration only).
 
-## 17. marks
+## 17. marks — ✅ implemented (Phase 6)
 
-**Purpose:** one score per student per exam-subject.
-Fields: `id`, `school_id`, `exam_subject_id → exam_subjects`,
-`student_id → students`, `marks_obtained NUMERIC`, `grade TEXT` (derived, stored for
-report snapshot), `is_absent BOOL`, `entered_by → users`, `version INT`,
-timestamps. `UNIQUE(exam_subject_id, student_id)`.
-**Constraints:** `CHECK (marks_obtained <= (SELECT max_marks …))` enforced in
-service + trigger; writes rejected when parent `exam_subjects.is_locked`;
-`version` optimistic-locking on edit. **Index:** `(school_id, exam_subject_id)`,
-`(school_id, student_id)`.
-Edits store `{before, after}` in `audit_logs.metadata`.
+**Purpose:** one score per student per exam-subject (+ result snapshot).
+Fields: `id`, `school_id`, `exam_subject_id → exam_subjects ON DELETE CASCADE`,
+`student_id → students`, `marks_obtained NUMERIC(6,2) NULL` (null when absent),
+`is_absent BOOL DEFAULT false`, `grade TEXT NULL` (server-computed snapshot
+from the school's grading rules), `entered_by → users NULL`, `updated_by →
+users NULL`, `version INT DEFAULT 1` (optimistic locking), timestamps.
+**Unique:** `(exam_subject_id, student_id)` — duplicate marks prevented.
+**Indexes:** `(school_id, exam_subject_id)`, `(school_id, student_id)`.
+**Constraints (DB-enforced):** `CHECK marks_obtained >= 0`; `CHECK (NOT
+is_absent OR marks_obtained IS NULL)`; `validate_marks_row()` trigger rejects
+marks > max_marks AND students not enrolled in the exam's class for the exam's
+academic year (enrollment model first, class pointer fallback); tenant
+triggers reject cross-school exam_subject/student references; `school_id`
+immutable.
+**Result states (on exam_subjects, Phase 6):** `is_locked BOOL DEFAULT false`
+(teacher edits rejected at RLS AND service; admin corrections/unlock only),
+`is_published BOOL DEFAULT false` (parents see published results only —
+enforced in RLS AND service). Lock/unlock/publish/unpublish are admin-only,
+audited.
 
-## 18. grading_systems + grading_rules
+## 18. grading_systems + grading_rules — ✅ implemented (Phase 6)
 
-**Purpose:** configurable per-school grading (percentage bands and/or CGPA).
-**`grading_systems`:** `id`, `school_id`, `name` (e.g. `CBSE-style`), `is_default BOOL`,
-timestamps. Partial unique `(school_id) WHERE is_default`.
-**`grading_rules`:** `id`, `school_id`, `grading_system_id → grading_systems ON DELETE CASCADE`,
-`min_percentage NUMERIC`, `max_percentage NUMERIC`, `grade TEXT`, `grade_point NUMERIC NULL`,
-`remark_template TEXT NULL`, timestamps. Non-overlapping bands enforced by trigger.
-Grade computation is a pure function (`lib/services/grades/`) — unit-tested with
-boundary fixtures — shared by marks entry preview and report cards (no duplicated logic).
+**Purpose:** configurable per-school grading — percentage bands (CGPA-
+extensible via `grade_point`). NO hard-coded letter grades anywhere.
+**`grading_systems`:** `id`, `school_id`, `name`, `is_default BOOL`,
+timestamps. **Unique:** `(school_id, name)` + partial unique
+`(school_id) WHERE is_default` (one default per school).
+**`grading_rules`:** `id`, `school_id`, `grading_system_id → grading_systems
+ON DELETE CASCADE`, `min_percentage NUMERIC(5,2) CHECK (>= 0)`,
+`max_percentage NUMERIC(5,2) CHECK (<= 100)`, `grade TEXT`, `grade_point
+NUMERIC(4,2) NULL`, `remark_template TEXT NULL`, timestamps.
+**Unique:** `(grading_system_id, grade)`. **Index:** `(grading_system_id)`.
+**Constraints:** `validate_grading_band()` trigger rejects overlapping bands
+at the DB; the `validateGradingRules` engine re-checks in the service.
+Grade computation is a pure function (`lib/services/grades/calc.ts`) —
+unit-tested with boundary fixtures — shared by marks entry and results (no
+duplicated logic). Boundary rule: a percentage on a shared boundary resolves
+to the HIGHER band (90 → 90–100, not 80–89.99).
 
 ## 19. report_cards
 

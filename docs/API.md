@@ -166,17 +166,28 @@ derives the date from its own timezone.
 
 Marks entry/results are Phase 6 — this phase is configuration + schedules only.
 
-## /marks · /grades — Marks / Grades
+## /marks · /grades · /results — Marks / Grades — ✅ implemented (Phase 6)
 
 | Method | Endpoint | Auth | Notes |
 |--------|----------|------|-------|
-| GET | `/exam-subjects/:id/marks` | admin / teacher:assigned | Entry grid: students × current marks; paginated for large sections. |
-| PUT | `/exam-subjects/:id/marks` | admin / teacher:assigned ＋audit | Bulk upsert `[{ studentId, marksObtained?, isAbsent? }]`; validates `≤ max_marks`; rejected if locked; `version` checked. |
-| PATCH | `/marks/:id` | admin / teacher:assigned ＋audit | Single edit with before/after audit. |
-| GET | `/students/:id/results` | admin / teacher:assigned / parent:linked+published | **Published only** for parents; includes per-subject marks, %, grade, overall. |
-| GET | `/grading-systems` | admin | School's systems + rules. |
-| POST | `/grading-systems` | admin ＋audit | `{ name, rules: [{ min, max, grade, gradePoint? }] }`; bands validated non-overlapping. |
-| PATCH | `/grading-systems/:id` | admin ＋audit | Defended against edits after results published on it (`409` unless new version created). |
+| GET | `/marks/subjects?examId=` | admin / teacher | Markable exam subjects with lock/publish state; teacher → authorized only (class teacher → all subjects of the class; subject assignee → their subject). |
+| GET | `/marks/subjects/:examSubjectId` | admin / teacher:authorized | Marks entry grid: subject state + roster (enrollment model, class pointer fallback) + existing marks. 404 unless authorized. |
+| PUT | `/marks/subjects/:examSubjectId` | admin / teacher:authorized ＋audit | Bulk upsert `{ records: [{ studentId, marksObtained?, isAbsent? }], version? }`; validates 0 ≤ marks ≤ max + enrollment (409); teacher edits rejected when locked (409); grade computed server-side; audited with old→new diffs. |
+| POST | `/exam-subjects/:id/lock` | admin ＋audit | Freezes teacher edits. |
+| POST | `/exam-subjects/:id/unlock` | admin ＋audit | Re-enables edits (audited). |
+| POST | `/exam-subjects/:id/publish` | admin ＋audit | Makes results visible to parents (read-only). |
+| POST | `/exam-subjects/:id/unpublish` | admin ＋audit | Hides results from parents again. |
+| GET | `/results/students/:studentId?examId=` | admin / teacher:assigned-class / parent:linked | Subject marks, totals, percentage, overall grade. Parents: PUBLISHED only (404 when unpublished/unlinked). |
+| GET | `/results/exams/:examId?subjectId=` | admin / teacher:authorized | Marks review grid for an exam subject. |
+| GET | `/grades` | admin | School's grading systems + rules. |
+| POST | `/grades/create` | admin ＋audit | `{ name, isDefault, rules: [{ minPercentage, maxPercentage, grade, gradePoint? }] }`; bands validated non-overlapping (409). |
+| PATCH | `/grades/:id` | admin ＋audit | Update system / replace rules. |
+
+Result states: editable → locked (teacher edits rejected; admin corrections/
+unlock only) → published (read-only to teachers/parents; parents see
+published only). Grades are server-side from the school's configurable
+percentage bands (CGPA-extensible via grade points); boundary percentages
+resolve to the higher band.
 
 ## /report-cards — Report Cards
 

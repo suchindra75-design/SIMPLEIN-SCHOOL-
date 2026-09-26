@@ -424,9 +424,9 @@ attendance happy paths. Tenant/RBAC suites block merges on failure.
 2. Auth + users + school settings + academic years; RLS policies + tenant tests. ✅ done (Phase 2).
 3. Students/parents/teachers + classes/sections/subjects + Excel import. ✅ done (Phase 3).
 4. Attendance. ✅ done (Phase 4).
-5. Exams + exam schedules. ✅ done (Phase 5). Marks + grading + report-card PDF: next.
-6. Timetable + fee tracking + documents hardening + audit coverage pass.
-7. Dashboard shells per role (child selector, "My Classes"), pagination +
+5. Exams + exam schedules. ✅ done (Phase 5).
+6. Marks + grades. ✅ done (Phase 6). Timetable + fee tracking + documents hardening + audit coverage pass: next.
+7. Report-card PDF + dashboard shells per role (child selector, "My Classes"), pagination +
    performance pass, OpenAPI generation, pilot readiness (backups, monitoring).
 
 Explicitly deferred: payments, SMS/WhatsApp, student dashboard, substitution.
@@ -537,7 +537,45 @@ Explicitly deferred: payments, SMS/WhatsApp, student dashboard, substitution.
   management), /teacher/exams (relevant schedule), /parent/exams (child
   selector + schedule). Functional, consistent with the existing design system.
 
-## 20. Important architectural decisions (log)
+## 20. Phase 6: marks + grades (implemented)
+
+- **Marks model:** `marks` — one row per student per exam-subject
+  (UNIQUE-deduped), with `marks_obtained` (null when absent), `is_absent`,
+  server-computed `grade` snapshot, and `version` for optimistic locking.
+  DB-enforced validity: marks ≤ max_marks and academic-enrollment validity
+  (`validate_marks_row()` trigger — enrollment model first, class pointer
+  fallback); CHECKs for bounds and absent/null consistency; tenant triggers
+  reject cross-school references. Batched single upsert per save (no N+1).
+- **Grading model:** `grading_systems` + `grading_rules` — configurable
+  percentage bands per school (no hard-coded letters), CGPA-extensible via
+  `grade_point`. One default system per school (partial unique index).
+  Non-overlapping bands enforced by the `validateGradingRules` engine AND a
+  DB trigger. Grade computation is ONE pure, unit-tested function
+  (`lib/services/grades/calc.ts`) used by marks entry and results; boundary
+  percentages resolve to the higher band; no rules → null (no fake grades).
+- **Result states + lock/publish rules:** `exam_subjects.is_locked` (marks
+  editable → locked; teacher edits rejected at BOTH the service (409) and
+  RLS; admin corrections/unlock only — documented) and
+  `exam_subjects.is_published` (parents see PUBLISHED results only — the
+  whole result is withheld when any subject is unpublished, 404 boundary;
+  enforced in BOTH service and RLS). Published results are read-only to
+  teachers/parents. Lock/unlock/publish/unpublish are separate, explicit,
+  audited admin operations.
+- **Authorization:** teacher marks entry is class+subject scoped (class
+  teacher of an in-class section → all subjects; subject assignee → their
+  subject; otherwise 404); admin own school; parents linked children only.
+  No client-supplied school/teacher/parent ids trusted anywhere.
+- **Result calculation rule (documented):** total = Σ non-absent
+  marks_obtained; maxTotal = Σ ALL max_marks (absent subjects contribute 0
+  obtained but full max — absence counts against, consistent with the
+  attendance philosophy); percentage rounded to 2 decimals; grade from the
+  school's default grading rules.
+- **UI:** /admin/marks (exam → subjects with lock/publish controls + review
+  grid), /teacher/marks (exam → authorized subjects → grid + save + locked
+  state), /parent/results (child + exam selector → published results).
+  Functional, consistent with the existing design system.
+
+## 21. Important architectural decisions (log)
 
 | # | Decision | Why |
 |---|----------|-----|
@@ -545,6 +583,9 @@ Explicitly deferred: payments, SMS/WhatsApp, student dashboard, substitution.
 | AD-2 | Supabase Auth + cookies, no custom crypto | Avoids inventing password/session security |
 | AD-3 | `fee_payment_records` naming; no `transactions` vocabulary | Makes "record vs processing" unambiguous in code and schema |
 | AD-4 | Attendance session/record split | Correct grain for daily class attendance, % views, and edits |
+| AD-19 | Lock/publish states on exam_subjects; publish = explicit + audited | Teacher edits die at lock; parents see published only — enforced in service AND RLS |
+| AD-20 | Grade = pure function over school-defined bands; no hard-coded letters | Configurable per school; CGPA-extensible; one tested implementation |
+| AD-21 | Absent subjects: 0 obtained, full max (counts against) | Consistent with the attendance absence philosophy; documented rule |
 | AD-17 | Class-scoped exams with class-based relevance | Teacher/parent visibility follows class membership — simple, matches school reality |
 | AD-18 | exam_schedules separate from marks config (1:1) | Room/invigilator edits never touch marks configuration |
 | AD-15 | LEAVE excused from the percentage denominator | One documented rule; on-leave students neither present nor penalised |

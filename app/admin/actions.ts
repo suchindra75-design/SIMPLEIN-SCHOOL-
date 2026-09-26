@@ -41,6 +41,11 @@ import {
   upsertExamSchedule,
 } from "@/lib/services/exams";
 import {
+  saveMarks,
+  setMarksLocked,
+  setResultsPublished,
+} from "@/lib/services/marks";
+import {
   createStudent,
   updateStudent,
 } from "@/lib/services/students";
@@ -770,6 +775,53 @@ export async function removeExamScheduleAction(
     const db = await createServerSupabaseClient();
     await removeExamSchedule(db, ctx, examSubjectId);
     revalidatePath(`/admin/exams/${examId}`);
+    return { success: true };
+  } catch (error) {
+    return err(error);
+  }
+}
+
+/* ---------------------------- marks + results --------------------------- */
+
+export async function saveMarksAction(
+  examSubjectId: string,
+  records: { studentId: string; marksObtained: number | null; isAbsent: boolean }[],
+): Promise<ActionState & { saved?: number; changed?: number }> {
+  try {
+    const ctx = await requireRole("SCHOOL_ADMIN");
+    const db = await createServerSupabaseClient();
+    const result = await saveMarks(db, ctx, examSubjectId, { records });
+    revalidatePath("/admin/marks");
+    return { success: true, saved: result.saved, changed: result.changed };
+  } catch (error) {
+    return err(error);
+  }
+}
+
+export async function setMarksLockedAction(
+  examSubjectId: string,
+  locked: boolean,
+): Promise<ActionState> {
+  try {
+    const ctx = await requireRole("SCHOOL_ADMIN");
+    const db = await createServerSupabaseClient();
+    await setMarksLocked(db, ctx, examSubjectId, locked);
+    revalidatePath("/admin/marks");
+    return { success: true };
+  } catch (error) {
+    return err(error);
+  }
+}
+
+export async function setResultsPublishedAction(
+  examSubjectId: string,
+  published: boolean,
+): Promise<ActionState> {
+  try {
+    const ctx = await requireRole("SCHOOL_ADMIN");
+    const db = await createServerSupabaseClient();
+    await setResultsPublished(db, ctx, examSubjectId, published);
+    revalidatePath("/admin/marks");
     return { success: true };
   } catch (error) {
     return err(error);

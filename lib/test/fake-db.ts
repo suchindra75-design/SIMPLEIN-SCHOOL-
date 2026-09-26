@@ -139,23 +139,30 @@ export class FakeQuery {
   }
 
   /** Upsert semantics: match rows by the onConflict columns' payload values,
-   *  update the first match or insert a new row. Returns the affected row. */
-  private applyUpsert(): Row | null {
-    const payload = this.payload as Row;
+   *  update the first match or insert a new row — per payload item (batch
+   *  upserts pass arrays). Returns the affected rows. */
+  private applyUpsert(): Row[] {
+    const payload = this.payload;
     const cols = (this.onConflict ?? "id").split(",").map((c) => c.trim());
     const rows = this.rows();
-    const match = rows.find((r) =>
-      cols.every((c) =>
-        payload[c] === undefined ? r[c] === undefined : r[c] === payload[c],
-      ),
-    );
-    if (match !== undefined) {
-      Object.assign(match, payload);
-      return match;
+    const items = (Array.isArray(payload) ? payload : [payload]) as Row[];
+    const affected: Row[] = [];
+    for (const item of items) {
+      const match = rows.find((r) =>
+        cols.every((c) =>
+          item[c] === undefined ? r[c] === undefined : r[c] === item[c],
+        ),
+      );
+      if (match !== undefined) {
+        Object.assign(match, item);
+        affected.push(match);
+      } else {
+        const row = { id: `gen-${idCounter++}`, ...item };
+        rows.push(row);
+        affected.push(row);
+      }
     }
-    const row = { id: `gen-${idCounter++}`, ...payload };
-    rows.push(row);
-    return row;
+    return affected;
   }
 
   private consumeFailure(): { code: string; message: string } | null {
@@ -186,7 +193,7 @@ export class FakeQuery {
       return { data: row, error: null };
     }
     if (this.op === "upsert") {
-      return { data: this.applyUpsert(), error: null };
+      return { data: this.applyUpsert()[0] ?? null, error: null };
     }
     const matched = this.rows().filter((r) => this.matches(r));
     if (matched.length === 0) {
@@ -220,7 +227,7 @@ export class FakeQuery {
       if (this.op === "upsert") {
         const affected = this.applyUpsert();
         return Promise.resolve(
-          resolve?.({ data: affected === null ? [] : [affected], error: null, count: null }) as TResult1,
+          resolve?.({ data: affected, error: null, count: null }) as TResult1,
         );
       }
       let rows = this.rows().filter((r) => this.matches(r));

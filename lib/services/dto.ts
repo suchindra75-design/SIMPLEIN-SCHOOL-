@@ -159,3 +159,51 @@ export interface ExamDto {
   classes?: { name: string } | null;
   subjects?: ExamSubjectDto[];
 }
+
+export interface ExamSubjectStateDto extends ExamSubjectDto {
+  isLocked: boolean;
+  isPublished: boolean;
+}
+
+export interface MarkRowDto {
+  id: string;
+  examSubjectId: string;
+  studentId: string;
+  marksObtained: number | null;
+  isAbsent: boolean;
+  grade: string | null;
+  version: number;
+}
+
+export interface StudentResultDto {
+  studentId: string;
+  displayName: string;
+  admissionNo: string;
+  subjects: {
+    subjectId: string;
+    subjectName: string;
+    marksObtained: number | null;
+    maxMarks: number;
+    isAbsent: boolean;
+    grade: string | null;
+  }[];
+  totalObtained: number;
+  maxTotal: number;
+  percentage: number | null;
+  overallGrade: string | null;
+  published: boolean;
+}
+
+export interface GradingSystemDto {
+  id: string;
+  name: string;
+  isDefault: boolean;
+  rules: {
+    id: string;
+    minPercentage: number;
+    maxPercentage: number;
+    grade: string;
+    gradePoint: number | null;
+    remarkTemplate: string | null;
+  }[];
+}

@@ -1,0 +1,83 @@
+-- SIMPLEIN SCHOOL ERP · Phase 6 RLS verification (LIVE DATABASE ONLY).
+-- Run against a staging Supabase project AFTER applying migration 0006, as
+-- authenticated users of two schools. No local Postgres tooling exists in
+-- this environment, so these checks have NOT been executed here — the
+-- equivalent server-boundary logic IS unit-tested in
+-- lib/services/marks.test.ts (22 tests) + lib/services/grades/calc.test.ts
+-- (9 tests), passing.
+--
+-- Setup: school A with admin(A); teacher T (class teacher of sec7a, class c7);
+-- teacher T2 (Math assignee in sec7a only, NOT class teacher); parent P
+-- (linked to student s1 in class c7 via student_parents, NOT to s2);
+-- school B with an equivalent set. Authenticate each block with that JWT.
+
+-- A. Tenant isolation — School A marks: A→A allowed, A→B denied --------------
+-- As admin(A):
+-- SELECT id FROM public.marks;               -- expect: only school-A rows
+-- SELECT * FROM public.marks WHERE id = '<school-B-mark-id>';  -- expect: 0 rows
+-- SELECT * FROM public.grading_systems;      -- expect: only school-A systems
+-- UPDATE public.marks SET marks_obtained = 0 WHERE id = '<school-B-mark-id>';
+--   -- expect: 0 rows affected
+
+-- B. Teacher scope (class c7; T = class teacher → all subjects; T2 = Math only)
+-- As teacher T (school A):
+-- SELECT id FROM public.marks;
+--   -- expect: marks of exam_subjects whose exam's class is c7 ONLY
+-- SELECT * FROM public.marks
+--   WHERE exam_subject_id = '<es-of-class-8>';  -- expect: 0 rows
+-- INSERT INTO public.marks (school_id, exam_subject_id, student_id, marks_obtained)
+--   VALUES ('<A>', '<es-8m>', '<s3>', 50);
+--   -- expect: RLS violation (exam's class not assigned to T)
+-- INSERT INTO public.marks ... VALUES ('<B>', ...);  -- expect: RLS violation
+
+-- As teacher T2 (Math assignee only):
+-- UPDATE public.marks SET marks_obtained = 90
+--   WHERE exam_subject_id = '<es-7m>' AND student_id = '<s1>';
+--   -- expect: 1 row (Math assigned) — but English (es-7e) → 0 rows
+
+-- C. Locked-state enforcement at the DB ------------------------------------------
+-- As teacher T with es-7m locked (service role sets is_locked=true):
+-- UPDATE public.marks SET marks_obtained = 95
+--   WHERE exam_subject_id = '<es-7m>';
+--   -- expect: 0 rows affected (RLS blocks locked teacher edits)
+
+-- D. Parent scope (linked to s1 in class c7; PUBLISHED only) -----------------------
+-- As parent P (school A):
+-- SELECT id FROM public.marks;
+--   -- expect: rows ONLY where the owning exam_subject is_published AND the
+--   --        student is linked (s1). Unpublished/c8/B rows invisible.
+-- SELECT * FROM public.marks
+--   WHERE exam_subject_id = '<unpublished-es>';  -- expect: 0 rows
+-- SELECT * FROM public.marks
+--   WHERE student_id = '<s2-in-c7>';             -- expect: 0 rows (unlinked)
+-- INSERT/UPDATE/DELETE on public.marks → expect: RLS violation (read-only)
+
+-- E. Data integrity (as admin A; triggers must RAISE) ------------------------------
+-- INSERT INTO public.marks (school_id, exam_subject_id, student_id, marks_obtained)
+--   VALUES ('<A>', '<A-es>', '<school-B-student>', 50);
+--   -- expect: cross-tenant reference exception (student)
+-- INSERT INTO public.marks (...) VALUES ('<A>', '<school-B-es>', '<s1>', 50);
+--   -- expect: cross-tenant reference exception (exam_subject)
+-- INSERT INTO public.marks (..., marks_obtained) VALUES (..., 150);
+--   --   (max_marks 100)  → expect: exceeds max_marks exception (trigger)
+-- INSERT INTO public.marks (..., marks_obtained) VALUES (..., -5);
+--   -- expect: CHECK violation (>= 0)
+-- INSERT INTO public.marks (school_id, exam_subject_id, student_id, marks_obtained)
+--   VALUES ('<A>', '<A-es>', '<student-not-enrolled-in-class>', 50);
+--   -- expect: not enrolled exception (trigger)
+-- INSERT INTO public.marks (school_id, exam_subject_id, student_id, marks_obtained)
+--   VALUES ('<A>', '<A-es>', '<s1>', 50);  -- twice → expect: duplicate key
+-- UPDATE public.marks SET school_id = '<B>' WHERE id = '<A-mark>';
+--   -- expect: school_id is immutable
+
+-- F. Grading rules (as admin A; triggers must RAISE) --------------------------------
+-- INSERT INTO public.grading_rules (school_id, grading_system_id, min_percentage, max_percentage, grade)
+--   VALUES ('<A>', '<gs1>', 85, 95, 'X');
+--   -- expect: overlapping band exception
+-- INSERT INTO public.grading_rules (school_id, grading_system_id, min_percentage, max_percentage, grade)
+--   VALUES ('<A>', '<school-B-system>', 0, 50, 'X');
+--   -- expect: cross-tenant reference exception
+
+-- G. Modification authorization -------------------------------------------------------
+-- As teacher T: UPDATE on grading_systems/grading_rules → expect RLS violations.
+-- As admin(A): UPDATE school-A marks → 1 row (ALLOWED). As admin(B) → 0 rows.
