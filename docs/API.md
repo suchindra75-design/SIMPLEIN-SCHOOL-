@@ -256,24 +256,24 @@ teacher double-booking by a service pre-check + partial
 | GET | `/notifications/preferences` | self | Non-critical opt-outs. |
 | PATCH | `/notifications/preferences` | self | Attendance/result categories mandatory (reject opt-out). |
 
-## /fees — Fee Tracking (records only, NO processing)
+## /fees — Fee Tracking (records only, NO processing) — ✅ implemented (Phase 11)
 
-> No endpoint accepts card/UPI/wallet data, initiates transfers, or issues
-> refunds. All amounts are staff-recorded receipts; corrections are new
-> superseding records.
+> **No endpoint accepts card/UPI/wallet data, initiates transfers, or issues
+> refunds.** All amounts are staff-recorded receipts (offline); corrections
+> are superseding audited records. No "Pay Now" exists anywhere.
 
 | Method | Endpoint | Auth | Notes |
 |--------|----------|------|-------|
-| GET | `/fee-structures` | admin / parent:linked | `?academicYearId&classId`; parents see structures assigned to linked children. |
-| POST | `/fee-structures` | admin ＋audit | `{ name, academicYearId, classId?, dueDate, components: [{ name, amount }] }`. |
-| PATCH | `/fee-structures/:id` | admin ＋audit | Blocked if assignments have verified records (`409`; create new structure instead). |
-| POST | `/fee-structures/:id/assign` | admin ＋audit | `{ studentIds[], totalAmount?, dueDate? }` bulk assign (concession via per-student total snapshot). |
-| GET | `/students/:id/fee-summary` | admin / parent:linked | `{ total, paid (verified), due, dueDate, status }` from `student_fee_balances` view. |
-| GET | `/students/:id/fee-history` | admin / parent:linked | Verified + pending records timeline with receipt links. |
-| POST | `/fee-assignments/:id/records` | admin ＋audit | `{ amount, paidOn, mode, referenceNo?, receiptDocumentId? }` — staff-recorded receipt. |
-| POST | `/fee-payment-records/:id/verify` | admin (maker≠checker) ＋audit | Second-person verification; void path requires reason. |
-| POST | `/fee-payment-records/:id/void` | admin ＋audit | `{ reason }`; record retained with `is_voided=true` (never hard-deleted). |
-| GET | `/fees/defaulters` | admin | `?dueBefore&classId&page` — outstanding balances list. Paginated. |
+| GET | `/fees/structures` | admin / parent:linked | Admin: all school structures (with components + totals). Parent: structures assigned to linked children. |
+| POST | `/fees/structures/create` | admin ＋audit | `{ name, academicYearId, classId?, dueDate?, components: [{ name, amount }] }`; 404 cross-tenant year/class. |
+| PATCH | `/fees/structures/:id` | admin ＋audit | Frozen when verified records exist (409 — create a new structure instead). |
+| POST | `/fees/structures/:id/assign` | admin ＋audit | `{ studentIds[], totalAmount? (concession snapshot, ≤ structure total), dueDate? }` bulk assign (409/404 guards). |
+| GET | `/fees/students/:studentId` | admin / parent:linked | Fee summary + assignments: `{ total, paid (verified), due, status, overdue, dueDate }` + records. Parent: linked children only (404). |
+| POST | `/fees/student-fees/:studentFeeId/records` | admin ＋audit | `{ amount (>0), paidOn, mode (CASH\|CHEQUE\|BANK_TRANSFER\|OTHER), referenceNo? }` — school-recorded receipt. Overpayment rejected (409 — no credit/advance in V1). |
+| POST | `/fees/payment-records/:id/verify` | admin (maker≠checker) ＋audit | Second-person verification. |
+| POST | `/fees/payment-records/:id/void` | admin (maker≠checker) ＋audit | `{ reason }`; record retained with `is_voided=true` (never hard-deleted). |
+| POST | `/fees/payment-records/:id/receipt` | admin ＋audit | Multipart `{ file }`: ≤10 MB, PDF/images/Office (macros blocked); private `fee-receipts` bucket. |
+| GET | `/fees/payment-records/:id/receipt/url` | admin / parent:linked | Short-lived **signed URL** (never public). |
 
 ## /documents — File metadata & access
 

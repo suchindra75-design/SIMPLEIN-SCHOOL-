@@ -187,3 +187,152 @@ export async function markAllNotificationsReadAction(): Promise<ActionState> {
     return err(error);
   }
 }
+
+/* --------------------------------- fees ---------------------------------- */
+
+export async function createFeeStructureAction(
+  _prev: ActionState,
+  form: FormData,
+): Promise<ActionState> {
+  try {
+    const ctx = await requireRole("SCHOOL_ADMIN");
+    const db = await createServerSupabaseClient();
+    const { createFeeStructure } = await import("@/lib/services/fees");
+    // Components arrive as repeating fields: component_name_i / component_amount_i.
+    const components: { name: string; amount: number }[] = [];
+    for (let i = 0; i < 30; i++) {
+      const name = str(form, `component_name_${i}`);
+      const amount = str(form, `component_amount_${i}`);
+      if (name !== undefined && amount !== undefined) {
+        components.push({ name, amount: Number(amount) });
+      }
+    }
+    if (components.length === 0) {
+      return { error: "Add at least one fee component" };
+    }
+    await createFeeStructure(db, ctx, {
+      name: str(form, "name") ?? "",
+      academicYearId: str(form, "academicYearId") ?? "",
+      classId: str(form, "classId") ?? null,
+      dueDate: str(form, "dueDate") ?? null,
+      components,
+    });
+    revalidatePath("/admin/fees");
+    return { success: true };
+  } catch (error) {
+    return err(error);
+  }
+}
+
+export async function assignFeesAction(
+  structureId: string,
+  _prev: ActionState,
+  form: FormData,
+): Promise<ActionState> {
+  try {
+    const ctx = await requireRole("SCHOOL_ADMIN");
+    const db = await createServerSupabaseClient();
+    const { assignFees } = await import("@/lib/services/fees");
+    const studentIds = form
+      .getAll("studentIds")
+      .filter((v): v is string => typeof v === "string" && v.trim() !== "");
+    if (studentIds.length === 0) return { error: "Select at least one student" };
+    const totalRaw = str(form, "totalAmount");
+    await assignFees(db, ctx, structureId, {
+      studentIds,
+      totalAmount: totalRaw === undefined ? null : Number(totalRaw),
+      dueDate: str(form, "dueDate") ?? null,
+    });
+    revalidatePath("/admin/fees");
+    return { success: true };
+  } catch (error) {
+    return err(error);
+  }
+}
+
+export async function recordPaymentAction(
+  studentFeeId: string,
+  _prev: ActionState,
+  form: FormData,
+): Promise<ActionState> {
+  try {
+    const ctx = await requireRole("SCHOOL_ADMIN");
+    const db = await createServerSupabaseClient();
+    const { recordPayment } = await import("@/lib/services/fees");
+    await recordPayment(db, ctx, studentFeeId, {
+      amount: Number(str(form, "amount") ?? 0),
+      paidOn: str(form, "paidOn") ?? "",
+      mode: (str(form, "mode") ?? "CASH") as
+        | "CASH"
+        | "CHEQUE"
+        | "BANK_TRANSFER"
+        | "OTHER",
+      referenceNo: str(form, "referenceNo") ?? null,
+    });
+    revalidatePath("/admin/fees");
+    return { success: true };
+  } catch (error) {
+    return err(error);
+  }
+}
+
+export async function verifyPaymentAction(
+  recordId: string,
+): Promise<ActionState> {
+  try {
+    const ctx = await requireRole("SCHOOL_ADMIN");
+    const db = await createServerSupabaseClient();
+    const { verifyPaymentRecord } = await import("@/lib/services/fees");
+    await verifyPaymentRecord(db, ctx, recordId);
+    revalidatePath("/admin/fees");
+    return { success: true };
+  } catch (error) {
+    return err(error);
+  }
+}
+
+export async function voidPaymentAction(
+  recordId: string,
+  _prev: ActionState,
+  form: FormData,
+): Promise<ActionState> {
+  try {
+    const ctx = await requireRole("SCHOOL_ADMIN");
+    const db = await createServerSupabaseClient();
+    const { voidPaymentRecord } = await import("@/lib/services/fees");
+    const reason = str(form, "reason") ?? "";
+    if (reason.length < 3) return { error: "Provide a void reason" };
+    await voidPaymentRecord(db, ctx, recordId, { reason });
+    revalidatePath("/admin/fees");
+    return { success: true };
+  } catch (error) {
+    return err(error);
+  }
+}
+
+export async function uploadReceiptAction(
+  recordId: string,
+  _prev: ActionState,
+  form: FormData,
+): Promise<ActionState> {
+  try {
+    const ctx = await requireRole("SCHOOL_ADMIN");
+    const db = await createServerSupabaseClient();
+    const { setPaymentReceipt } = await import("@/lib/services/fees");
+    const file = form.get("file");
+    if (!(file instanceof File)) return { error: "Choose a file" };
+    if (file.size > MAX_HOMEWORK_FILE_BYTES) {
+      return { error: "File must be under 10 MB" };
+    }
+    await setPaymentReceipt(db, ctx, recordId, {
+      name: file.name,
+      type: file.type,
+      size: file.size,
+      bytes: await file.arrayBuffer(),
+    });
+    revalidatePath("/admin/fees");
+    return { success: true };
+  } catch (error) {
+    return err(error);
+  }
+}

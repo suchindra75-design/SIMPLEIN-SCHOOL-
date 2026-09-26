@@ -1,0 +1,64 @@
+-- SIMPLEIN SCHOOL ERP · Phase 11 RLS verification (LIVE DATABASE ONLY).
+-- Run against a staging Supabase project AFTER applying migration 0011, as
+-- authenticated users of two schools. No local Postgres tooling exists in
+-- this environment, so these checks have NOT been executed here — the
+-- equivalent server-boundary logic IS unit-tested in
+-- lib/services/fees.test.ts (21 tests, passing).
+--
+-- Setup: school A with admins(A1, A2); parent P (linked to student s1 via
+-- student_parents, NOT s2); teacher T (NO fees role); school B with an
+-- equivalent set. Authenticate each block with that JWT.
+
+-- A. Tenant isolation — School A fees: A→A allowed, A→B denied -------------------
+-- As admin(A1):
+-- SELECT id, name FROM public.fee_structures;   -- expect: only school-A structures
+-- SELECT id, student_id FROM public.student_fees; -- expect: only school-A assignments
+-- SELECT id FROM public.fee_payment_records;    -- expect: only school-A records
+-- SELECT * FROM public.student_fees WHERE id = '<school-B-assignment>'; -- expect: 0 rows
+-- UPDATE public.fee_structures SET name='x' WHERE id = '<school-B-structure>';
+--   -- expect: 0 rows affected
+
+-- B. Parent scope (linked to s1 only) ------------------------------------------------
+-- As parent P (school A):
+-- SELECT id, student_id FROM public.student_fees;
+--   -- expect: s1's assignments ONLY (s2 unlinked → invisible)
+-- SELECT id FROM public.fee_payment_records;
+--   -- expect: non-voided records of linked children ONLY
+-- SELECT * FROM public.fee_payment_records WHERE is_voided = true;  -- expect: 0 rows
+-- INSERT/UPDATE/DELETE on any fee table → expect: RLS violations (read-only)
+
+-- C. Storage (private fee-receipts bucket) ----------------------------------------------
+-- As admin(A1): upload under schools/<A>/fee-receipts/ → ALLOWED.
+-- As parent P: signed-URL download of s1's receipt → ALLOWED.
+-- Any user: direct public URL → does not exist (bucket private).
+-- As admin(B): school-A receipt paths → 0 objects.
+
+-- D. Data integrity (as admin A1; triggers must RAISE) --------------------------------------
+-- INSERT INTO public.fee_components (school_id, fee_structure_id, name, amount)
+--   VALUES ('<A>', '<school-B-structure>', 'X', 100);
+--   -- expect: cross-tenant reference exception
+-- INSERT INTO public.student_fees (school_id, student_id, fee_structure_id, total_amount)
+--   VALUES ('<A>', '<school-B-student>', '<A-structure>', 1000);
+--   -- expect: cross-tenant reference exception (student)
+-- INSERT INTO public.student_fees (school_id, student_id, fee_structure_id, total_amount)
+--   VALUES ('<A>', '<s1>', '<school-B-structure>', 1000);
+--   -- expect: cross-tenant reference exception (structure)
+-- INSERT INTO public.fee_payment_records (school_id, student_fee_id, amount, paid_on, mode, recorded_by)
+--   VALUES ('<A>', '<school-B-assignment>', 100, CURRENT_DATE, 'CASH', '<A1>');
+--   -- expect: cross-tenant reference exception (assignment)
+-- INSERT INTO public.fee_payment_records (..., amount) VALUES (..., 0);
+--   -- expect: CHECK violation (amount > 0)
+-- INSERT INTO public.fee_payment_records (..., mode) VALUES (..., 'UPI');
+--   -- expect: CHECK violation (mode IN CASH|CHEQUE|BANK_TRANSFER|OTHER)
+-- INSERT INTO public.fee_components (..., amount) VALUES (..., -100);
+--   -- expect: CHECK violation (amount >= 0)
+-- INSERT INTO public.student_fees (school_id, student_id, fee_structure_id, total_amount)
+--   VALUES ('<A>', '<s1>', '<A-structure>', 1000);  -- twice → duplicate key (UNIQUE student+structure)
+-- UPDATE public.student_fees SET school_id = '<B>' WHERE id = '<A-assignment>';
+--   -- expect: school_id is immutable
+
+-- E. Modification authorization ----------------------------------------------------------------
+-- As teacher T: any INSERT/UPDATE/DELETE on fee tables → RLS violations (no fees role).
+-- As parent P: same → RLS violations.
+-- As admin(A1): INSERT/UPDATE own-school fee rows → 1 row (ALLOWED).
+-- As admin(B): UPDATE school-A rows → 0 rows (DENIED).

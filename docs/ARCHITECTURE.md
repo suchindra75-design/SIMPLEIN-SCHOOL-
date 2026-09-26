@@ -429,7 +429,8 @@ attendance happy paths. Tenant/RBAC suites block merges on failure.
 7. Report cards + PDF. ✅ done (Phase 7).
 8. Timetable. ✅ done (Phase 8).
 9. Homework + attachments. ✅ done (Phase 9).
-10. Notices + notifications. ✅ done (Phase 10). Fee tracking + documents hardening + audit coverage pass: next.
+10. Notices + notifications. ✅ done (Phase 10).
+11. Fee tracking (records only). ✅ done (Phase 11). Documents hardening + audit coverage pass: next.
 8. Dashboard shells per role (child selector, "My Classes"), pagination +
    performance pass, OpenAPI generation, pilot readiness (backups, monitoring).
 
@@ -703,7 +704,42 @@ Explicitly deferred: payments, SMS/WhatsApp, student dashboard, substitution.
   badges on all three dashboards. Functional, consistent with the existing
   design system.
 
-## 25. Important architectural decisions (log)
+## 25. Phase 11: fee tracking (implemented — records only)
+
+- **RECORDS-ONLY model:** `fee_payment_records` are offline amounts a school
+  staff member recorded as received (CASH | CHEQUE | BANK_TRANSFER | OTHER).
+  There is NO UPI, NO card payments, NO gateway, NO online transaction
+  processing, NO refunds, and NO "Pay Now" anywhere in the UI or API —
+  corrections are superseding audited records (maker-checker), never silent
+  edits or gateway vocabulary.
+- **Balance/concession rule (one consistent rule):** paid = Σ(amount WHERE
+  NOT is_voided AND verified_by IS NOT NULL); due = total − paid (never
+  negative — overpayment is REJECTED with 409, no credit/advance in V1);
+  status computed (PAID / PARTIAL / DUE + overdue when past the due date with
+  due > 0); concession = the assignment's `total_amount` snapshot set BELOW
+  the structure total (per-student discount; full waiver = 0; never above —
+  409). Implemented once in `lib/services/fees/calc.ts` (pure, unit-tested).
+- **Structures:** `fee_structures` (per year, optional class) + components
+  (Σ = total). Structures are FROZEN once assignments have verified records
+  (409 — create a new structure instead), keeping paid history consistent.
+- **Authorization:** admin own school (structures/assignments/records/
+  receipts; verify + void with maker ≠ checker — a second admin must confirm
+  a colleague's records); parent read-only, linked children only (404
+  otherwise); teachers have NO fees entry in the matrix (denied by default);
+  STUDENT dormant. No client-supplied school/parent/student ids trusted.
+- **Receipts/storage:** private `fee-receipts` bucket, tenant-prefixed paths
+  (`schools/{school_id}/fee-receipts/…`); storage RLS (members read
+  own-school prefix; admins write); signed URLs only after the same scope
+  check as the fee read; ≤10 MB, PDF/images/Office (macros blocked).
+- **Tenant safety:** tenant triggers reject cross-school structure/student/
+  assignment references; `school_id` immutable; cross-tenant ids → 404.
+- **UI:** /admin/fees (structures + components + assignment + payment
+  recording + verification/void + receipts + student fee panel),
+  /parent/fees (child selector → totals + paid + due + history + receipts;
+  explicitly read-only, no Pay Now). Functional, consistent with the
+  existing design system.
+
+## 26. Important architectural decisions (log)
 
 | # | Decision | Why |
 |---|----------|-----|
@@ -717,6 +753,8 @@ Explicitly deferred: payments, SMS/WhatsApp, student dashboard, substitution.
 | AD-25 | homework_attachments own their storage metadata | Documents registry lands later without re-modeling attachments |
 | AD-26 | Audience filtering enforced twice (service 404 + RLS joins) | Server-side targeting; no browser-determined recipients |
 | AD-27 | Notification fan-out in-request, chunked; recipient isolation own-rows-only | Simple V1 without a job queue; isolation guaranteed at RLS + service |
+| AD-28 | Fee records-only: no gateway vocabulary, no Pay Now, overpayment rejected | Makes "record vs processing" unambiguous; zero online-transaction surface in V1 |
+| AD-29 | Maker-checker on fee verify/void; structures frozen after verified records | Financial integrity without a payments system; auditable corrections |
 | AD-19 | Lock/publish states on exam_subjects; publish = explicit + audited | Teacher edits die at lock; parents see published only — enforced in service AND RLS |
 | AD-20 | Grade = pure function over school-defined bands; no hard-coded letters | Configurable per school; CGPA-extensible; one tested implementation |
 | AD-21 | Absent subjects: 0 obtained, full max (counts against) | Consistent with the attendance absence philosophy; documented rule |

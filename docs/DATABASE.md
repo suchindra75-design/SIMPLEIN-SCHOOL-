@@ -357,125 +357,45 @@ for the fee module; `channel` reserved for post-V1 SMS/WhatsApp.)
 user's, even same school); `INSERT` (fan-out) allowed for admins/teachers of
 the school (the service resolves recipients server-side).
 
-## 24. Fee tracking — `fee_structures` · `fee_components` · `student_fee_assignments` · `fee_payment_records`
+## 24. Fee tracking — `fee_structures` · `fee_components` · `student_fees` · `fee_payment_records` — ✅ implemented (Phase 11)
 
-> Naming is deliberate: **`fee_payment_records`** = offline amounts a school
-> staff member recorded as received. No gateway, no settlement, no refunds —
-> corrections are new superseding records (audited), never silent edits.
+> **V1 is RECORDS-ONLY:** `fee_payment_records` are offline amounts a school
+> staff member recorded as received (CASH | CHEQUE | BANK_TRANSFER | OTHER).
+> NO UPI, NO card payments, NO gateway, NO online transactions, NO refunds —
+> corrections are superseding audited records (maker-checker), never silent
+> edits or gateway vocabulary. No "Pay Now" exists anywhere.
 
 **`fee_structures`:** named fee plan per year (e.g. `2026-27 · Grade 5`).
-`id`, `school_id`, `academic_year_id`, `name`, `class_id NULL` (NULL = applies to
-listed assignments only), `due_date DATE`, `is_active BOOL`, timestamps.
-**`fee_components`:** line items. `id`, `school_id`, `fee_structure_id → fee_structures
-ON DELETE CASCADE`, `name` (Tuition/Transport/Lab), `amount NUMERIC(12,2)`,
-timestamps. Structure total = Σ components (SQL view `fee_structure_totals`).
-**`student_fee_assignments`:** which student owes which structure (allows
-concessions/splits). `id`, `school_id`, `student_id → students`,
-`fee_structure_id → fee_structures`, `total_amount NUMERIC` (snapshot at assign
-time, supports concession), `due_date DATE`, `status (DUE|PARTIAL|PAID|OVERDUE|WAIVED)`,
-timestamps. `UNIQUE(student_id, fee_structure_id)`.
-**Index:** `(school_id, student_id, status)`, `(school_id, due_date)` (defaulter list).
-**`fee_payment_records`:** ledger rows entered by staff. `id`, `school_id`,
-`assignment_id → student_fee_assignments`, `amount NUMERIC`,
-`paid_on DATE`, `mode (CASH|CHEQUE|BANK_TRANSFER|OTHER)`, `reference_no`,
-`receipt_document_id → documents NULL`, `recorded_by → users`,
-`verified_by → users NULL`, `is_voided BOOL DEFAULT false`, `version INT`, timestamps.
-**Outstanding (per assignment)** = `total_amount − Σ(amount WHERE NOT is_voided
-AND verified)` — computed in view `student_fee_balances`, never from client math.
-Voiding requires `verified_by ≠ recorded_by` (maker-checker) + audit entry.
-Receipt files live in the `fee-receipts` bucket; once linked to a verified record
-the document row is immutable.
+`id`, `school_id`, `academic_year_id → academic_years`, `class_id → classes NULL`,
+`name`, `due_date DATE NULL`, `is_active BOOL`, timestamps.
+**Unique:** `(school_id, academic_year_id, name)`. **Index:** `(school_id, academic_year_id)`.
+**`fee_components`:** line items. `id`, `school_id`, `fee_structure_id →
+fee_structures ON DELETE CASCADE`, `name`, `amount NUMERIC(12,2) CHECK (>= 0)`,
+timestamps. Structure total = Σ components (computed in
+`lib/services/fees/calc.ts` — pure, unit-tested).
+**`student_fees`:** assignment + concession snapshot. `id`, `school_id`,
+`student_id → students`, `fee_structure_id → fee_structures ON DELETE CASCADE`,
+`total_amount NUMERIC(12,2) CHECK (>= 0)` (snapshot at assign time; may sit
+BELOW the structure total = per-student concession; full waiver = 0; never
+above — 409), `due_date DATE NULL`, timestamps. **Unique:**
+`(student_id, fee_structure_id)`. **Indexes:** `(school_id, student_id)`,
+`(school_id, due_date)`. (The draft's status column is COMPUTED — PAID /
+PARTIAL / DUE + overdue — from balances, not stored.)
+**`fee_payment_records`:** ledger rows recorded by staff. `id`, `school_id`,
+`student_fee_id → student_fees ON DELETE CASCADE`, `amount NUMERIC(12,2)
+CHECK (> 0)`, `paid_on DATE`, `mode (CASH|CHEQUE|BANK_TRANSFER|OTHER)`,
+`reference_no NULL`, receipt document (bucket/path/name/mime/bytes — private
+`fee-receipts` bucket, signed access only), `recorded_by → users NOT NULL`,
+`verified_by → users NULL`, `is_voided BOOL DEFAULT false`, `void_reason`,
+`version INT`, timestamps. **Index:** `(student_fee_id)`, `(school_id, paid_on DESC)`.
+**Balance rule (one consistent rule):** paid = Σ(amount WHERE NOT is_voided
+AND verified_by IS NOT NULL); due = total − paid (never negative —
+overpayment rejected, 409); status computed. Verification and voiding require
+maker ≠ checker (a second admin) + audit; voided records are retained, never
+deleted; parents see non-voided records only.
+**Tenant triggers:** components→structure, student_fees→student/structure,
+records→assignment cross-school references rejected; `school_id` immutable.
+**RLS:** structures/components members-read (parents see assigned structures
+via the service scope); student_fees/records: admins own school + parents
+linked children only; writes admin-only.
 
-## 13b. student_enrollments — ✅ implemented (Phase 3)
-
-**Purpose:** promotion-safe year history. Current placement stays on
-`students` (fast queries); this table snapshots it per academic year.
-`id`, `school_id`, `student_id → students ON DELETE CASCADE`,
-`academic_year_id → academic_years`, `class_id`, `section_id`, `roll_number`,
-`status (enrolled|completed|transferred|withdrawn)`, `created_at`.
-`UNIQUE(student_id, academic_year_id)`. **Index:** `(school_id, academic_year_id)`.
-Maintained automatically by student create/update (upsert into the current
-year when one exists). No promotion logic yet — that only writes new rows here
-and repoints `students`, never rewrites history.
-
-## 25. documents
-
-**Purpose:** metadata registry for every file in Supabase Storage.
-Fields: `id`, `school_id`, `bucket TEXT`, `path TEXT` (tenant-prefixed per §9),
-`original_name`, `mime TEXT`, `bytes INT`, `checksum TEXT NULL`,
-`uploaded_by → users`, `is_deleted BOOL DEFAULT false`, timestamps.
-`UNIQUE(bucket, path)`. **Index:** `(school_id, bucket, is_deleted)`.
-Access control: readability derives from the *owning record's* permission
-(student doc → same rule as student; receipt → same as fee) + signed URLs.
-
-> Phase 3 note: the full `documents` registry lands with its module. Photos
-> (student/teacher) already use private buckets `student-photos` /
-> `teacher-photos` with tenant-prefixed paths and storage RLS (school members
-> read own-school prefix; admins write), referenced via `photo_path`.
-
-## 26. audit_logs — ✅ implemented (Phase 3)
-
-**Purpose:** append-only trail. Fields: `id`, `school_id`, `actor_id → users NULL`
-(NULL = system), `action TEXT` (`student.created`, `marks.updated`, …),
-`entity TEXT`, `entity_id UUID NULL`, `created_at`, `metadata JSONB`.
-**Index:** `(school_id, entity, entity_id, created_at DESC)`,
-`(school_id, actor_id, created_at DESC)`. **No UPDATE/DELETE grants** to app
-roles; marks/fee diffs carry `{before, after}` in `metadata`.
-
----
-
-## RLS policy pattern (applied per tenant table)
-
-> ✅ **Live for identity tables** (`schools`, `users`, `user_roles`) in
-> migration `0002_auth_tenant.sql` via helpers `current_app_user_id()`,
-> `current_school_id()`, `has_app_role()`, `is_school_admin()` (all
-> `SECURITY DEFINER`, fixed `search_path`, derived from `auth.uid()` — never
-> client-supplied ids).
-> ✅ **Extended in Phase 3** (`0003_people_structure.sql`): same-school
-> baseline for catalog tables; **link-scoped** reads for `students`,
-> `student_parents`, `student_enrollments` via `teacher_can_access_section()`
-> / `parent_can_access_student()`; admin-only writes for all Phase 3 tables;
-> append-only `audit_logs`; tenant-consistency triggers
-> (`assert_child_same_school`, `assert_link_same_school`) plus `school_id`
-> immutability on every tenant table.
-
-```sql
--- Read: same school, active user. (Parent/teacher link checks compose on top
--- in service queries AND dedicated RLS functions; never client-supplied ids.)
-CREATE POLICY "<table>_select_same_school" ON public.<table>
-FOR SELECT USING (
-  EXISTS (SELECT 1 FROM public.users u
-          WHERE u.auth_user_id = auth.uid()
-            AND u.is_active
-            AND u.school_id = <table>.school_id)
-);
--- INSERT/UPDATE/DELETE add WITH CHECK (school_id match) + role predicates
--- via is_school_admin() / teaches_section() / linked_parent() helpers.
-```
-
-`school_id` immutability trigger + `audit_logs` writer trigger ship in the same
-migration as each table. Full DDL lands in `supabase/migrations/` during
-roadmap steps 2–6; this document is the normative contract for it.
-
-## ER overview (text)
-
-```text
-schools 1───* users 1───* user_roles
-   │        │ 1───1 teachers ───* teacher_subjects *───1 subjects
-   │        │ 1───1 parents ───* student_parents *───1 students
-   │        └───* academic_years
-   ├───* classes 1───* sections ───* students
-   │      └───* class_subjects *─── subjects
-   ├───* attendance_sessions 1───* attendance_records *─── students
-   ├───* exams 1───* exam_subjects 1───* marks *─── students
-   │                                    └── exam_schedules
-   ├───* grading_systems 1───* grading_rules
-   ├───* report_cards (exam × student snapshot + pdf → documents)
-   ├───* timetable_slots (section × day × period)
-   ├───* homework 1───* homework_attachments *─── documents
-   ├───* notices 1───* notice_audience
-   ├───* notifications *─── users
-   ├───* fee_structures 1───* fee_components
-   │      └───* student_fee_assignments 1───* fee_payment_records
-   └───* documents (registry over Storage buckets) ───* audit_logs (trail)
-```

@@ -10,12 +10,14 @@ export function AttachmentLink({
   homeworkId: string;
   attachmentId: string;
   label: string;
-  kind?: "homework" | "notice";
+  kind?: "homework" | "notice" | "receipt";
 }) {
   const endpoint =
     kind === "notice"
       ? `/api/v1/notices/${homeworkId}/attachments/url`
-      : `/api/v1/homework/${homeworkId}/attachments/${attachmentId}`;
+      : kind === "homework"
+        ? `/api/v1/homework/${homeworkId}/attachments/${attachmentId}`
+        : `/api/v1/fees/payment-records/${homeworkId}/receipt/url`;
   return (
     <button
       type="button"
