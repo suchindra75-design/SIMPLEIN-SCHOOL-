@@ -430,7 +430,8 @@ attendance happy paths. Tenant/RBAC suites block merges on failure.
 8. Timetable. ✅ done (Phase 8).
 9. Homework + attachments. ✅ done (Phase 9).
 10. Notices + notifications. ✅ done (Phase 10).
-11. Fee tracking (records only). ✅ done (Phase 11). Documents hardening + audit coverage pass: next.
+11. Fee tracking (records only). ✅ done (Phase 11).
+12. Student portal + promotion + PYQs. ✅ done (Phase 12). Documents hardening + audit coverage pass: next.
 8. Dashboard shells per role (child selector, "My Classes"), pagination +
    performance pass, OpenAPI generation, pilot readiness (backups, monitoring).
 
@@ -739,7 +740,41 @@ Explicitly deferred: payments, SMS/WhatsApp, student dashboard, substitution.
   explicitly read-only, no Pay Now). Functional, consistent with the
   existing design system.
 
-## 26. Important architectural decisions (log)
+## 26. Phase 12: student portal + promotion + PYQs (implemented)
+
+- **Student Portal:** the STUDENT role is ACTIVATED (previously dormant) —
+  self-only reads via the `students.user_id` login link (one login per
+  student). `getStudentScope()` resolves the caller's own student row; every
+  service's scope checks gained a STUDENT branch (own data, own school,
+  published-only for results/report cards, own section/class for
+  timetable/homework/notices). Student provisioning: admins can now create
+  STUDENT logins linked to a student profile (never SCHOOL_ADMIN). The portal
+  has 12 routes (/student + attendance/timetable/homework/exams/results/
+  report-cards/notices/notifications/fees/pyqs/academic-history), all
+  read-only, with its own navigation and mobile-friendly layout.
+- **Promotion/enrollment history:** `/admin/promotions` — preview (eligible
+  students + proposed next class by order_index + proposed next section by
+  same-name counterpart) → per-student adjust (next class/section, hold/
+  retain) → approve. Promotion is an EXPLICIT admin action (never automatic);
+  PROMOTE inserts a NEW enrollment row for the target year (history
+  preserved — previous enrollments/attendance/marks/report cards untouched)
+  and repoints the student's current placement; UNIQUE(student, year)
+  prevents duplicate promotions (409); HOLD creates no enrollment (audited);
+  FINAL class (no next class by order_index) graduates safely
+  (students.status='graduated', NO invalid next-class enrollment).
+- **PYQ storage/access:** school-managed PYQ bank (`pyqs` table + private
+  `pyqs` bucket, tenant-prefixed paths, signed URLs only). Admin manages
+  (upload question + optional solution/answer key, metadata edit,
+  archive/restore — audited); students/teachers/parents browse their school's
+  bank with filters (class/subject/year/exam/board) and download via
+  expiring signed links; archived PYQs hidden + not downloadable. Files
+  validated with the shared allowlist (≤10 MB, macros blocked).
+- **RLS:** migration 0012 extends every module's policies with student
+  self-access (`current_student_id()`), marks/report_cards published-only
+  gating for students, and audience-aware notice reads for the STUDENT role;
+  pyqs same-school reads + admin-only writes.
+
+## 27. Important architectural decisions (log)
 
 | # | Decision | Why |
 |---|----------|-----|
@@ -755,6 +790,8 @@ Explicitly deferred: payments, SMS/WhatsApp, student dashboard, substitution.
 | AD-27 | Notification fan-out in-request, chunked; recipient isolation own-rows-only | Simple V1 without a job queue; isolation guaranteed at RLS + service |
 | AD-28 | Fee records-only: no gateway vocabulary, no Pay Now, overpayment rejected | Makes "record vs processing" unambiguous; zero online-transaction surface in V1 |
 | AD-29 | Maker-checker on fee verify/void; structures frozen after verified records | Financial integrity without a payments system; auditable corrections |
+| AD-30 | Student self-scope via students.user_id + current_student_id() | Self-only portal without new authorization machinery; RLS + service enforce |
+| AD-31 | Promotion = explicit admin action; new enrollment rows only; final class graduates | History preserved; duplicates impossible; no automatic date-driven promotion |
 | AD-19 | Lock/publish states on exam_subjects; publish = explicit + audited | Teacher edits die at lock; parents see published only — enforced in service AND RLS |
 | AD-20 | Grade = pure function over school-defined bands; no hard-coded letters | Configurable per school; CGPA-extensible; one tested implementation |
 | AD-21 | Absent subjects: 0 obtained, full max (counts against) | Consistent with the attendance absence philosophy; documented rule |

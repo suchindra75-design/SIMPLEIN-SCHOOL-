@@ -63,6 +63,15 @@ export async function assertTimetableSectionAccess(
     if (!inSection) throw new TenantBoundaryError();
     return;
   }
+  if (ctx.roles.includes("STUDENT")) {
+    // Student: own section only.
+    const { getStudentScope } = await import("@/lib/services/students");
+    const scope = await getStudentScope(db, ctx);
+    if (scope === null || scope.sectionId !== sectionId) {
+      throw new TenantBoundaryError();
+    }
+    return;
+  }
   throw new TenantBoundaryError();
 }
 
@@ -102,7 +111,7 @@ export async function listSectionTimetable(
   ctx: SessionContext,
   sectionId: string,
 ): Promise<{ slots: TimetableSlotDto[] }> {
-  authorizeRoles(ctx, ["SCHOOL_ADMIN", "TEACHER", "PARENT"]);
+  authorizeRoles(ctx, ["SCHOOL_ADMIN", "TEACHER", "PARENT", "STUDENT"]);
   const { data: section, error: sectionError } = await db
     .from("sections")
     .select("id")
@@ -162,13 +171,20 @@ export async function listMyTimetable(
   db: DbClient,
   ctx: SessionContext,
 ): Promise<{ slots: TimetableSlotDto[] }> {
-  authorizeRoles(ctx, ["TEACHER", "PARENT"]);
+  authorizeRoles(ctx, ["TEACHER", "PARENT", "STUDENT"]);
   if (ctx.roles.includes("TEACHER")) {
     const scope = await getTeacherScope(db, ctx);
     if (scope === null || scope.teacherId === undefined) {
       return { slots: [] };
     }
     return listTeacherTimetable(db, ctx, scope.teacherId);
+  }
+  if (ctx.roles.includes("STUDENT")) {
+    // Student: own section's timetable.
+    const { getStudentScope } = await import("@/lib/services/students");
+    const scope = await getStudentScope(db, ctx);
+    if (scope === null || scope.sectionId === null) return { slots: [] };
+    return listSectionTimetable(db, ctx, scope.sectionId);
   }
   // Parent: timetable of linked children's sections.
   const scope = await getParentScope(db, ctx);

@@ -79,6 +79,15 @@ export async function assertHomeworkSectionAccess(
     if (!inSection) throw new TenantBoundaryError();
     return;
   }
+  if (ctx.roles.includes("STUDENT")) {
+    // Student: own section only.
+    const { getStudentScope } = await import("@/lib/services/students");
+    const scope = await getStudentScope(db, ctx);
+    if (scope === null || scope.sectionId !== sectionId) {
+      throw new TenantBoundaryError();
+    }
+    return;
+  }
   throw new TenantBoundaryError();
 }
 
@@ -141,7 +150,7 @@ export async function listHomework(
   ctx: SessionContext,
   f: HomeworkFilters,
 ): Promise<{ homework: HomeworkDto[]; total: number }> {
-  authorizeRoles(ctx, ["SCHOOL_ADMIN", "TEACHER", "PARENT"]);
+  authorizeRoles(ctx, ["SCHOOL_ADMIN", "TEACHER", "PARENT", "STUDENT"]);
   const from = (f.page - 1) * f.limit;
   let query = db
     .from("homework")
@@ -165,6 +174,17 @@ export async function listHomework(
       } else {
         query = query.in("section_id", [...scope.sectionIds]);
       }
+    } else if (ctx.roles.includes("STUDENT")) {
+      // Student: own section's homework.
+      const { getStudentScope } = await import("@/lib/services/students");
+      const scope = await getStudentScope(db, ctx);
+      if (scope === null || scope.sectionId === null) {
+        return { homework: [], total: 0 };
+      }
+      query =
+        f.sectionId !== undefined && f.sectionId === scope.sectionId
+          ? query.eq("section_id", f.sectionId)
+          : query.eq("section_id", scope.sectionId);
     } else {
       // Parent: linked children's sections only.
       const scope = await getParentScope(db, ctx);

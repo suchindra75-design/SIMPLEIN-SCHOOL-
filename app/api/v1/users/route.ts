@@ -40,7 +40,8 @@ export async function POST(request: Request) {
     const input = userCreateSchema.parse(body);
     if (
       (input.role === "TEACHER" && input.link.teacherId === undefined) ||
-      (input.role === "PARENT" && input.link.parentId === undefined)
+      (input.role === "PARENT" && input.link.parentId === undefined) ||
+      (input.role === "STUDENT" && input.link.studentId === undefined)
     ) {
       return fail("VALIDATION_ERROR", "Role requires its matching profile link");
     }

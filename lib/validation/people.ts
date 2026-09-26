@@ -155,10 +155,10 @@ export const academicYearCreateSchema = z.object({
 export type AcademicYearCreateInput = z.infer<typeof academicYearCreateSchema>;
 
 /* ------------------------- admin user management ----------------------- */
-// Admins may grant TEACHER or PARENT only — never SCHOOL_ADMIN (reserved for
-// onboarding) and never STUDENT (dormant). The identity links to an existing
-// unlinked teacher/parent profile in the SAME school.
-export const manageableRoleSchema = z.enum(["TEACHER", "PARENT"]);
+// Admins may grant TEACHER, PARENT, or STUDENT — never SCHOOL_ADMIN (reserved
+// for onboarding). The identity links to an existing unlinked profile in the
+// SAME school. STUDENT logins are self-only (no writes anywhere).
+export const manageableRoleSchema = z.enum(["TEACHER", "PARENT", "STUDENT"]);
 
 export const userCreateSchema = z.object({
   email: z.string().trim().toLowerCase().email().max(320),
@@ -169,6 +169,7 @@ export const userCreateSchema = z.object({
   link: z.object({
     teacherId: z.string().uuid().optional(),
     parentId: z.string().uuid().optional(),
+    studentId: z.string().uuid().optional(),
   }),
 });
 

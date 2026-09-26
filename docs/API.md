@@ -275,6 +275,43 @@ teacher double-booking by a service pre-check + partial
 | POST | `/fees/payment-records/:id/receipt` | admin ＋audit | Multipart `{ file }`: ≤10 MB, PDF/images/Office (macros blocked); private `fee-receipts` bucket. |
 | GET | `/fees/payment-records/:id/receipt/url` | admin / parent:linked | Short-lived **signed URL** (never public). |
 
+## /student — Student Portal — ✅ implemented (Phase 12)
+
+Student self-scope: every endpoint resolves the caller's own student row
+(`students.user_id`) — another student's id → 404; cross-school → 404.
+Strictly read-only.
+
+| Method | Endpoint | Auth | Notes |
+|--------|----------|------|-------|
+| GET | `/students` | student (self-only) | Own row only (service-scoped). |
+| GET | `/attendance/students/:studentId` + `/summary` | student (self) | Own attendance. |
+| GET | `/timetable/me` | student | Own section's weekly grid. |
+| GET | `/homework` | student | Own section's homework + attachments (signed URLs). |
+| GET | `/exams` | student | Own class's exams. |
+| GET | `/results/students/:studentId?examId=` | student (self) | PUBLISHED results only (Phase 6 logic reused; 404 when unpublished). |
+| GET | `/report-cards/students/:studentId?examId=` | student (self) | OWN cards, PUBLISHED only (Phase 7 logic reused). |
+| GET | `/notices` | student | Audience-aware: school-wide + own section/class. |
+| GET | `/notifications` + `/unread-count` + read endpoints | self | Own inbox (Phase 10). |
+| GET | `/fees/students/:studentId` + `/fees/structures` | student (self) | Own fees + receipts (read-only, no Pay Now). |
+| GET | `/pyqs` + `/pyqs/:id/file` | student | School PYQ bank (filterable; signed URLs). |
+
+## /promotions — Academic Promotion — ✅ implemented (Phase 12)
+
+| Method | Endpoint | Auth | Notes |
+|--------|----------|------|-------|
+| POST | `/promotions/preview` | admin | `{ fromYearId, toYearId, classId? }` → eligible students + proposed next class (order_index + 1, configurable) + proposed next section (same-name counterpart, else first). Final class → GRADUATE proposal. Already-promoted flagged. 404 cross-tenant years. |
+| POST | `/promotions/promote` | admin ＋audit | `{ fromYearId, toYearId, assignments: [{ studentId, nextClassId?, nextSectionId?, hold? }] }`. Explicit admin action (never automatic). PROMOTE → INSERT next-year enrollment (history preserved; UNIQUE student+year prevents duplicates → 409) + repoint current placement. HOLD → no enrollment (audited). GRADUATE → students.status='graduated' (no invalid next class). Per-student failures collected; batch audited. |
+
+## /pyqs — Previous Year Questions — ✅ implemented (Phase 12)
+
+| Method | Endpoint | Auth | Notes |
+|--------|----------|------|-------|
+| GET | `/pyqs` | session | School's PYQ bank (filterable: `?classId&subjectId&yearLabel&examBoardName&page&limit`); archived excluded. |
+| POST | `/pyqs/create` | admin ＋audit | Multipart: `file` (required), `solution?`/`answerKey?` + `{ classId, subjectId, yearLabel, examBoardName, title? }`. ≤10 MB, PDF/images/Office (macros blocked); private `pyqs` bucket; orphan cleanup on failure. |
+| PATCH | `/pyqs/:id` | admin ＋audit | Metadata edit. |
+| POST | `/pyqs/:id?active=` | admin ＋audit | Archive/restore (soft-delete). |
+| GET | `/pyqs/:id/file?kind=question\|solution\|answerKey` | session | Short-lived **signed URL** (never public); archived → 404; missing file → 404. |
+
 ## /documents — File metadata & access
 
 | Method | Endpoint | Auth | Notes |

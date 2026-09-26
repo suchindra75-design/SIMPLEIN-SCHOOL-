@@ -79,6 +79,15 @@ async function assertStudentFeeAccess(
     }
     return;
   }
+  if (ctx.roles.includes("STUDENT")) {
+    // Student: own fees only.
+    const { getStudentScope } = await import("@/lib/services/students");
+    const scope = await getStudentScope(db, ctx);
+    if (scope === null || scope.studentId !== studentId) {
+      throw new TenantBoundaryError();
+    }
+    return;
+  }
   throw new TenantBoundaryError();
 }
 
@@ -88,7 +97,7 @@ export async function listFeeStructures(
   db: DbClient,
   ctx: SessionContext,
 ): Promise<{ structures: FeeStructureDto[] }> {
-  authorizeRoles(ctx, ["SCHOOL_ADMIN", "PARENT"]);
+  authorizeRoles(ctx, ["SCHOOL_ADMIN", "PARENT", "STUDENT"]);
   const { data, error } = await db
     .from("fee_structures")
     .select(`${STRUCTURE_COLUMNS}, fee_components(name, amount)`)
@@ -106,13 +115,22 @@ export async function listFeeStructures(
     })),
   );
   if (isAdmin(ctx)) return { structures };
-  // Parent: only structures assigned to linked children.
-  const scope = await parentStudentIds(db, ctx);
-  if (scope === null || scope.size === 0) return { structures: [] };
+  // Parent: structures assigned to linked children. Student: own assignments.
+  let ownStudentIds: Set<string> | null;
+  if (ctx.roles.includes("PARENT")) {
+    ownStudentIds = await parentStudentIds(db, ctx);
+  } else if (ctx.roles.includes("STUDENT")) {
+    const { getStudentScope } = await import("@/lib/services/students");
+    const scope = await getStudentScope(db, ctx);
+    ownStudentIds = scope === null ? new Set<string>() : new Set([scope.studentId]);
+  } else {
+    throw new TenantBoundaryError();
+  }
+  if (ownStudentIds === null || ownStudentIds.size === 0) return { structures: [] };
   const { data: assignments, error: assignError } = await db
     .from("student_fees")
     .select("fee_structure_id")
-    .in("student_id", [...scope])
+    .in("student_id", [...ownStudentIds])
     .eq("school_id", ctx.profile.schoolId);
   throwForPostgrest(assignError);
   const assignedIds = new Set(
@@ -323,7 +341,7 @@ export async function listStudentFees(
   ctx: SessionContext,
   studentId: string,
 ): Promise<{ fees: StudentFeeDto[] }> {
-  authorizeRoles(ctx, ["SCHOOL_ADMIN", "PARENT"]);
+  authorizeRoles(ctx, ["SCHOOL_ADMIN", "PARENT", "STUDENT"]);
   const { data: student, error: studentError } = await db
     .from("students")
     .select("id")

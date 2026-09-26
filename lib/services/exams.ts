@@ -85,6 +85,13 @@ export async function examScopeClassIds(
         .filter((c): c is string => c !== null),
     );
   }
+  if (ctx.roles.includes("STUDENT")) {
+    // Student: own class's exams.
+    const { getStudentScope } = await import("@/lib/services/students");
+    const scope = await getStudentScope(db, ctx);
+    if (scope === null || scope.classId === null) return new Set();
+    return new Set([scope.classId]);
+  }
   throw new TenantBoundaryError();
 }
 
@@ -140,7 +147,7 @@ export async function listExams(
   ctx: SessionContext,
   f: ExamFilters,
 ): Promise<{ exams: ExamDto[]; total: number }> {
-  authorizeRoles(ctx, ["SCHOOL_ADMIN", "TEACHER", "PARENT"]);
+  authorizeRoles(ctx, ["SCHOOL_ADMIN", "TEACHER", "PARENT", "STUDENT"]);
   const scopeClasses = await examScopeClassIds(db, ctx);
   if (f.classId !== undefined) {
     if (!scopeClasses.has(f.classId)) throw new TenantBoundaryError();
@@ -591,11 +598,20 @@ export async function listChildExamSchedule(
   ctx: SessionContext,
   studentId: string,
 ): Promise<{ exams: ExamDto[] }> {
-  authorizeRoles(ctx, ["SCHOOL_ADMIN", "PARENT"]);
+  authorizeRoles(ctx, ["SCHOOL_ADMIN", "PARENT", "STUDENT"]);
   if (!isAdmin(ctx)) {
-    const scope = await getParentScope(db, ctx);
-    if (scope === null || !scope.studentIds.has(studentId)) {
-      throw new TenantBoundaryError();
+    if (ctx.roles.includes("STUDENT")) {
+      // Student: own schedule only.
+      const { getStudentScope } = await import("@/lib/services/students");
+      const scope = await getStudentScope(db, ctx);
+      if (scope === null || scope.studentId !== studentId) {
+        throw new TenantBoundaryError();
+      }
+    } else {
+      const scope = await getParentScope(db, ctx);
+      if (scope === null || !scope.studentIds.has(studentId)) {
+        throw new TenantBoundaryError();
+      }
     }
   }
   const { data: student, error: studentError } = await db

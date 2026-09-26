@@ -245,6 +245,17 @@ export class FakeQuery {
           resolve?.({ data: affected, error: null, count: null }) as TResult1,
         );
       }
+      if (this.op === "insert") {
+        const items = (Array.isArray(this.payload) ? this.payload : [this.payload]) as Row[];
+        const inserted = items.map((item) => {
+          const row = { id: `gen-${idCounter++}`, ...item };
+          this.rows().push(row);
+          return row;
+        });
+        return Promise.resolve(
+          resolve?.({ data: inserted, error: null, count: null }) as TResult1,
+        );
+      }
       if (this.op === "update") {
         const matched = this.rows().filter((r) => this.matches(r));
         for (const m of matched) Object.assign(m, this.payload as Row);

@@ -197,17 +197,22 @@ describe("RBAC at the server boundary", () => {
     ).resolves.toBeDefined();
   });
 
-  it("STUDENT remains dormant: denied every permission", () => {
+  it("STUDENT is activated (Phase 12): self-only reads, no writes, no admin", () => {
     const ctx = resolveSessionContext(
       "auth-1",
       profileRow(),
       roleRows(["STUDENT"]),
       schoolRow(),
     );
-    expect(() => authorizePermission(ctx, "notices", "read")).toThrow(
+    // Self-only reads are granted (scoped per-request to own data).
+    expect(authorizePermission(ctx, "notices", "read")).toBeDefined();
+    expect(authorizePermission(ctx, "timetable", "read")).toBeDefined();
+    expect(authorizePermission(ctx, "marks", "read")).toBeDefined();
+    // No writes anywhere; no admin areas.
+    expect(() => authorizePermission(ctx, "notices", "write")).toThrow(
       ForbiddenError,
     );
-    expect(() => authorizePermission(ctx, "timetable", "read")).toThrow(
+    expect(() => authorizePermission(ctx, "marks", "write")).toThrow(
       ForbiddenError,
     );
     expect(() => authorizeRoles(ctx, ["SCHOOL_ADMIN"])).toThrow(

@@ -82,6 +82,21 @@ async function audienceRelevant(
       return false;
     });
   }
+  if (ctx.roles.includes("STUDENT")) {
+    // Student: SECTION → own section; CLASS → own class; untargeted = school-wide.
+    const { getStudentScope } = await import("@/lib/services/students");
+    const scope = await getStudentScope(db, ctx);
+    if (scope === null) return false;
+    return rows.some((t) => {
+      if (t.audience_type === "SECTION" && t.section_id !== null) {
+        return t.section_id === scope.sectionId;
+      }
+      if (t.audience_type === "CLASS" && t.class_id !== null) {
+        return t.class_id === scope.classId;
+      }
+      return false;
+    });
+  }
   return false;
 }
 
@@ -182,7 +197,7 @@ export async function listNotices(
   ctx: SessionContext,
   f: NoticeFilters,
 ): Promise<{ notices: NoticeDto[]; total: number }> {
-  authorizeRoles(ctx, ["SCHOOL_ADMIN", "TEACHER", "PARENT"]);
+  authorizeRoles(ctx, ["SCHOOL_ADMIN", "TEACHER", "PARENT", "STUDENT"]);
   const from = (f.page - 1) * f.limit;
   let query = db
     .from("notices")
@@ -219,7 +234,7 @@ export async function getNotice(
   ctx: SessionContext,
   id: string,
 ): Promise<NoticeDto> {
-  authorizeRoles(ctx, ["SCHOOL_ADMIN", "TEACHER", "PARENT"]);
+  authorizeRoles(ctx, ["SCHOOL_ADMIN", "TEACHER", "PARENT", "STUDENT"]);
   const { data, error } = await db
     .from("notices")
     .select(NOTICE_COLUMNS)
@@ -472,7 +487,7 @@ export async function getNoticeAttachmentUrl(
   ctx: SessionContext,
   noticeId: string,
 ): Promise<string> {
-  authorizeRoles(ctx, ["SCHOOL_ADMIN", "TEACHER", "PARENT"]);
+  authorizeRoles(ctx, ["SCHOOL_ADMIN", "TEACHER", "PARENT", "STUDENT"]);
   const { data, error } = await db
     .from("notices")
     .select(NOTICE_COLUMNS)

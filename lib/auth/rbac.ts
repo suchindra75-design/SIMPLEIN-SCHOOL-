@@ -94,8 +94,20 @@ const MATRIX: Record<AppRole, Partial<Record<Resource, Action[]>>> = {
     documents: ["read"],
   },
   STUDENT: {
-    // Dormant in V1: no grants. Any future student dashboard must add
-    // explicit entries here plus tests before shipping.
+    // Activated in Phase 12: self-only reads. Every grant below is scoped to
+    // the student's OWN data (students.user_id link) + own school — enforced
+    // per-request with the student scope helpers, not by this matrix alone.
+    students: ["read"],
+    attendance: ["read"],
+    exams: ["read"],
+    marks: ["read"],
+    "report-cards": ["read"],
+    timetable: ["read"],
+    homework: ["read"],
+    notices: ["read"],
+    notifications: ["read", "write"],
+    fees: ["read"],
+    documents: ["read"],
   },
 };
 

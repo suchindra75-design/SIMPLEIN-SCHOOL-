@@ -467,7 +467,7 @@ export async function getStudentResult(
   studentId: string,
   examId: string,
 ): Promise<StudentResultDto> {
-  authorizeRoles(ctx, ["SCHOOL_ADMIN", "TEACHER", "PARENT"]);
+  authorizeRoles(ctx, ["SCHOOL_ADMIN", "TEACHER", "PARENT", "STUDENT"]);
   const { data: student, error: studentError } = await db
     .from("students")
     .select("id, display_name, admission_no")
@@ -485,7 +485,7 @@ export async function getStudentResult(
   const examRow = exam as { id: string; class_id: string };
 
   let published: boolean;
-  // Actual publish state (all roles see it; only parents are gated by it).
+  // Actual publish state (all roles see it; parents/students gated by it).
   {
     const { data: states, error: stError } = await db
       .from("exam_subjects")
@@ -517,6 +517,14 @@ export async function getStudentResult(
         throw new TenantBoundaryError();
       }
       // Published-only: parents never see unpublished results.
+      if (!published) throw new NotFoundError("Results are not published yet");
+    } else if (ctx.roles.includes("STUDENT")) {
+      // Student: own results only, published-only.
+      const { getStudentScope } = await import("@/lib/services/students");
+      const scope = await getStudentScope(db, ctx);
+      if (scope === null || scope.studentId !== studentId) {
+        throw new TenantBoundaryError();
+      }
       if (!published) throw new NotFoundError("Results are not published yet");
     } else {
       throw new TenantBoundaryError();

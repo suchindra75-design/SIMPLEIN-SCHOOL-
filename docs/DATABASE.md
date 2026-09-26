@@ -399,3 +399,81 @@ records→assignment cross-school references rejected; `school_id` immutable.
 via the service scope); student_fees/records: admins own school + parents
 linked children only; writes admin-only.
 
+## 24b. pyqs — ✅ implemented (Phase 12)
+
+**Purpose:** school-managed Previous Year Questions bank (private bucket,
+signed access only).
+Fields: `id`, `school_id`, `class_id → classes`, `subject_id → subjects`,
+`year_label TEXT (2–20)`, `exam_board_name TEXT (1–120)`, `title TEXT NULL`,
+question file (`file_bucket/path/name/mime/bytes`), optional solution +
+answer-key files (`solution_*`/`answer_key_path/name`), `uploaded_by → users
+NOT NULL`, `is_active BOOL DEFAULT true` (archive), timestamps.
+**Indexes:** `(school_id, class_id, subject_id)`, `(school_id, year_label)`.
+**Constraints:** file `bytes > 0` CHECKs; tenant triggers reject cross-school
+class/subject references; `school_id` immutable.
+**RLS:** same-school reads (students/teachers/parents browse their school's
+bank; archived rows hidden via the service + not downloadable); writes
+admin-only.
+
+---
+
+## RLS policy pattern (applied per tenant table)
+
+> ✅ **Live for identity tables** (`schools`, `users`, `user_roles`) in
+> migration `0002_auth_tenant.sql` via helpers `current_app_user_id()`,
+> `current_school_id()`, `has_app_role()`, `is_school_admin()` (all
+> `SECURITY DEFINER`, fixed `search_path`, derived from `auth.uid()` — never
+> client-supplied ids).
+> ✅ **Extended in Phase 3** (`0003_people_structure.sql`): same-school
+> baseline for catalog tables; **link-scoped** reads for `students`,
+> `student_parents`, `student_enrollments` via `teacher_can_access_section()`
+> / `parent_can_access_student()`; admin-only writes for all Phase 3 tables;
+> append-only `audit_logs`; tenant-consistency triggers
+> (`assert_child_same_school`, `assert_link_same_school`) plus `school_id`
+> immutability on every tenant table.
+> ✅ **Extended in Phase 12** (`0012_student_portal.sql`): STUDENT role
+> activation — `students.user_id` login link + `current_student_id()`;
+> self-only reads across every module's RLS (own row/records, own school,
+> published results only, own section/class for timetable/homework/notices).
+
+```sql
+-- Read: same school, active user. (Parent/teacher/student link checks compose
+-- on top in service queries AND dedicated RLS functions; never client ids.)
+CREATE POLICY "<table>_select_same_school" ON public.<table>
+FOR SELECT USING (
+  EXISTS (SELECT 1 FROM public.users u
+          WHERE u.auth_user_id = auth.uid()
+            AND u.is_active
+            AND u.school_id = <table>.school_id)
+);
+-- INSERT/UPDATE/DELETE add WITH CHECK (school_id match) + role predicates
+-- via is_school_admin() / teaches_section() / linked_parent() helpers.
+```
+
+`school_id` immutability trigger + `audit_logs` writer trigger ship in the same
+migration as each table. Full DDL lands in `supabase/migrations/`; this
+document is the normative contract for it.
+
+## ER overview (text)
+
+```text
+schools 1───* users 1───* user_roles
+   │        │ 1───1 teachers ───* teacher_subjects *───1 subjects
+   │        │ 1───1 parents ───* student_parents *───1 students
+   │        └───* academic_years
+   ├───* classes 1───* sections ───* students
+   │      └───* class_subjects *─── subjects
+   ├───* attendance_sessions 1───* attendance_records *─── students
+   ├───* exams 1───* exam_subjects 1───* marks *─── students
+   │                                    └── exam_schedules
+   ├───* grading_systems 1───* grading_rules
+   ├───* report_cards (exam × student snapshot + pdf → private bucket)
+   ├───* timetable_slots (section × day × period)
+   ├───* homework 1───* homework_attachments *─── private buckets
+   ├───* notices 1───* notice_targets
+   ├───* notifications *─── users (recipient-isolated inbox)
+   ├───* fee_structures 1───* fee_components
+   │      └───* student_fee_assignments 1───* fee_payment_records
+   ├───* pyqs (school PYQ bank → private bucket)
+   └───* documents (registry, later module) ───* audit_logs (trail)
+```

@@ -28,9 +28,14 @@ describe("hasPermission", () => {
     expect(hasPermission(["PARENT"], "fees", "read")).toBe(true);
   });
 
-  it("keeps STUDENT dormant in V1 (deny by default)", () => {
-    expect(hasPermission(["STUDENT"], "notices", "read")).toBe(false);
-    expect(hasPermission(["STUDENT"], "timetable", "read")).toBe(false);
+  it("STUDENT (activated Phase 12): self-only reads, never writes", () => {
+    expect(hasPermission(["STUDENT"], "notices", "read")).toBe(true);
+    expect(hasPermission(["STUDENT"], "marks", "read")).toBe(true);
+    expect(hasPermission(["STUDENT"], "fees", "read")).toBe(true);
+    expect(hasPermission(["STUDENT"], "marks", "write")).toBe(false);
+    expect(hasPermission(["STUDENT"], "notices", "write")).toBe(false);
+    expect(hasPermission(["STUDENT"], "fees", "manage")).toBe(false);
+    expect(hasPermission(["STUDENT"], "users", "read")).toBe(false);
   });
 
   it("denies unknown combinations", () => {

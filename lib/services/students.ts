@@ -118,6 +118,11 @@ export async function listStudents(
         return { students: [], total: 0 };
       }
       query = query.in("id", [...scope.studentIds]);
+    } else if (ctx.roles.includes("STUDENT")) {
+      // Student: own row only.
+      const scope = await getStudentScope(db, ctx);
+      if (scope === null) return { students: [], total: 0 };
+      query = query.eq("id", scope.studentId);
     } else {
       throw new TenantBoundaryError();
     }
@@ -189,7 +194,39 @@ export async function assertStudentAccess(
     );
     return;
   }
+  if (ctx.roles.includes("STUDENT")) {
+    // Student: own row only.
+    const scope = await getStudentScope(db, ctx);
+    if (scope === null || scope.studentId !== row.id) {
+      throw new TenantBoundaryError();
+    }
+    return;
+  }
   throw new TenantBoundaryError();
+}
+
+export interface StudentScope {
+  studentId: string;
+  classId: string | null;
+  sectionId: string | null;
+}
+
+/** Resolve the caller's student scope (null when the user has no student profile). */
+export async function getStudentScope(
+  db: DbClient,
+  ctx: SessionContext,
+): Promise<StudentScope | null> {
+  const { data, error } = await db
+    .from("students")
+    .select("id, class_id, section_id")
+    .eq("user_id", ctx.profile.id)
+    .eq("school_id", ctx.profile.schoolId)
+    .eq("status", "active")
+    .maybeSingle();
+  if (error !== null) throw new Error(error.message);
+  if (data === null) return null;
+  const row = data as { id: string; class_id: string | null; section_id: string | null };
+  return { studentId: row.id, classId: row.class_id, sectionId: row.section_id };
 }
 
 /** Admin only. */

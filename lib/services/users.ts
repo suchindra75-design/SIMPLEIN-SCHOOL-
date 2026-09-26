@@ -16,7 +16,7 @@ import type {
 import type { AppRole } from "@/lib/auth/rbac";
 
 /** Roles a School Admin may grant. SCHOOL_ADMIN is onboarding-only. */
-const GRANTABLE: AppRole[] = ["TEACHER", "PARENT"];
+const GRANTABLE: AppRole[] = ["TEACHER", "PARENT", "STUDENT"];
 
 function requireAdmin(ctx: SessionContext): void {
   authorizeRoles(ctx, ["SCHOOL_ADMIN"]);
@@ -93,9 +93,18 @@ export async function createUserWithRole(
   const admin = createAdminClient();
 
   // Resolve + verify the profile link (same school, currently unlinked).
-  const profileTable = input.role === "TEACHER" ? "teachers" : "parents";
+  const profileTable =
+    input.role === "TEACHER"
+      ? "teachers"
+      : input.role === "PARENT"
+        ? "parents"
+        : "students";
   const profileId =
-    input.role === "TEACHER" ? input.link.teacherId : input.link.parentId;
+    input.role === "TEACHER"
+      ? input.link.teacherId
+      : input.role === "PARENT"
+        ? input.link.parentId
+        : input.link.studentId;
   if (profileId === undefined) {
     throw new ConflictError(`${input.role} creation requires a profile link`);
   }

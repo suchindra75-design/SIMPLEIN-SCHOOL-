@@ -1,0 +1,62 @@
+-- SIMPLEIN SCHOOL ERP · Phase 12 RLS verification (LIVE DATABASE ONLY).
+-- Run against a staging Supabase project AFTER applying migration 0012, as
+-- authenticated users of two schools. No local Postgres tooling exists in
+-- this environment, so these checks have NOT been executed here — the
+-- equivalent server-boundary logic IS unit-tested in
+-- lib/services/student-portal.test.ts (11 tests),
+-- lib/services/promotions.test.ts (12 tests), and
+-- lib/services/pyqs.test.ts (11 tests) — all passing.
+--
+-- Setup: school A with admin(A); student S (login linked via
+-- students.user_id, class 7A) + student S2 (class 7A, different login);
+-- teacher T; parent P (linked to s1); school B with an equivalent set.
+-- Authenticate each block with that JWT.
+
+-- A. Student self-access (own data only) --------------------------------------
+-- As student S (school A):
+-- SELECT id, display_name FROM public.students;
+--   -- expect: ONLY S's own row (s2 same-class invisible, B invisible)
+-- SELECT id FROM public.student_enrollments;   -- expect: only S's rows
+-- SELECT id FROM public.attendance_records;    -- expect: only S's rows
+-- SELECT id FROM public.student_fees;          -- expect: only S's rows
+-- SELECT id FROM public.timetable_slots;       -- expect: S's section rows only
+-- SELECT id FROM public.homework;              -- expect: S's section rows only
+-- SELECT * FROM public.students WHERE id = '<s2>';  -- expect: 0 rows
+
+-- B. Published-only gating ---------------------------------------------------------
+-- As student S:
+-- SELECT id FROM public.marks;
+--   -- expect: ONLY S's marks where the owning exam_subject is_published
+-- SELECT * FROM public.marks WHERE exam_subject_id = '<unpublished-es>';
+--   -- expect: 0 rows
+-- SELECT id, status FROM public.report_cards;
+--   -- expect: ONLY S's cards with status='PUBLISHED'
+-- SELECT * FROM public.report_cards WHERE status = 'DRAFT';  -- expect: 0 rows
+-- INSERT/UPDATE/DELETE on marks/report_cards/attendance/fees →
+--   expect: RLS violations (read-only role; writes are admin/teacher-only)
+
+-- C. Promotion (admin-only; own school) -----------------------------------------------
+-- As student S / teacher T: INSERT into student_enrollments for a new year →
+--   expect: RLS violation (enrollments have admin-only write policies).
+-- As admin(A): promote → INSERT enrollment row for y2 → 1 row (ALLOWED);
+--   duplicate (same student+year) → duplicate key; UPDATE students pointers → 1 row.
+-- As admin(B): school-A enrollments → 0 rows (DENIED).
+
+-- D. PYQs -------------------------------------------------------------------------------
+-- As admin(A): upload under schools/<A>/pyqs/ → ALLOWED.
+-- As student S: SELECT id FROM public.pyqs;  -- expect: only school-A PYQs
+-- SELECT * FROM public.pyqs WHERE id = '<school-B-pyq-id>';  -- expect: 0 rows
+-- INSERT/UPDATE/DELETE on public.pyqs as student → expect: RLS violations.
+-- Signed-URL download of a school-A PYQ → ALLOWED; direct public URL → none.
+
+-- E. Data integrity (as admin A; triggers must RAISE) -------------------------------------
+-- INSERT INTO public.students (school_id, admission_no, first_name, display_name, user_id)
+--   VALUES ('<A>', 'X', 'X', 'X', '<school-B-user>');
+--   -- expect: cross-tenant reference exception (user link)
+-- INSERT INTO public.students (..., user_id) VALUES (..., '<same-school-user-with-a-student>');
+--   -- expect: duplicate key (user_id UNIQUE — one login per student)
+-- INSERT INTO public.pyqs (school_id, class_id, subject_id, ...)
+--   VALUES ('<A>', '<school-B-class>', '<A-subject>', ...);
+--   -- expect: cross-tenant reference exception (class)
+-- UPDATE public.students SET school_id = '<B>' WHERE id = '<s1>';
+--   -- expect: school_id is immutable

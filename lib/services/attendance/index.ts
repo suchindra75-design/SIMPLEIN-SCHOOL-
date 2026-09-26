@@ -130,6 +130,15 @@ export async function assertStudentAttendanceAccess(
     );
     return;
   }
+  if (ctx.roles.includes("STUDENT")) {
+    // Student: own attendance only.
+    const { getStudentScope } = await import("@/lib/services/students");
+    const scope = await getStudentScope(db, ctx);
+    if (scope === null || scope.studentId !== studentId) {
+      throw new TenantBoundaryError();
+    }
+    return;
+  }
   throw new TenantBoundaryError();
 }
 
@@ -470,6 +479,7 @@ export async function getStudentAttendance(
   studentId: string,
   q: AttendanceRangeQuery,
 ): Promise<{ records: StudentAttendanceRow[]; total: number }> {
+  authorizeRoles(ctx, ["SCHOOL_ADMIN", "TEACHER", "PARENT", "STUDENT"]);
   // Tenant + link scope (shared helper; 404 on cross-tenant).
   const { data: student, error: studentError } = await db
     .from("students")
@@ -523,6 +533,7 @@ export async function getStudentSummary(
   studentId: string,
   range: { from?: string; to?: string },
 ): Promise<AttendanceSummary> {
+  authorizeRoles(ctx, ["SCHOOL_ADMIN", "TEACHER", "PARENT", "STUDENT"]);
   // Scope first (404 on cross-tenant; linked children only for parents).
   const { data: student, error: studentError } = await db
     .from("students")

@@ -533,7 +533,13 @@ export async function createUserAction(
   try {
     const ctx = await requireRole("SCHOOL_ADMIN");
     const db = await createServerSupabaseClient();
-    const role = str(form, "role") === "PARENT" ? "PARENT" : "TEACHER";
+    const roleRaw = str(form, "role") ?? "TEACHER";
+    const role =
+      roleRaw === "PARENT"
+        ? "PARENT"
+        : roleRaw === "STUDENT"
+          ? "STUDENT"
+          : "TEACHER";
     await createUserWithRole(db, ctx, {
       email: str(form, "email") ?? "",
       fullName: str(form, "fullName") ?? "",
@@ -543,6 +549,7 @@ export async function createUserAction(
       link: {
         teacherId: role === "TEACHER" ? str(form, "teacherId") : undefined,
         parentId: role === "PARENT" ? str(form, "parentId") : undefined,
+        studentId: role === "STUDENT" ? str(form, "studentId") : undefined,
       },
     });
     revalidatePath("/admin/users");
@@ -897,4 +904,154 @@ export async function deleteTimetableSlotAction(
   } catch (error) {
     return err(error);
   }
+}
+
+/* ------------------------------ promotions ------------------------------ */
+
+export async function promoteStudentsAction(
+  _prev: ActionState,
+  form: FormData,
+): Promise<ActionState & { promoted?: number; failed?: number }> {
+  try {
+    const ctx = await requireRole("SCHOOL_ADMIN");
+    const db = await createServerSupabaseClient();
+    const fromYearId = str(form, "fromYearId") ?? "";
+    const toYearId = str(form, "toYearId") ?? "";
+    if (fromYearId === "" || toYearId === "") {
+      return { error: "Select both academic years" };
+    }
+    // Per-student rows: studentId_<i> + nextSectionId_<i> + hold_<i>.
+    const assignments: {
+      studentId: string;
+      nextClassId: string | null;
+      nextSectionId: string | null;
+      hold: boolean;
+    }[] = [];
+    for (let i = 0; i < 500; i++) {
+      const studentId = str(form, `studentId_${i}`);
+      if (studentId === undefined) continue;
+      const sectionId = str(form, `nextSectionId_${i}`);
+      const nextClassRaw = str(form, `nextClassId_${i}`);
+      assignments.push({
+        studentId,
+        nextClassId: nextClassRaw === undefined ? null : nextClassRaw,
+        nextSectionId: sectionId === undefined ? null : sectionId,
+        hold: form.get(`hold_${i}`) === "on",
+      });
+    }
+    if (assignments.length === 0) {
+      return { error: "No students selected" };
+    }
+    const { promoteStudents } = await import("@/lib/services/promotions");
+    const result = await promoteStudents(db, ctx, {
+      fromYearId,
+      toYearId,
+      assignments,
+    });
+    revalidatePath("/admin/promotions");
+    return {
+      success: true,
+      promoted: result.promoted,
+      failed: result.failed.length,
+    };
+  } catch (error) {
+    return err(error);
+  }
+}
+
+/** Void-returning wrapper for plain-form promotion submission. */
+export async function promoteStudentsFormAction(
+  prev: ActionState,
+  form: FormData,
+): Promise<void> {
+  await promoteStudentsAction(prev, form);
+}
+
+/* --------------------------------- pyqs ---------------------------------- */
+
+/** Multipart PYQ upload (file + optional solution/answerKey + metadata). */
+export async function createPyqAction(
+  _prev: ActionState,
+  form: FormData,
+): Promise<void> {
+  const ctx = await requireRole("SCHOOL_ADMIN");
+  const db = await createServerSupabaseClient();
+  const { createPyq } = await import("@/lib/services/pyqs");
+  const file = form.get("file");
+  if (!(file instanceof File)) {
+    throw new Error("Attach the question paper");
+  }
+  const solutionRaw = form.get("solution");
+  const answerKeyRaw = form.get("answerKey");
+  await createPyq(
+    db,
+    ctx,
+    {
+      classId: str(form, "classId") ?? "",
+      subjectId: str(form, "subjectId") ?? "",
+      yearLabel: str(form, "yearLabel") ?? "",
+      examBoardName: str(form, "examBoardName") ?? "",
+      title: str(form, "title") ?? null,
+    },
+    {
+      file: {
+        name: file.name,
+        type: file.type,
+        size: file.size,
+        bytes: await file.arrayBuffer(),
+      },
+      solution:
+        solutionRaw instanceof File
+          ? {
+              name: solutionRaw.name,
+              type: solutionRaw.type,
+              size: solutionRaw.size,
+              bytes: await solutionRaw.arrayBuffer(),
+            }
+          : null,
+      answerKey:
+        answerKeyRaw instanceof File
+          ? {
+              name: answerKeyRaw.name,
+              type: answerKeyRaw.type,
+              size: answerKeyRaw.size,
+              bytes: await answerKeyRaw.arrayBuffer(),
+            }
+          : null,
+    },
+  );
+  revalidatePath("/admin/pyqs");
+}
+
+export async function updatePyqAction(
+  id: string,
+  _prev: ActionState,
+  form: FormData,
+): Promise<ActionState> {
+  const ctx = await requireRole("SCHOOL_ADMIN");
+  const db = await createServerSupabaseClient();
+  const { updatePyq } = await import("@/lib/services/pyqs");
+  await updatePyq(db, ctx, id, {
+    yearLabel: str(form, "yearLabel"),
+    examBoardName: str(form, "examBoardName"),
+    title: str(form, "title") ?? null,
+  });
+  revalidatePath("/admin/pyqs");
+  return { success: true };
+}
+
+export async function archivePyqAction(id: string): Promise<void> {
+  const ctx = await requireRole("SCHOOL_ADMIN");
+  const db = await createServerSupabaseClient();
+  const { setPyqActive } = await import("@/lib/services/pyqs");
+  await setPyqActive(db, ctx, id, false);
+  revalidatePath("/admin/pyqs");
+}
+
+export async function restorePyqAction(id: string): Promise<void> {
+  const ctx = await requireRole("SCHOOL_ADMIN");
+  const db = await createServerSupabaseClient();
+  const { setPyqActive } = await import("@/lib/services/pyqs");
+  await setPyqActive(db, ctx, id, true);
+  revalidatePath("/admin/pyqs");
 }
