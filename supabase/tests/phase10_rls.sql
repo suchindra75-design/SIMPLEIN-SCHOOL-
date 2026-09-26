@@ -1,0 +1,69 @@
+-- SIMPLEIN SCHOOL ERP · Phase 10 RLS verification (LIVE DATABASE ONLY).
+-- Run against a staging Supabase project AFTER applying migration 0010, as
+-- authenticated users of two schools. No local Postgres tooling exists in
+-- this environment, so these checks have NOT been executed here — the
+-- equivalent server-boundary logic IS unit-tested in
+-- lib/services/notices.test.ts (18 tests, passing).
+--
+-- Setup: school A with admin(A); teacher T (class teacher of sec7a) + T2
+-- (class teacher of sec7b); parent P (linked to student s1 in sec7a via
+-- student_parents, NOT s2 in sec7b); school B with an equivalent set.
+-- Authenticate each block with that JWT.
+
+-- A. Tenant isolation — School A notices: A→A allowed, A→B denied -----------------
+-- As admin(A):
+-- SELECT id, title FROM public.notices;       -- expect: only school-A notices
+-- SELECT * FROM public.notices WHERE id = '<school-B-notice-id>'; -- expect: 0 rows
+-- SELECT id FROM public.notifications;        -- expect: only OWN inbox rows
+-- UPDATE public.notices SET title='x' WHERE id = '<school-B-notice-id>';
+--   -- expect: 0 rows affected
+
+-- B. Audience targeting in RLS --------------------------------------------------------
+-- As teacher T (school A):
+-- SELECT id, title FROM public.notices;
+--   -- expect: school-wide (untargeted) + TEACHERS-targeted + sec7a-targeted +
+--   --        own drafts ONLY. sec7b/other-class notices invisible.
+-- As parent P (school A):
+-- SELECT id, title FROM public.notices;
+--   -- expect: school-wide + PARENTS-targeted + sec7a-targeted ONLY.
+
+-- C. Notification recipient isolation ----------------------------------------------------
+-- As teacher T: SELECT * FROM public.notifications;  -- expect: only T's rows
+-- UPDATE public.notifications SET is_read = true WHERE user_id = '<other-user>';
+--   -- expect: 0 rows affected (own-rows-only update policy)
+-- INSERT INTO public.notifications (school_id, user_id, type, title, message)
+--   VALUES ('<B>', '<T>', 'NOTICE', 'X', '');
+--   -- expect: RLS violation (cross-school fan-out)
+-- INSERT INTO public.notifications (school_id, user_id, type, title, message)
+--   VALUES ('<A>', '<other-user>', 'NOTICE', 'X', '');
+--   -- expect: allowed for admin/teacher (fan-out), violation for parent
+
+-- D. Storage (private notice-attachments bucket) --------------------------------------------
+-- As admin(A): upload under schools/<A>/notices/<notice-id>/ → ALLOWED.
+-- As teacher/parent (in-audience): signed-URL download → ALLOWED.
+-- Any user: direct public URL → does not exist (bucket private).
+-- As admin(B): school-A paths → 0 objects.
+
+-- E. Data integrity (as admin A; triggers must RAISE) ------------------------------------------
+-- INSERT INTO public.notice_targets (school_id, notice_id, audience_type, class_id)
+--   VALUES ('<A>', '<A-notice>', 'CLASS', '<school-B-class>');
+--   -- expect: cross-tenant reference exception
+-- INSERT INTO public.notice_targets (school_id, notice_id, audience_type, section_id)
+--   VALUES ('<A>', '<A-notice>', 'SECTION', '<school-B-section>');
+--   -- expect: cross-tenant reference exception
+-- INSERT INTO public.notice_targets (school_id, notice_id, audience_type)
+--   VALUES ('<A>', '<A-notice>', 'SCHOOL');  -- twice → duplicate key (unique index)
+-- INSERT INTO public.notice_targets (school_id, notice_id, audience_type, class_id, section_id)
+--   VALUES ('<A>', '<A-notice>', 'SCHOOL', '<A-class>', NULL);
+--   -- expect: CHECK violation (SCHOOL shape requires NULL class/section)
+-- INSERT INTO public.notices (school_id, title, content, category)
+--   VALUES ('<A>', 'X', 'X', 'UNKNOWN');
+--   -- expect: CHECK violation (category enum)
+-- UPDATE public.notices SET school_id = '<B>' WHERE id = '<A-notice>';
+--   -- expect: school_id is immutable
+
+-- F. Modification authorization ------------------------------------------------------------------
+-- As teacher T / parent P: any INSERT/UPDATE/DELETE on notices/notice_targets →
+--   RLS violations (admin-only writes).
+-- As admin(A): INSERT/UPDATE own-school notices → 1 row (ALLOWED).
+-- As admin(B): UPDATE school-A rows → 0 rows (DENIED).

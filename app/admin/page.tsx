@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { requireRole } from "@/lib/auth/session";
+import { UnreadBadge } from "@/app/components/UnreadBadge";
 import { listClasses } from "@/lib/services/classes";
 import { listParents } from "@/lib/services/parents";
 import { listStudents } from "@/lib/services/students";
@@ -29,6 +30,7 @@ export default async function AdminDashboardPage() {
   return (
     <main>
       <h2 className="text-xl font-semibold">Dashboard</h2>
+      <div className="mt-2"><UnreadBadge /></div>
       <p className="mt-1 text-sm text-gray-600">
         {ctx.profile.fullName} · {ctx.school.name}
       </p>

@@ -453,7 +453,7 @@ export async function addHomeworkAttachment(
   await assertHomeworkSectionAccess(db, ctx, row.section_id);
   await assertHomeworkAuthorship(db, ctx, row);
 
-  const path = buildAttachmentPath(ctx.profile.schoolId, homeworkId, file.name);
+  const path = buildAttachmentPath(ctx.profile.schoolId, "homework", homeworkId, file.name);
   await uploadHomeworkAttachment(db, path, file.bytes, file.type);
   const { data, error } = await db
     .from("homework_attachments")

@@ -245,6 +245,23 @@ export class FakeQuery {
           resolve?.({ data: affected, error: null, count: null }) as TResult1,
         );
       }
+      if (this.op === "update") {
+        const matched = this.rows().filter((r) => this.matches(r));
+        for (const m of matched) Object.assign(m, this.payload as Row);
+        return Promise.resolve(
+          resolve?.({ data: matched, error: null, count: null }) as TResult1,
+        );
+      }
+      if (this.op === "delete") {
+        const matched = this.rows().filter((r) => this.matches(r));
+        for (const m of matched) {
+          const idx = this.rows().indexOf(m);
+          if (idx >= 0) this.rows().splice(idx, 1);
+        }
+        return Promise.resolve(
+          resolve?.({ data: matched, error: null, count: null }) as TResult1,
+        );
+      }
       let rows = this.rows().filter((r) => this.matches(r));
       const total = rows.length;
       if (this.rangeSlice !== null) {

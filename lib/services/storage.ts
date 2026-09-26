@@ -99,13 +99,14 @@ const BLOCKED_EXTENSIONS = new Set(["docm", "xlsm", "exe", "bat", "sh", "js"]);
 /** Tenant-prefixed attachment path (RLS enforces the school segment). */
 export function buildAttachmentPath(
   schoolId: string,
+  folder: string,
   entityId: string,
   originalName: string,
 ): string {
   const ext = originalName.split(".").pop()?.toLowerCase().replace(/[^a-z0-9]/g, "") ?? "bin";
   const safeExt = BLOCKED_EXTENSIONS.has(ext) ? "bin" : ext.slice(0, 10);
   const rand = Math.random().toString(36).slice(2, 10);
-  return `schools/${schoolId}/homework/${entityId}/${Date.now()}_${rand}.${safeExt}`;
+  return `schools/${schoolId}/${folder}/${entityId}/${Date.now()}_${rand}.${safeExt}`;
 }
 
 /** Returns an error message, or null when the upload is acceptable. */
@@ -113,8 +114,7 @@ export function validateHomeworkUpload(file: {
   size: number;
   type: string;
   name: string;
-}): string | null {
-  if (!ALLOWED_HOMEWORK_MIME.has(file.type)) {
+}): string | null {  if (!ALLOWED_HOMEWORK_MIME.has(file.type)) {
     return "Attachment type is not allowed";
   }
   if (file.size <= 0 || file.size > MAX_HOMEWORK_FILE_BYTES) {
@@ -156,6 +156,44 @@ export async function signedHomeworkUrl(
     .createSignedUrl(path, expiresInSeconds);
   if (error !== null || data === null) {
     throw new Error(`homework_url_failed: ${error?.message ?? "unknown"}`);
+  }
+  return data.signedUrl;
+}
+
+/* ------------------- generic bucket helpers (Phase 10) ------------------- */
+
+/** Shared document allowlist (PDF/images/Office; macros blocked) — used by
+ *  homework AND notice attachments. */
+export const validateDocumentUpload = validateHomeworkUpload;
+
+/** Upload to any private bucket via the caller's client. */
+export async function uploadToBucket(
+  db: DbClient,
+  bucket: string,
+  path: string,
+  bytes: ArrayBuffer,
+  contentType: string,
+): Promise<void> {
+  const { error } = await db.storage
+    .from(bucket)
+    .upload(path, bytes, { contentType, upsert: false });
+  if (error !== null) {
+    throw new Error(`upload_failed: ${error.message}`);
+  }
+}
+
+/** Short-lived signed read URL for any private bucket (caller authorized). */
+export async function signedBucketUrl(
+  db: DbClient,
+  bucket: string,
+  path: string,
+  expiresInSeconds = 600,
+): Promise<string> {
+  const { data, error } = await db.storage
+    .from(bucket)
+    .createSignedUrl(path, expiresInSeconds);
+  if (error !== null || data === null) {
+    throw new Error(`url_failed: ${error?.message ?? "unknown"}`);
   }
   return data.signedUrl;
 }

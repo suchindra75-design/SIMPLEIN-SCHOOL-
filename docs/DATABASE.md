@@ -319,25 +319,43 @@ check is service-enforced); parents linked children's sections (read-only,
 attachment downloads via signed URLs); storage RLS: members read own-school
 prefix; admins + teachers write.
 
-## 22. notices + notice_audience
+## 22. notices + notice_targets — ✅ implemented (Phase 10)
 
-**`notices`:** `id`, `school_id`, `title`, `body`, `category
-(GENERAL|CLASS|EXAM|HOLIDAY|URGENT)`, `published_by → users`, `published_at`,
-`expires_at NULL`, `attachment_document_id → documents NULL`, timestamps.
-**Index:** `(school_id, category, published_at DESC)`.
-**`notice_audience`:** targets: `notice_id → notices ON DELETE CASCADE`,
-`audience_type (SCHOOL|CLASS|SECTION)`, `class_id NULL`, `section_id NULL`.
-Untargeted (no rows) = whole school. Parent/teacher feeds filter by their
-sections + school-wide rows.
+**`notices`:** `id`, `school_id`, `title TEXT CHECK (1–200)`, `content TEXT
+CHECK (1–5000)`, `category (GENERAL|CLASS|SECTION|EXAM|HOLIDAY|URGENT)`,
+`is_published BOOL DEFAULT false`, `published_at NULL`, `expires_at DATE NULL`,
+`is_active BOOL DEFAULT true` (soft-delete/archive — history preserved; the
+draft's "published_by" is realized as `created_by`), single attachment
+(`attachment_bucket/path/name/mime/bytes` — private `notice-attachments`
+bucket, signed access only), `created_by → users`, timestamps.
+**Indexes:** `(school_id, is_published, created_at DESC)`,
+`(school_id, category, created_at DESC)`.
+**`notice_targets`:** `id`, `school_id`, `notice_id → notices ON DELETE
+CASCADE`, `audience_type (SCHOOL|CLASS|SECTION|TEACHERS|PARENTS)`, `class_id
+NULL`, `section_id NULL`, timestamps. Untargeted (no rows) = school-wide.
+**Constraint:** `notice_targets_school_shape` CHECK (SCHOOL/TEACHERS/PARENTS
+→ NULL ids; CLASS → class_id; SECTION → section_id). **Duplicate targets
+prevented:** `UNIQUE(notice_id, audience_type, class_id, section_id)`.
+**Indexes:** `(notice_id)`, `(school_id, section_id)`.
+**Tenant triggers:** class/section target references rejected cross-school;
+`school_id` immutable.
+**RLS:** audience filtering IN RLS (mirrors the service feeds): admins all;
+teachers school-wide + TEACHERS + their sections/classes + own; parents
+school-wide + PARENTS + linked children's sections/classes; writes admin-only.
 
-## 23. notifications
+## 23. notifications — ✅ implemented (Phase 10)
 
 **Purpose:** per-user internal inbox (V1 delivery = in-app; see ARCHITECTURE §10).
-Fields: `id`, `school_id`, `user_id → users ON DELETE CASCADE`, `type
-(ATTENDANCE|HOMEWORK|EXAM|RESULT|NOTICE|FEE|ACCOUNT)`, `title`, `body`,
-`entity TEXT NULL`, `entity_id UUID NULL`, `is_read BOOL DEFAULT false`,
-timestamps. **Index:** `(school_id, user_id, is_read, created_at DESC)` (badge query).
-`channel` enum reserved for post-V1 (SMS/WhatsApp) without schema change.
+Fields: `id`, `school_id`, `user_id → users ON DELETE CASCADE` (RECIPIENT),
+`type (ATTENDANCE|HOMEWORK|EXAM|RESULT|NOTICE|ACCOUNT)`, `title TEXT CHECK
+(1–200)`, `message TEXT`, `entity TEXT NULL`, `entity_id UUID NULL`,
+`is_read BOOL DEFAULT false`, `read_at NULL`, `created_at`.
+**Indexes:** `(user_id, is_read, created_at DESC)` (badge query + recipient
+lookups), `(school_id, created_at DESC)`. (The draft's FEE type is reserved
+for the fee module; `channel` reserved for post-V1 SMS/WhatsApp.)
+**RLS:** RECIPIENT ISOLATION — `SELECT`/`UPDATE` own rows only (never another
+user's, even same school); `INSERT` (fan-out) allowed for admins/teachers of
+the school (the service resolves recipients server-side).
 
 ## 24. Fee tracking — `fee_structures` · `fee_components` · `student_fee_assignments` · `fee_payment_records`
 

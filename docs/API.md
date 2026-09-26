@@ -229,22 +229,28 @@ teacher double-booking by a service pre-check + partial
 | POST | `/homework/:id/attachments` | author-teacher / admin ＋audit | Multipart `{ file }`: ≤10 MB, PDF/images/Office (macro-enabled blocked); stored privately (tenant-prefixed path); orphan cleaned on failure. |
 | GET | `/homework/:id/attachments/:attachmentId` | admin / teacher:assigned / parent:linked | Short-lived **signed URL** (never a public URL). |
 
-## /notices — Notices
+## /notices — Notices — ✅ implemented (Phase 10)
 
 | Method | Endpoint | Auth | Notes |
 |--------|----------|------|-------|
-| GET | `/notices` | session | Feed auto-filtered: school-wide + caller's classes/sections; `?category`. |
-| POST | `/notices` | admin (+ teacher:assigned for CLASS scope, policy-flagged) ＋audit | `{ title, body, category, audience: {type, classId?, sectionId?}, expiresAt? }`; queues notifications. |
-| GET | `/notices/:id` | session (in-audience) | 404 outside audience. |
-| PATCH | `/notices/:id` | author / admin ＋audit | |
-| DELETE | `/notices/:id` | author / admin ＋audit | Soft-delete; inbox copies marked withdrawn. |
+| GET | `/notices` | session | Audience-filtered feed (server-side targeting): admins all; teachers school-wide + TEACHERS + own sections/classes; parents school-wide + PARENTS + children's sections/classes. Expired excluded; `?category&page&limit&includeInactive`. |
+| POST | `/notices/create` | admin ＋audit | `{ title, content, category, audience: {type, classId?, sectionId?}, expiresAt? }`; created UNPUBLISHED; target shape validated (409/404); cross-school targets rejected. |
+| GET | `/notices/:id` | session (in-audience) | 404 outside audience/cross-tenant. |
+| PATCH | `/notices/:id` | admin ＋audit | Title/content/category/expiry + audience replacement (target change audited). |
+| POST | `/notices/:id/publish` | admin ＋audit | Publishes + fans out in-app notifications to the targeted audience (server-side resolution, chunked). |
+| POST | `/notices/:id/unpublish` | admin ＋audit | |
+| DELETE | `/notices/:id` | admin ＋audit | Archive (soft-delete; restorable). |
+| POST | `/notices/:id/attachments` | admin ＋audit | Multipart `{ file }`: ≤10 MB, PDF/images/Office (macros blocked); private `notice-attachments` bucket. |
+| GET | `/notices/:id/attachments/url` | session (in-audience) | Short-lived **signed URL** (never public). |
 
-## /notifications — Notifications (internal)
+## /notifications — Notifications (internal) — ✅ implemented (Phase 10)
 
 | Method | Endpoint | Auth | Notes |
 |--------|----------|------|-------|
-| GET | `/notifications` | session | Own inbox; `?unreadOnly&type&page`. |
-| GET | `/notifications/unread-count` | session | Badge number. |
+| GET | `/notifications` | session | Own inbox (recipient isolation); `?unreadOnly&type&page&limit`. |
+| GET | `/notifications/unread-count` | session | Badge number (own rows only). |
+| POST | `/notifications/:id/read` | self ＋ | Mark one as read (idempotent; own rows only). |
+| POST | `/notifications/read-all` | self ＋ | Mark all as read. |
 | POST | `/notifications/:id/read` | self | Idempotent mark-read. |
 | POST | `/notifications/read-all` | self | |
 | GET | `/notifications/preferences` | self | Non-critical opt-outs. |

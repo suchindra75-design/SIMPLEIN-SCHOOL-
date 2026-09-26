@@ -428,7 +428,8 @@ attendance happy paths. Tenant/RBAC suites block merges on failure.
 6. Marks + grades. ✅ done (Phase 6).
 7. Report cards + PDF. ✅ done (Phase 7).
 8. Timetable. ✅ done (Phase 8).
-9. Homework + attachments. ✅ done (Phase 9). Fee tracking + documents hardening + audit coverage pass: next.
+9. Homework + attachments. ✅ done (Phase 9).
+10. Notices + notifications. ✅ done (Phase 10). Fee tracking + documents hardening + audit coverage pass: next.
 8. Dashboard shells per role (child selector, "My Classes"), pagination +
    performance pass, OpenAPI generation, pilot readiness (backups, monitoring).
 
@@ -664,7 +665,45 @@ Explicitly deferred: payments, SMS/WhatsApp, student dashboard, substitution.
   + secure attachment links). Functional, consistent with the existing
   design system.
 
-## 24. Important architectural decisions (log)
+## 24. Phase 10: notices + notifications (implemented)
+
+- **Notice targeting (server-side):** `notice_targets` rows define the
+  audience (`SCHOOL | CLASS | SECTION | TEACHERS | PARENTS`; untargeted =
+  school-wide). Audience shape enforced at the DB (CHECK + unique index for
+  duplicate targets); recipient resolution and feed filtering happen in BOTH
+  the service (feeds/detail, 404 boundary) and RLS (audience joins) — never
+  in the browser.
+- **Audience semantics:** SCHOOL → all active school users; CLASS → admins +
+  teachers of the class's sections + parents of students in the class;
+  SECTION → admins + class teacher + subject teachers + parents of the
+  section; TEACHERS → teachers only (no admins); PARENTS → all active parents.
+  Cross-school CLASS/SECTION targets rejected (404 before any write).
+- **Notification architecture (reusable):** `lib/services/notifications.ts` —
+  `fanOutNotification(db, ctx, {type, title, message, entity, audience})`
+  resolves recipients per audience, dedupes, inserts in chunks of 500.
+  Fully wired to notice publishing (NOTICE type). The same fan-out is ready
+  for HOMEWORK (homework create), EXAM (publish), RESULT (publish), and
+  ATTENDANCE events — callers pass their own type/entity/audience; documented
+  limitation: fan-out is in-request (chunked, not background-queued).
+- **Recipient isolation:** notifications SELECT/UPDATE are own-rows-only at
+  RLS AND service (a user never reads another user's inbox even in the same
+  school); INSERT (fan-out) is restricted to authorized school roles.
+  Unread count + mark-one/mark-all-read are per-user.
+- **Notice lifecycle:** created UNPUBLISHED → publish (explicit, audited,
+  fans out) → unpublish → archive (soft-delete, restorable, audited).
+  Expired notices are excluded from all feeds (server-side, every role).
+  Teachers have read-only notice permissions in the matrix — creation is
+  admin-only (deny-by-default; a teacher-creation policy flag is future work).
+- **Attachments:** single attachment per notice, private
+  `notice-attachments` bucket, tenant-prefixed paths, signed URLs only after
+  the audience scope check; ≤10 MB, PDF/images/Office (macros blocked).
+- **UI:** /admin/notices (create/edit/publish/archive + audience selection +
+  attachment), /teacher/notices, /parent/notices (+secure attachment links),
+  /notifications (all roles: list, unread badge, mark read/all) + unread
+  badges on all three dashboards. Functional, consistent with the existing
+  design system.
+
+## 25. Important architectural decisions (log)
 
 | # | Decision | Why |
 |---|----------|-----|
@@ -676,6 +715,8 @@ Explicitly deferred: payments, SMS/WhatsApp, student dashboard, substitution.
 | AD-23 | Section × day × period slots; DB-enforced overlap + teacher-clash guards | Conflicts prevented at the DB (partial unique index), not just app code; periods configurable |
 | AD-24 | Homework authorship boundary (not section-level) for edits/deletes | A teacher never touches another teacher's homework, even in the same section |
 | AD-25 | homework_attachments own their storage metadata | Documents registry lands later without re-modeling attachments |
+| AD-26 | Audience filtering enforced twice (service 404 + RLS joins) | Server-side targeting; no browser-determined recipients |
+| AD-27 | Notification fan-out in-request, chunked; recipient isolation own-rows-only | Simple V1 without a job queue; isolation guaranteed at RLS + service |
 | AD-19 | Lock/publish states on exam_subjects; publish = explicit + audited | Teacher edits die at lock; parents see published only — enforced in service AND RLS |
 | AD-20 | Grade = pure function over school-defined bands; no hard-coded letters | Configurable per school; CGPA-extensible; one tested implementation |
 | AD-21 | Absent subjects: 0 obtained, full max (counts against) | Consistent with the attendance absence philosophy; documented rule |

@@ -1,4 +1,5 @@
 import { requireRole } from "@/lib/auth/session";
+import { UnreadBadge } from "@/app/components/UnreadBadge";
 import {
   getTeacherScope,
   listTeacherSections,
@@ -19,6 +20,7 @@ export default async function TeacherDashboardPage() {
   return (
     <main>
       <h2 className="text-xl font-semibold">My classes</h2>
+      <div className="mt-2"><UnreadBadge /></div>
       <p className="mt-1 text-sm text-gray-600">
         {ctx.profile.fullName} · {ctx.school.name}
       </p>

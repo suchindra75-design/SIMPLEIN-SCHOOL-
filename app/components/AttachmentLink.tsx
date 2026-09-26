@@ -5,17 +5,23 @@ export function AttachmentLink({
   homeworkId,
   attachmentId,
   label,
+  kind = "homework",
 }: {
   homeworkId: string;
   attachmentId: string;
   label: string;
+  kind?: "homework" | "notice";
 }) {
+  const endpoint =
+    kind === "notice"
+      ? `/api/v1/notices/${homeworkId}/attachments/url`
+      : `/api/v1/homework/${homeworkId}/attachments/${attachmentId}`;
   return (
     <button
       type="button"
       className="underline text-blue-700"
       onClick={() => {
-        void fetch(`/api/v1/homework/${homeworkId}/attachments/${attachmentId}`)
+        void fetch(endpoint)
           .then((r) => r.json())
           .then((body: { data?: { url: string }; error?: { message: string } }) => {
             if (body.data?.url !== undefined) {
