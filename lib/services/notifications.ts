@@ -116,21 +116,30 @@ export async function resolveRecipients(
   const sectionIds = sectionRows.map((s) => s.id);
   if (sectionIds.length === 0) return [...recipientIds];
 
-  // Teachers: class teachers + subject assignees of those sections.
-  for (const s of sectionRows) {
-    if (s.class_teacher_id !== null) recipientIds.add(await teacherUserId(db, s.class_teacher_id));
-  }
+  // Teachers: class teachers + subject assignees of those sections (batched).
+  const classTeacherIds = sectionRows
+    .map((s) => s.class_teacher_id)
+    .filter((id): id is string => id !== null);
   const { data: ts, error: tsError } = await db
     .from("teacher_subjects")
     .select("teacher_id")
     .in("section_id", sectionIds)
     .eq("school_id", schoolId);
   throwForPostgrest(tsError);
-  for (const r of ts as { teacher_id: string }[]) {
-    recipientIds.add(await teacherUserId(db, r.teacher_id));
+  const subjectTeacherIds = [...new Set((ts as { teacher_id: string }[]).map((r) => r.teacher_id))];
+  const teacherMap = await teacherUserIds(db, [
+    ...new Set([...classTeacherIds, ...subjectTeacherIds]),
+  ]);
+  for (const id of classTeacherIds) {
+    const uid = teacherMap.get(id);
+    if (uid !== undefined && uid !== "") recipientIds.add(uid);
+  }
+  for (const id of subjectTeacherIds) {
+    const uid = teacherMap.get(id);
+    if (uid !== undefined && uid !== "") recipientIds.add(uid);
   }
 
-  // Parents of students in those sections.
+  // Parents of students in those sections (batched).
   const { data: students, error: stuError } = await db
     .from("students")
     .select("id")
@@ -144,31 +153,44 @@ export async function resolveRecipients(
       .select("parent_id")
       .in("student_id", studentIds);
     throwForPostgrest(linkError);
-    for (const r of links as { parent_id: string }[]) {
-      recipientIds.add(await parentUserId(db, r.parent_id));
+    const parentIds = [...new Set((links as { parent_id: string }[]).map((r) => r.parent_id))];
+    const parentMap = await parentUserIds(db, parentIds);
+    for (const id of parentIds) {
+      const uid = parentMap.get(id);
+      if (uid !== undefined && uid !== "") recipientIds.add(uid);
     }
   }
   return [...recipientIds];
 }
 
-async function teacherUserId(db: DbClient, teacherId: string): Promise<string> {
+async function teacherUserIds(db: DbClient, teacherIds: readonly string[]): Promise<Map<string, string>> {
+  // Batch fetch (no N+1): one query for all teachers.
+  const map = new Map<string, string>();
+  if (teacherIds.length === 0) return map;
   const { data, error } = await db
     .from("teachers")
-    .select("user_id")
-    .eq("id", teacherId)
-    .maybeSingle();
+    .select("id, user_id")
+    .in("id", [...teacherIds]);
   if (error !== null) throw new Error(error.message);
-  return (data as { user_id: string | null } | null)?.user_id ?? "";
+  for (const r of data as { id: string; user_id: string | null }[]) {
+    map.set(r.id, r.user_id ?? "");
+  }
+  return map;
 }
 
-async function parentUserId(db: DbClient, parentId: string): Promise<string> {
+async function parentUserIds(db: DbClient, parentIds: readonly string[]): Promise<Map<string, string>> {
+  // Batch fetch (no N+1): one query for all parents.
+  const map = new Map<string, string>();
+  if (parentIds.length === 0) return map;
   const { data, error } = await db
     .from("parents")
-    .select("user_id")
-    .eq("id", parentId)
-    .maybeSingle();
+    .select("id, user_id")
+    .in("id", [...parentIds]);
   if (error !== null) throw new Error(error.message);
-  return (data as { user_id: string | null } | null)?.user_id ?? "";
+  for (const r of data as { id: string; user_id: string | null }[]) {
+    map.set(r.id, r.user_id ?? "");
+  }
+  return map;
 }
 
 /**

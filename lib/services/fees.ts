@@ -361,16 +361,27 @@ export async function listStudentFees(
     id: string;
     total_amount: number;
     due_date: string | null;
+    fee_structures?: { name: string } | null;
   }[];
-  const fees: StudentFeeDto[] = [];
-  for (const a of assignments) {
-    const { data: records, error: recError } = await db
+  // ONE query for ALL payment records (no N+1 over assignments), then grouped.
+  const assignmentIds = assignments.map((a) => a.id);
+  const recordsByFee = new Map<string, PaymentRecordDto[]>();
+  if (assignmentIds.length > 0) {
+    const { data: allRecords, error: allRecError } = await db
       .from("fee_payment_records")
       .select(RECORD_COLUMNS)
-      .eq("student_fee_id", a.id)
+      .in("student_fee_id", assignmentIds)
       .eq("school_id", ctx.profile.schoolId);
-    throwForPostgrest(recError);
-    const recRows = toCamel<PaymentRecordDto[]>(records ?? []);
+    throwForPostgrest(allRecError);
+    for (const r of toCamel<PaymentRecordDto[]>(allRecords ?? [])) {
+      const list = recordsByFee.get(r.studentFeeId) ?? [];
+      list.push(r);
+      recordsByFee.set(r.studentFeeId, list);
+    }
+  }
+  const today = new Date().toISOString().slice(0, 10);
+  const fees: StudentFeeDto[] = assignments.map((a) => {
+    const recRows = recordsByFee.get(a.id) ?? [];
     const balance = feeBalance(
       a.total_amount,
       recRows.map((r) => ({
@@ -378,9 +389,9 @@ export async function listStudentFees(
         isVoided: r.isVoided,
         verified: r.verifiedBy !== null,
       })),
-      { dueDate: a.due_date, today: new Date().toISOString().slice(0, 10) },
+      { dueDate: a.due_date, today },
     );
-    fees.push({
+    return {
       id: a.id,
       total: balance.total,
       paid: balance.paid,
@@ -388,13 +399,10 @@ export async function listStudentFees(
       status: balance.status,
       overdue: balance.overdue,
       dueDate: a.due_date,
-      structureName:
-        (assignments as unknown as { fee_structures?: { name: string } | null }[])[
-          assignments.indexOf(a)
-        ]?.fee_structures?.name ?? "Fee",
+      structureName: a.fee_structures?.name ?? "Fee",
       records: recRows,
-    });
-  }
+    };
+  });
   return { fees };
 }
 

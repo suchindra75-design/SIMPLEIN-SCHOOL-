@@ -16,6 +16,7 @@ import {
   fanOutNotification,
   type Audience,
 } from "@/lib/services/notifications";
+import { getTeacherScope } from "@/lib/services/teachers";
 import {
   buildAttachmentPath,
   signedBucketUrl,
@@ -220,11 +221,114 @@ export async function listNotices(
   );
   if (isAdmin(ctx)) return { notices: notExpired, total: notExpired.length };
 
-  // Audience filter (server-side, mirrors RLS).
-  const visible: NoticeDto[] = [];
-  for (const n of notExpired) {
-    if (await audienceRelevant(db, ctx, n.id)) visible.push(n);
+  // Audience filter (server-side, mirrors RLS) — BATCHED: one targets query
+  // for the whole page + one scope resolution per role (no N+1 per notice).
+  const noticeIds = notExpired.map((n) => n.id);
+  const targetsByNotice = new Map<string, Set<string>>();
+  if (noticeIds.length > 0) {
+    const { data: targets, error: targetError } = await db
+      .from("notice_targets")
+      .select("notice_id, audience_type, class_id, section_id")
+      .in("notice_id", noticeIds)
+      .eq("school_id", ctx.profile.schoolId);
+    throwForPostgrest(targetError);
+    for (const t of targets as {
+      notice_id: string;
+      audience_type: string;
+      class_id: string | null;
+      section_id: string | null;
+    }[]) {
+      const set = targetsByNotice.get(t.notice_id) ?? new Set<string>();
+      set.add(
+        t.audience_type === "SECTION" && t.section_id !== null
+          ? `section:${t.section_id}`
+          : t.audience_type === "CLASS" && t.class_id !== null
+            ? `class:${t.class_id}`
+            : t.audience_type,
+      );
+      targetsByNotice.set(t.notice_id, set);
+    }
   }
+
+  // Resolve the caller's scope ONCE (no per-notice queries).
+  let childSectionIds = new Set<string>();
+  let childClassIds = new Set<string>();
+  let teacherScopeSections = new Set<string>();
+  let teacherClassIds = new Set<string>();
+  let ownSectionId: string | null = null;
+  let ownClassId: string | null = null;
+  if (ctx.roles.includes("PARENT")) {
+    const scope = await parentScope(db, ctx);
+    childSectionIds = scope.childSectionIds;
+    childClassIds = scope.childClassIds;
+  } else if (ctx.roles.includes("TEACHER")) {
+    const { data: teacher, error: teacherError } = await db
+      .from("teachers")
+      .select("id")
+      .eq("user_id", ctx.profile.id)
+      .eq("school_id", ctx.profile.schoolId)
+      .maybeSingle();
+    throwForPostgrest(teacherError);
+    const teacherId = (teacher as { id: string } | null)?.id ?? null;
+    if (teacherId !== null) {
+      const scope = await getTeacherScope(db, ctx);
+      if (scope !== null) {
+        teacherScopeSections = scope.sectionIds;
+        const { data: secs, error: secsError } = await db
+          .from("sections")
+          .select("id, class_id")
+          .in("id", [...teacherScopeSections])
+          .eq("school_id", ctx.profile.schoolId);
+        throwForPostgrest(secsError);
+        teacherClassIds = new Set(
+          (secs as { class_id: string | null }[])
+            .map((s) => s.class_id)
+            .filter((c): c is string => c !== null),
+        );
+      }
+    }
+  } else if (ctx.roles.includes("STUDENT")) {
+    const { getStudentScope } = await import("@/lib/services/students");
+    const scope = await getStudentScope(db, ctx);
+    ownSectionId = scope?.sectionId ?? null;
+    ownClassId = scope?.classId ?? null;
+  }
+
+  const visible: NoticeDto[] = notExpired.filter((n) => {
+    const targets = targetsByNotice.get(n.id);
+    if (targets === undefined || targets.size === 0) return true; // school-wide
+    for (const t of targets) {
+      if (t === "TEACHERS") {
+        if (ctx.roles.includes("TEACHER")) return true;
+        continue;
+      }
+      if (t === "PARENTS") {
+        if (ctx.roles.includes("PARENT")) return true;
+        continue;
+      }
+      if (t.startsWith("section:")) {
+        const id = t.slice(8);
+        if (ctx.roles.includes("STUDENT")) {
+          if (ownSectionId === id) return true;
+        } else if (childSectionIds.has(id) || teacherScopeSections.has(id)) {
+          return true;
+        }
+        continue;
+      }
+      if (t.startsWith("class:")) {
+        const id = t.slice(6);
+        if (ctx.roles.includes("STUDENT")) {
+          if (ownClassId === id) return true;
+        } else if (childClassIds.has(id) || teacherClassIds.has(id)) {
+          return true;
+        }
+        continue;
+      }
+    }
+    // Own drafts remain visible to their creator (teacher).
+    if (ctx.roles.includes("TEACHER") && n.createdBy === ctx.profile.id) return true;
+    return false;
+  });
   return { notices: visible, total: visible.length };
 }
 

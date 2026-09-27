@@ -349,25 +349,35 @@ Full endpoint reference: **`docs/API.md`**. Conventions:
 - Output: error envelope without internals; cross-school IDs → 404;
   PII minimization in logs (ids, never passwords/marks dumps).
 - Uploads: per §9 allowlists + size caps + signed-URL-only reads.
-- Web risks: CSRF mitigated by SameSite cookies + origin check on mutations;
-  XSS via React escaping + no `dangerouslySetInnerHTML` for user content;
-  rate limiting per §12; security headers (CSP, frame-ancestors, nosniff).
-- Backups: Supabase PITR + scheduled dumps tested by restore drill before
-  pilot; `audit_logs` append-only (no UPDATE/DELETE grants to app roles).
+- Web risks: CSRF mitigated by SameSite=Lax cookies (no cross-site form
+  posts reach mutations); XSS via React escaping + no `dangerouslySetInnerHTML`
+  for user content; rate limiting per §12 (implemented in Phase 13); security
+  headers implemented in Phase 13 (`X-Frame-Options: DENY`, `nosniff`,
+  `Referrer-Policy`, `Permissions-Policy`, HSTS — see `next.config.mjs`).
+  CSP deliberately deferred (Next hydration requires nonce-based setup or a
+  weak `unsafe-inline`; decision documented in docs/SECURITY.md §14).
+- Backups: REQUIRED but not configured by this repo — see
+  docs/PRODUCTION_READINESS.md §3–4 (Supabase PITR + external storage sync +
+  restore drills). `audit_logs` append-only (no UPDATE/DELETE grants).
 
-## 12. Rate limiting strategy
+## 12. Rate limiting strategy — ✅ implemented (Phase 13)
 
-Tiered, per-user (fallback per-IP) sliding windows, enforced at middleware/edge:
+Tiered, per-IP sliding windows, enforced in `middleware.ts` via
+`lib/security/rate-limit.ts` (previously documented-only — implemented during
+the Phase 13 audit):
 
 | Tier | Endpoints | Limit (initial) |
 |------|-----------|-----------------|
-| Auth | login, reset, refresh | 10 req / 10 min / IP, captcha/escalation on abuse |
-| Write | attendance, marks, fees, uploads | 120 req / min / user |
-| Read | lists, dashboards | 600 req / min / user |
-| Heavy | imports, report generation, exports | queued + concurrency cap (1–2 per school) |
+| AUTH | `/api/v1/auth/*`, `/api/v1/onboarding/*` | 10 req / 10 min / IP |
+| WRITE | other `/api/v1/*` mutations (POST/PUT/PATCH/DELETE) | 120 req / min / IP |
+| READ | other `/api/v1/*` reads | 600 req / min / IP |
 
+Page loads are not rate-limited in V1 (they are auth-gated and cheap).
 Exceeding → `429 RATE_LIMITED` with `Retry-After`. Bulk ops (attendance for a
 section, marks for a subject) are single batched calls, not N requests.
+**Limitation:** the store is per-process memory — serverless instances do not
+share it, so limits are approximate under horizontal scaling; the
+`RateLimiter` interface is isolated for a Redis/Upstash swap.
 
 ## 13. Audit logging
 
@@ -431,7 +441,8 @@ attendance happy paths. Tenant/RBAC suites block merges on failure.
 9. Homework + attachments. ✅ done (Phase 9).
 10. Notices + notifications. ✅ done (Phase 10).
 11. Fee tracking (records only). ✅ done (Phase 11).
-12. Student portal + promotion + PYQs. ✅ done (Phase 12). Documents hardening + audit coverage pass: next.
+12. Student portal + promotion + PYQs. ✅ done (Phase 12).
+13. Production readiness + security audit. ✅ done (Phase 13). Remaining: staging RLS execution, backups/monitoring, pilot readiness.
 8. Dashboard shells per role (child selector, "My Classes"), pagination +
    performance pass, OpenAPI generation, pilot readiness (backups, monitoring).
 
@@ -774,7 +785,35 @@ Explicitly deferred: payments, SMS/WhatsApp, student dashboard, substitution.
   gating for students, and audience-aware notice reads for the STUDENT role;
   pyqs same-school reads + admin-only writes.
 
-## 27. Important architectural decisions (log)
+## 27. Phase 13: production readiness + security audit (completed)
+
+An audit-only phase — no new features. Findings and fixes:
+
+- **HIGH (fixed): rate limiting was documented but never implemented.**
+  Implemented `lib/security/rate-limit.ts` + middleware tiers (§12), with
+  unit tests. In-memory store documented as approximate under scaling.
+- **HIGH (fixed): security headers were missing.** Added X-Frame-Options
+  DENY, nosniff, Referrer-Policy, Permissions-Policy, HSTS in
+  `next.config.mjs`. CSP deliberately deferred (documented decision).
+- **MEDIUM (fixed): N+1 queries.** `resolveRecipients` fan-out now batch-
+  fetches teacher/parent user ids (was 1 query per recipient — 100+ queries
+  for a class notice); `listStudentFees` fetches all payment records in one
+  query; `listNotices` fetches all targets in one query and resolves the
+  caller scope once.
+- **LOW (fixed): audit gaps.** Student photo uploads now audited explicitly
+  (`student.photo_updated`); school onboarding writes a system audit row
+  (`school.created`, actor NULL).
+- **Verified clean:** all API routes authenticate (only /health is open and
+  onboarding is bearer-guarded); all 7 storage buckets private; no secrets
+  committed; error envelopes leak nothing; migration constraints/indexes
+  consistent; OpenAPI generated (129 operations,
+  `scripts/generate-openapi.mjs` → `docs/openapi.yaml`); docs/SECURITY.md
+  and docs/PRODUCTION_READINESS.md added (actual status, not intended).
+- **Confirmed NOT done (blockers):** live RLS execution, migrations never
+  applied to any environment, backups/monitoring/error-tracking to be
+  configured at deployment (documented as requirements, not claims).
+
+## 28. Important architectural decisions (log)
 
 | # | Decision | Why |
 |---|----------|-----|

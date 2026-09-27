@@ -102,6 +102,17 @@ export async function createSchoolWithAdmin(
     throw new Error(`Role grant failed: ${rolesError.message}`);
   }
 
+  // Critical event: audit the school creation (actor NULL = system, since no
+  // admin existed before onboarding).
+  await admin.from("audit_logs").insert({
+    school_id: school.id,
+    actor_id: null,
+    action: "school.created",
+    entity: "schools",
+    entity_id: school.id,
+    metadata: { slug: input.school.slug, adminEmail: input.admin.email },
+  });
+
   return {
     school: { id: school.id, name: school.name, slug: school.slug },
     adminUserId: profile.id,

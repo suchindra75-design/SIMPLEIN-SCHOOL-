@@ -59,6 +59,7 @@ import {
   createUserWithRole,
   setUserActive,
 } from "@/lib/services/users";
+import { logAudit } from "@/lib/services/audit";
 import {
   buildPhotoPath,
   uploadPhoto,
@@ -173,7 +174,6 @@ export async function uploadStudentPhotoAction(
     if (problem !== null) return { error: problem };
     const path = buildPhotoPath(ctx.profile.schoolId, "student", id, file.name);
     await uploadPhoto(db, "student", path, await file.arrayBuffer(), file.type);
-    await updateStudent(db, ctx, id, {});
     // Persist the path directly (updateStudent has no photo field by design).
     const { error } = await db
       .from("students")
@@ -181,6 +181,10 @@ export async function uploadStudentPhotoAction(
       .eq("id", id)
       .eq("school_id", ctx.profile.schoolId);
     if (error !== null) return { error: error.message };
+    await logAudit(db, ctx, "student.photo_updated", "students", id, {
+      name: file.name,
+      size: file.size,
+    });
     revalidatePath(`/admin/students/${id}`);
     return { success: true };
   } catch (error) {
