@@ -1,60 +1,189 @@
--- SIMPLEIN SCHOOL ERP · Phase 3 RLS verification (LIVE DATABASE ONLY).
--- Run against a staging Supabase project AFTER applying migration 0003, as
--- authenticated users of two schools. No local Postgres tooling exists in
--- this environment, so these checks have NOT been executed here — the
--- equivalent server-boundary logic IS unit-tested in
--- lib/services/people-scope.test.ts (20 tests, passing).
---
--- Setup: school A with admin(A), teacher T (class teacher of sec7a +
--- Math assignee), parent P (linked to student s1 in sec7a, NOT to s2 in
--- sec7b); school B with an equivalent set. Authenticate each block with
--- that user's JWT (e.g. via the Supabase dashboard SQL editor "run as"
--- or a psql session with request.jwt.claims set by your harness).
+-- SIMPLEIN SCHOOL ERP · Phase 3 live pgTAP RLS suite.
+-- Convention notes in phase2_rls.sql. One transaction; rolls back at the end.
 
--- A. Tenant isolation — cross-school reads return ZERO rows (never 403) -----
--- As admin(A):
--- SELECT id FROM public.students;            -- expect: only school-A rows
--- SELECT id FROM public.teachers;            -- expect: only school-A rows
--- SELECT id FROM public.parents;             -- expect: only school-A rows
--- SELECT id FROM public.classes;             -- expect: only school-A rows
--- SELECT id FROM public.sections;            -- expect: only school-A rows
--- SELECT id FROM public.subjects;            -- expect: only school-A rows
--- UPDATE public.students SET status='inactive'
---   WHERE id = '<school-B-student-id>';      -- expect: 0 rows affected
+create extension if not exists pgtap;
+begin;
+select plan(28); -- 28 assertions
 
--- B. Teacher link scope -------------------------------------------------------
--- As teacher T (school A):
--- SELECT id FROM public.students;            -- expect: sec7a students ONLY
--- SELECT * FROM public.students WHERE id = '<s2-in-sec7b>';
---                                            -- expect: 0 rows
--- INSERT INTO public.students (school_id, admission_no, first_name, display_name)
---   VALUES ('<school-A-id>', 'X', 'X', 'X'); -- expect: RLS violation (admin-only writes)
+-- ---------------------- fixture: schools/users/roles ----------------------
+insert into auth.users (instance_id, id, aud, role, email, encrypted_password, email_confirmed_at, created_at, updated_at, raw_app_meta_data, raw_user_meta_data) values
+  ('00000000-0000-0000-0000-000000000000','f3030303-0303-4003-8303-0000000000a1','authenticated','authenticated','t3.adminA@phase.tests','',now(),now(),now(),'{"provider":"email","providers":["email"]}','{}'),
+  ('00000000-0000-0000-0000-000000000000','f3030303-0303-4003-8303-0000000000a2','authenticated','authenticated','t3.teacherA@phase.tests','',now(),now(),now(),'{"provider":"email","providers":["email"]}','{}'),
+  ('00000000-0000-0000-0000-000000000000','f3030303-0303-4003-8303-0000000000a3','authenticated','authenticated','t3.parentA@phase.tests','',now(),now(),now(),'{"provider":"email","providers":["email"]}','{}'),
+  ('00000000-0000-0000-0000-000000000000','f3030303-0303-4003-8303-0000000000b1','authenticated','authenticated','t3.admB@phase.tests','',now(),now(),now(),'{"provider":"email","providers":["email"]}','{}'),
+  ('00000000-0000-0000-0000-000000000000','f3030303-0303-4003-8303-0000000000b3','authenticated','authenticated','t3.parB@phase.tests','',now(),now(),now(),'{"provider":"email","providers":["email"]}','{}')
+on conflict (id) do nothing;
 
--- C. Parent link scope ----------------------------------------------------------
--- As parent P (school A):
--- SELECT id FROM public.students;            -- expect: s1 ONLY
--- SELECT * FROM public.students WHERE id = '<s2>';  -- expect: 0 rows
--- SELECT * FROM public.teachers;             -- expect: T (teaches s1's section) ONLY
+insert into public.schools (id, name, slug) values
+  ('f3030303-0303-4003-8303-1000000000a1','Phase3 School A','phase3-school-a'),
+  ('f3030303-0303-4003-8303-1000000000b1','Phase3 School B','phase3-school-b')
+on conflict (id) do nothing;
 
--- D. Tenant-consistency triggers --------------------------------------------------
--- As admin(A), all must RAISE:
--- INSERT INTO public.sections (school_id, class_id, name)
---   VALUES ('<A>', '<school-B-class-id>', 'X');                       -- cross-tenant reference
--- INSERT INTO public.student_parents (student_id, parent_id)
---   VALUES ('<A-student>', '<B-parent>');                             -- cross-tenant link
--- INSERT INTO public.teacher_subjects (school_id, teacher_id, subject_id, section_id)
---   VALUES ('<A>', '<A-teacher>', '<B-subject>', '<A-section>');       -- cross-tenant reference
--- UPDATE public.students SET school_id = '<B>' WHERE id = '<A-student>';
---                                                                     -- school_id is immutable
--- UPDATE public.users SET is_active = false
---   WHERE id = public.current_app_user_id();                          -- identity columns immutable
+insert into public.academic_years (id, school_id, name, starts_on, ends_on, is_current) values
+  ('f3030303-0303-4003-8303-1000000000a1','f3030303-0303-4003-8303-1000000000a1','2026-27','2026-04-01','2027-03-31', true),
+  ('f3030303-0303-4003-8303-1000000000b1','f3030303-0303-4003-8303-1000000000b1','2026-27','2026-04-01','2027-03-31', true)
+on conflict (id) do nothing;
 
--- E. Admin write boundary ----------------------------------------------------------
--- As teacher T: INSERT/UPDATE/DELETE on teachers/parents/students/classes →
---   expect RLS violations (admin-only).
--- As admin(A): INSERT a student in A → 1 row; DELETE it → 1 row.
+insert into public.users (id, auth_user_id, school_id, email, full_name) values
+  ('f3030303-0303-4003-8303-2000000000a1','f3030303-0303-4003-8303-0000000000a1','f3030303-0303-4003-8303-1000000000a1','phase3.adminA@phase.tests','Admin A'),
+  ('f3030303-0303-4003-8303-2000000000a2','f3030303-0303-4003-8303-0000000000a2','f3030303-0303-4003-8303-1000000000a1','phase3.teacherA@phase.tests','Teacher A'),
+  ('f3030303-0303-4003-8303-2000000000a3','f3030303-0303-4003-8303-0000000000a3','f3030303-0303-4003-8303-1000000000a1','phase3.parentA@phase.tests','Parent A'),
+  ('f3030303-0303-4003-8303-2000000000b1','f3030303-0303-4003-8303-0000000000b1','f3030303-0303-4003-8303-1000000000b1','phase3.adminB@phase.tests','Admin B'),
+  ('f3030303-0303-4003-8303-2000000000b3','f3030303-0303-4003-8303-0000000000b3','f3030303-0303-4003-8303-1000000000b1','phase3.parentB@phase.tests','Parent B')
+on conflict (id) do nothing;
 
--- F. Audit log -----------------------------------------------------------------------
--- As teacher T: SELECT * FROM public.audit_logs;  -- expect: 0 rows (admin-only reads)
--- As admin(A): SELECT * FROM public.audit_logs;   -- expect: school-A rows only
--- As admin(A): DELETE FROM public.audit_logs;     -- expect: RLS violation (append-only)
+insert into public.user_roles (user_id, role) values
+  ('f3030303-0303-4003-8303-2000000000a1','SCHOOL_ADMIN'),
+  ('f3030303-0303-4003-8303-2000000000a2','TEACHER'),
+  ('f3030303-0303-4003-8303-2000000000a3','PARENT'),
+  ('f3030303-0303-4003-8303-2000000000b1','SCHOOL_ADMIN'),
+  ('f3030303-0303-4003-8303-2000000000b3','PARENT')
+on conflict do nothing;
+
+insert into public.classes (id, school_id, name, order_index) values
+  ('f3030303-0303-4003-8303-1000000000a1','f3030303-0303-4003-8303-1000000000a1','Grade 6',6),
+  ('f3030303-0303-4003-8303-1000000000b1','f3030303-0303-4003-8303-1000000000b1','Grade 1',1)
+on conflict (id) do nothing;
+
+insert into public.teachers (id, school_id, user_id, employee_no, first_name, display_name) values
+  ('f3030303-0303-4003-8303-2000000000a2','f3030303-0303-4003-8303-1000000000a1','f3030303-0303-4003-8303-2000000000a2','E1','Ravi','Ravi'),
+  ('f3030303-0303-4003-8303-2000000000b2','f3030303-0303-4003-8303-1000000000b1','f3030303-0303-4003-8303-2000000000b2','EB1','Far Teacher','Far Teacher')
+on conflict (id) do nothing;
+
+insert into public.sections (id, school_id, class_id, name, class_teacher_id) values
+  ('f3030303-0303-4003-8303-1000000000a1','f3030303-0303-4003-8303-1000000000a1','f3030303-0303-4003-8303-1000000000a1','A','f3030303-0303-4003-8303-2000000000a2'),
+  ('f3030303-0303-4003-8303-1000000000a2','f3030303-0303-4003-8303-1000000000a1','f3030303-0303-4003-8303-1000000000a1','B', null),
+  ('f3030303-0303-4003-8303-1000000000b1','f3030303-0303-4003-8303-1000000000b1','f3030303-0303-4003-8303-1000000000b1','A', null)
+on conflict (id) do nothing;
+
+insert into public.subjects (id, school_id, name, code) values
+  ('f3030303-0303-4003-8303-1000000000a1','f3030303-0303-4003-8303-1000000000a1','Mathematics','MATH'),
+  ('f3030303-0303-4003-8303-1000000000b1','f3030303-0303-4003-8303-1000000000b1','Art','ART')
+on conflict (id) do nothing;
+
+insert into public.students (id, school_id, admission_no, first_name, last_name, display_name, class_id, section_id, status)
+values
+  ('f3030303-0303-4003-8303-1000000000a1','f3030303-0303-4003-8303-1000000000a1','301','Sonia','P3','Sonia P3','f3030303-0303-4003-8303-1000000000a1','f3030303-0303-4003-8303-1000000000a1','active'),
+  ('f3030303-0303-4003-8303-1000000000a2','f3030303-0303-4003-8303-1000000000a1','302','Rahul','P3','Rahul P3','f3030303-0303-4003-8303-1000000000a1','f3030303-0303-4003-8303-1000000000a2','active'),
+  ('f3030303-0303-4003-8303-1000000000b1','f3030303-0303-4003-8303-1000000000b1','B101','Far','B','Far Child','f3030303-0303-4003-8303-1000000000b1','f3030303-0303-4003-8303-1000000000b1','active')
+on conflict (id) do nothing;
+
+insert into public.parents (id, school_id, user_id, full_name) values
+  ('f3030303-0303-4003-8303-2000000000a3','f3030303-0303-4003-8303-1000000000a1','f3030303-0303-4003-8303-2000000000a3','Parent A'),
+  ('f3030303-0303-4003-8303-2000000000b3','f3030303-0303-4003-8303-1000000000b1','f3030303-0303-4003-8303-2000000000b3','Parent B')
+on conflict (id) do nothing;
+
+insert into public.student_parents (student_id, parent_id, relation, is_primary) values
+  ('f3030303-0303-4003-8303-1000000000a1','f3030303-0303-4003-8303-2000000000a3','mother', true),
+  ('f3030303-0303-4003-8303-1000000000b1','f3030303-0303-4003-8303-2000000000b3','father', true)
+on conflict do nothing;
+
+insert into public.teacher_subjects (school_id, teacher_id, subject_id, section_id) values
+  ('f3030303-0303-4003-8303-1000000000a1','f3030303-0303-4003-8303-2000000000a2','f3030303-0303-4003-8303-1000000000a1','f3030303-0303-4003-8303-1000000000a1')
+on conflict do nothing;
+
+insert into public.student_enrollments (id, school_id, student_id, academic_year_id, class_id, section_id) values
+  ('f3030303-0303-4003-8303-1000000000a1','f3030303-0303-4003-8303-1000000000a1','f3030303-0303-4003-8303-1000000000a1','f3030303-0303-4003-8303-1000000000a1','f3030303-0303-4003-8303-1000000000a1','f3030303-0303-4003-8303-1000000000a1'),
+  ('f3030303-0303-4003-8303-1000000000a2','f3030303-0303-4003-8303-1000000000a1','f3030303-0303-4003-8303-1000000000a2','f3030303-0303-4003-8303-1000000000a1','f3030303-0303-4003-8303-1000000000a1','f3030303-0303-4003-8303-1000000000a2'),
+  ('f3030303-0303-4003-8303-1000000000b1','f3030303-0303-4003-8303-1000000000b1','f3030303-0303-4003-8303-1000000000b1','f3030303-0303-4003-8303-1000000000b1','f3030303-0303-4003-8303-1000000000b1','f3030303-0303-4003-8303-1000000000b1')
+on conflict (id) do nothing;
+
+-- ------------------------- RLS assertions -------------------------
+set local role authenticated;
+
+-- Admin A tenant isolation: sees own school only; B invisible.
+set local "request.jwt.claims" = '{"sub":"f3030303-0303-4003-8303-0000000000a1"}';
+select is((select count(*)::int from public.students where school_id='f3030303-0303-4003-8303-1000000000a1'),2,'admin A sees School A students');
+select is((select count(*)::int from public.students where school_id='f3030303-0303-4003-8303-1000000000b1'),0,'admin A sees zero School B students');
+select is((select count(*)::int from public.teachers where school_id='f3030303-0303-4003-8303-1000000000b1'),0,'admin A sees zero School B teachers');
+select is((select count(*)::int from public.parents where school_id='f3030303-0303-4003-8303-1000000000b1'),0,'admin A sees zero School B parents');
+select is((select count(*)::int from public.classes where school_id='f3030303-0303-4003-8303-1000000000b1'),0,'admin A sees zero School B classes');
+select is((select count(*)::int from public.sections where school_id='f3030303-0303-4003-8303-1000000000b1'),0,'admin A sees zero School B sections');
+select is((select count(*)::int from public.subjects where school_id='f3030303-0303-4003-8303-1000000000b1'),0,'admin A sees zero School B subjects');
+
+-- Teacher scope: only assigned-section students (sec A only).
+set local "request.jwt.claims" = '{"sub":"f3030303-0303-4003-8303-0000000000a2"}';
+select is((select count(*)::int from public.students where section_id='f3030303-0303-4003-8303-1000000000a1'),1,'teacher sees only own section students');
+select is((select count(*)::int from public.students where section_id='f3030303-0303-4003-8303-1000000000a2'),0,'teacher sees no students from unassigned section');
+select is((select count(*)::int from public.students where school_id='f3030303-0303-4003-8303-1000000000b1'),0,'teacher sees no School B students');
+
+-- Parent scope: only linked children.
+set local "request.jwt.claims" = '{"sub":"f3030303-0303-4003-8303-0000000000a3"}';
+select is((select count(*)::int from public.students where id='f3030303-0303-4003-8303-1000000000a1'),1,'parent sees linked child');
+select is((select count(*)::int from public.students where id='f3030303-0303-4003-8303-1000000000a2'),0,'parent sees zero unlinked children');
+select is((select count(*)::int from public.students where school_id='f3030303-0303-4003-8303-1000000000b1'),0,'parent sees zero School B students');
+
+-- Enrollment visibility follows the same scope.
+set local "request.jwt.claims" = '{"sub":"f3030303-0303-4003-8303-0000000000a1"}';
+select is((select count(*)::int from public.student_enrollments where school_id='f3030303-0303-4003-8303-1000000000a1'),2,'admin sees all School A enrollments');
+set local "request.jwt.claims" = '{"sub":"f3030303-0303-4003-8303-0000000000a2"}';
+select is((select count(*)::int from public.student_enrollments where school_id='f3030303-0303-4003-8303-1000000000a1'),1,'teacher sees only own section enrollment');
+set local "request.jwt.claims" = '{"sub":"f3030303-0303-4003-8303-0000000000a3"}';
+select is((select count(*)::int from public.student_enrollments where school_id='f3030303-0303-4003-8303-1000000000a1'),1,'parent sees only own child enrollment');
+
+-- Cross-school write denial (update filtered to zero rows).
+set local "request.jwt.claims" = '{"sub":"f3030303-0303-4003-8303-0000000000a1"}';
+update public.students set status='inactive' where id='f3030303-0303-4003-8303-1000000000b1';
+select is((select count(*)::int from public.students where id='f3030303-0303-4003-8303-1000000000b1' and status='inactive'),0,'admin A update of School B student had zero effect');
+
+-- ------------------------- trigger assertions (superuser) -------------------------
+reset role;
+
+select throws_ok(
+  $$ insert into public.sections (id, school_id, class_id, name) values
+      ('f3030303-0303-4003-8303-900000000091','f3030303-0303-4003-8303-1000000000a1','f3030303-0303-4003-8303-1000000000b1','X') $$,
+  'cross-tenant', 'trigger: section cannot reference School B class');
+
+select throws_ok(
+  $$ insert into public.teachers (id, school_id, user_id, employee_no, first_name, display_name) values
+      ('f3030303-0303-4003-8303-900000000092','f3030303-0303-4003-8303-1000000000a1','f3030303-0303-4003-8303-2000000000b1','EX','X','X') $$,
+  'cross-tenant', 'trigger: teacher cannot be linked to another school user');
+
+select throws_ok(
+  $$ insert into public.parents (id, school_id, user_id, full_name) values
+      ('f3030303-0303-4003-8303-900000000093','f3030303-0303-4003-8303-1000000000a1','f3030303-0303-4003-8303-2000000000b3','X') $$,
+  'cross-tenant', 'trigger: parent cannot be linked to another school user');
+
+select throws_ok(
+  $$ insert into public.students (id, school_id, admission_no, first_name, display_name, class_id, section_id) values
+      ('f3030303-0303-4003-8303-900000000094','f3030303-0303-4003-8303-1000000000a1','900','X','X','f3030303-0303-4003-8303-1000000000b1','f3030303-0303-4003-8303-1000000000a1') $$,
+  'cross-tenant', 'trigger: student cannot reference School B class');
+
+select throws_ok(
+  $$ insert into public.student_parents (student_id, parent_id, relation) values
+      ('f3030303-0303-4003-8303-1000000000a1','f3030303-0303-4003-8303-2000000000b3','guardian') $$,
+  'cross-tenant', 'trigger: student-parent link cannot cross schools');
+
+select throws_ok(
+  $$ insert into public.teacher_subjects (school_id, teacher_id, subject_id, section_id) values
+      ('f3030303-0303-4003-8303-1000000000a1','f3030303-0303-4003-8303-2000000000a2','f3030303-0303-4003-8303-1000000000b1','f3030303-0303-4003-8303-1000000000a1') $$,
+  'cross-tenant', 'trigger: teacher assignment cannot reference School B subject');
+
+select throws_ok(
+  $$ update public.students set school_id='f3030303-0303-4003-8303-1000000000b1'
+      where id='f3030303-0303-4003-8303-1000000000a1' $$,
+  'school_id is immutable', 'trigger: school_id can never change on a student row');
+
+-- RLS write boundary: teacher/parent cannot insert.
+set local role authenticated;
+set local "request.jwt.claims" = '{"sub":"f3030303-0303-4003-8303-0000000000a2"}';
+select throws_ok(
+  $$ insert into public.students (school_id, admission_no, first_name, display_name) values
+      ('f3030303-0303-4003-8303-1000000000a1','999','X','X') $$,
+  '42501','teacher cannot insert a student (admin-only writes)');
+
+set local "request.jwt.claims" = '{"sub":"f3030303-0303-4003-8303-0000000000a3"}';
+select throws_ok(
+  $$ insert into public.students (school_id, admission_no, first_name, display_name) values
+      ('f3030303-0303-4003-8303-1000000000a1','998','X','X') $$,
+  '42501','parent cannot insert a student (admin-only writes)');
+
+-- Audit-log read scope: only admins of own school.
+set local "request.jwt.claims" = '{"sub":"f3030303-0303-4003-8303-0000000000a2"}';
+select is((select count(*)::int from public.audit_logs),0,'teacher sees zero audit rows (admin-only)');
+
+set local "request.jwt.claims" = '{"sub":"f3030303-0303-4003-8303-0000000000a1"}';
+select is((select count(*)::int from public.audit_logs where school_id='f3030303-0303-4003-8303-1000000000b1'),0,'admin A sees zero School B audit rows');
+
+select * from finish();
+rollback;
