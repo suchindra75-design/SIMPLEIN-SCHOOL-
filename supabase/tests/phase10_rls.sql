@@ -179,16 +179,15 @@ select throws_matching(
   $$ insert into public.notices (school_id, title, content, category) values
       ('f1010101-1010-4101-8101-1000000000a1','X','X','UNKNOWN') $$,
   'violates check constraint','E: unknown category rejected (CHECK)');
--- NOTE: unlike every other tenant table, notices has no prevent_school_move
--- trigger (migration 0010 ships touch-only) — tenant moves are blocked for
--- school users by the RLS WITH CHECK instead (asserted here as admin A).
--- Flagged in the verification report; production untouched.
+-- NOTE: migration 0013 added the missing prevent_school_move trigger to
+-- notices (parity with all other tenant tables), so the trigger — not RLS —
+-- now rejects the move first, exactly like every sibling table.
 set local role authenticated;
 set local "request.jwt.claims" = '{"sub":"f1010101-1010-4101-8101-0000000000a1"}';
 select throws_matching(
   $$ update public.notices set school_id='f1010101-1010-4101-8101-1000000000b1'
       where id='f1010101-1010-4101-8101-7000000000a1' $$,
-  'row-level security policy','E: school_id can never change on a notice row (RLS WITH CHECK)');
+  'school_id is immutable','E: school_id can never change on a notice row (trigger)');
 reset role;
 
 -- ------------------------- modification authorization -------------------------
