@@ -107,16 +107,16 @@ set local "request.jwt.claims" = '{"sub":"f4040404-0404-4004-8404-0000000000a3"}
 select is((select count(*)::int from public.attendance_sessions where school_id='f4040404-0404-4004-8404-1000000000a1'),0,'unassigned teacher sees zero sessions');
 
 -- Teacher write denial on an unassigned section.
-select throws_ok(
+select throws_matching(
   $$ insert into public.attendance_sessions (school_id, academic_year_id, section_id, attendance_date) values
       ('f4040404-0404-4004-8404-1000000000a1','f4040404-0404-4004-8404-1000000000a1','f4040404-0404-4004-8404-1000000000a2','2026-09-25') $$,
-  '42501','teacher cannot create a session for an unassigned section');
+  'row-level security policy','teacher cannot create a session for an unassigned section');
 
--- Cross-school session write.
-select throws_ok(
+-- Cross-school session write (section invisible → tenant trigger reports it).
+select throws_matching(
   $$ insert into public.attendance_sessions (school_id, academic_year_id, section_id, attendance_date) values
       ('f4040404-0404-4004-8404-1000000000b1','f4040404-0404-4004-8404-1000000000b1','f4040404-0404-4004-8404-1000000000b1','2026-09-25') $$,
-  '42501','teacher cannot create a session in School B');
+  'does not exist','teacher cannot create a session in School B');
 
 -- Attendance record edits follow section scope.
 update public.attendance_records set status='PRESENT' where id='f4040404-0404-4004-8404-1000000000a2';
@@ -129,43 +129,45 @@ select is((select count(*)::int from public.attendance_records where student_id=
 select is((select count(*)::int from public.attendance_records where school_id='f4040404-0404-4004-8404-1000000000b1'),0,'parent sees zero School B records');
 
 -- Parent is read-only.
-select throws_ok(
+select throws_matching(
   $$ insert into public.attendance_records (school_id, attendance_session_id, student_id, status) values
       ('f4040404-0404-4004-8404-1000000000a1','f4040404-0404-4004-8404-1000000000a1','f4040404-0404-4004-8404-1000000000a1','PRESENT') $$,
-  '42501','parent cannot insert attendance (read-only)');
+  'row-level security policy','parent cannot insert attendance (read-only)');
 
--- ------------------------- trigger assertions (superuser) -------------------------
+-- ------------------------- trigger assertions (connecting role) -------------------------
+-- The connecting role bypasses RLS, so tenant triggers see every row and
+-- report real mismatches; CHECK/unique/enum errors surface directly.
 reset role;
 
-select throws_ok(
+select throws_matching(
   $$ insert into public.attendance_sessions (id, school_id, academic_year_id, section_id, attendance_date) values
       ('f4040404-0404-4004-8404-900000000091','f4040404-0404-4004-8404-1000000000a1','f4040404-0404-4004-8404-1000000000a1','f4040404-0404-4004-8404-1000000000b1','2026-09-30') $$,
-  'cross-tenant','trigger: session cannot reference School B section');
+  'cross-tenant reference','trigger: session cannot reference School B section');
 
-select throws_ok(
+select throws_matching(
   $$ insert into public.attendance_records (id, school_id, attendance_session_id, student_id, status) values
       ('f4040404-0404-4004-8404-900000000092','f4040404-0404-4004-8404-1000000000a1','f4040404-0404-4004-8404-1000000000a1','f4040404-0404-4004-8404-1000000000b1','LEAVE') $$,
-  'cross-tenant','trigger: attendance record cannot reference School B student');
+  'cross-tenant reference','trigger: attendance record cannot reference School B student');
 
-select throws_ok(
+select throws_matching(
   $$ insert into public.attendance_sessions (id, school_id, academic_year_id, section_id, attendance_date) values
       ('f4040404-0404-4004-8404-900000000093','f4040404-0404-4004-8404-1000000000a1','f4040404-0404-4004-8404-1000000000a1','f4040404-0404-4004-8404-1000000000a1','2026-09-24') $$,
-  '23505','duplicate attendance session for same section/date prevented');
+  'duplicate key value','duplicate attendance session for same section/date prevented');
 
-select throws_ok(
+select throws_matching(
   $$ insert into public.attendance_records (id, school_id, attendance_session_id, student_id, status) values
       ('f4040404-0404-4004-8404-900000000094','f4040404-0404-4004-8404-1000000000a1','f4040404-0404-4004-8404-1000000000a1','f4040404-0404-4004-8404-1000000000a1','LATE') $$,
-  '22P02','invalid attendance status rejected (enum)');
+  'invalid input value for enum','invalid attendance status rejected (enum)');
 
-select throws_ok(
+select throws_matching(
   $$ update public.attendance_sessions set school_id='f4040404-0404-4004-8404-1000000000b1'
       where id='f4040404-0404-4004-8404-1000000000a1' $$,
   'school_id is immutable','trigger: school_id can never change on attendance_sessions');
 
-select throws_ok(
+select throws_matching(
   $$ insert into public.attendance_records (id, school_id, attendance_session_id, student_id, status) values
       ('f4040404-0404-4004-8404-900000000095','f4040404-0404-4004-8404-1000000000a1','f4040404-0404-4004-8404-1000000000a1','f4040404-0404-4004-8404-1000000000b1','PRESENT') $$,
-  'cross-tenant','trigger: attendance record cannot reference School B student (repeat guard)');
+  'cross-tenant reference','trigger: attendance record cannot reference School B student (repeat guard)');
 
 select * from finish();
 rollback;

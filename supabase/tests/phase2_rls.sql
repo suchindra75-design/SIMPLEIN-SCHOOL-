@@ -6,8 +6,10 @@
 --   JWT request.jwt.claims.sub  →  public.users.auth_user_id
 --   →  users.school_id  →  user_roles  →  policies.
 -- RLS assertions run `set local role authenticated` + SET request.jwt.claims.
--- Trigger assertions run as the default connecting role (bypasses RLS) so the
--- trigger itself is isolated as the only possible failure cause.
+-- Identity-trigger assertions run as the affected user themselves (their own
+-- row passes the UPDATE USING clause, so the trigger is the only possible
+-- failure cause — the production trigger fires for every role, RLS bypass or
+-- not, and the connecting role cannot demonstrate it).
 
 create extension if not exists pgtap;
 
@@ -31,13 +33,17 @@ insert into public.schools (id, name, slug) values
   ('f2020202-0202-4002-8202-1000000000b1', 'Phase2 School B', 'phase2-school-b')
 on conflict (id) do nothing;
 
-insert into public.users (id, auth_user_id, school_id, email, full_name) values
-  ('f2020202-0202-4002-8202-2000000000a1', 'f2020202-0202-4002-8202-0000000000a1', 'f2020202-0202-4002-8202-1000000000a1', 'phase2.adminA@phase.tests', 'Phase2 Admin A'),
-  ('f2020202-0202-4002-8202-2000000000a2', 'f2020202-0202-4002-8202-0000000000a2', 'f2020202-0202-4002-8202-1000000000a1', 'phase2.teacherA@phase.tests', 'Phase2 Teacher A'),
-  ('f2020202-0202-4002-8202-2000000000a3', 'f2020202-0202-4002-8202-0000000000a3', 'f2020202-0202-4002-8202-1000000000a1', 'phase2.parentA@phase.tests', 'Phase2 Parent A'),
-  ('f2020202-0202-4002-8202-2000000000b1', 'f2020202-0202-4002-8202-0000000000b1', 'f2020202-0202-4002-8202-1000000000b1', 'phase2.adminB@phase.tests', 'Phase2 Admin B'),
-  ('f2020202-0202-4002-8202-2000000000b2', 'f2020202-0202-4002-8202-0000000000b2', 'f2020202-0202-4002-8202-1000000000b1', 'phase2.teacherB@phase.tests', 'Phase2 Teacher B'),
-  ('f2020202-0202-4002-8202-2000000000c1', 'f2020202-0202-4002-8202-0000000000c1', 'f2020202-0202-4002-8202-1000000000a1', 'phase2.inactiveA@phase.tests', 'Phase2 Inactive A')
+-- Inactive users are created directly with is_active = false: the production
+-- prevent_identity_change() trigger is BEFORE UPDATE (it rejects flipping the
+-- flag afterwards), so INSERT-time state is the only valid way to fixture
+-- them — exactly how trusted provisioning creates them.
+insert into public.users (id, auth_user_id, school_id, email, full_name, is_active) values
+  ('f2020202-0202-4002-8202-2000000000a1', 'f2020202-0202-4002-8202-0000000000a1', 'f2020202-0202-4002-8202-1000000000a1', 'phase2.adminA@phase.tests', 'Phase2 Admin A', true),
+  ('f2020202-0202-4002-8202-2000000000a2', 'f2020202-0202-4002-8202-0000000000a2', 'f2020202-0202-4002-8202-1000000000a1', 'phase2.teacherA@phase.tests', 'Phase2 Teacher A', true),
+  ('f2020202-0202-4002-8202-2000000000a3', 'f2020202-0202-4002-8202-0000000000a3', 'f2020202-0202-4002-8202-1000000000a1', 'phase2.parentA@phase.tests', 'Phase2 Parent A', true),
+  ('f2020202-0202-4002-8202-2000000000b1', 'f2020202-0202-4002-8202-0000000000b1', 'f2020202-0202-4002-8202-1000000000b1', 'phase2.adminB@phase.tests', 'Phase2 Admin B', true),
+  ('f2020202-0202-4002-8202-2000000000b2', 'f2020202-0202-4002-8202-0000000000b2', 'f2020202-0202-4002-8202-1000000000b1', 'phase2.teacherB@phase.tests', 'Phase2 Teacher B', true),
+  ('f2020202-0202-4002-8202-2000000000c1', 'f2020202-0202-4002-8202-0000000000c1', 'f2020202-0202-4002-8202-1000000000a1', 'phase2.inactiveA@phase.tests', 'Phase2 Inactive A', false)
 on conflict (id) do nothing;
 
 insert into public.user_roles (user_id, role) values
@@ -48,11 +54,6 @@ insert into public.user_roles (user_id, role) values
   ('f2020202-0202-4002-8202-2000000000b2', 'TEACHER'),
   ('f2020202-0202-4002-8202-2000000000c1', 'TEACHER')
 on conflict do nothing;
-
--- (Superuser) flip the inactive user AFTER roles exist; trigger parity requires it runs
--- pre-impersonation so the flag is truly stored.
-update public.users set is_active = false
- where id = 'f2020202-0202-4002-8202-2000000000c1';
 
 -- RLS checks run as authenticated with claims; this single SET keeps them valid.
 set local role authenticated;
@@ -82,18 +83,19 @@ select is(
   0, 'cross-school write blocked: School B admin update had zero effect on School A');
 
 -- ----------------------------------------------------------------------
--- 3. Trigger denials — run as connecting role (superuser) so ONLY the trigger
---    can fail (RLS bypassed), isolating trigger behavior itself.
+-- 3. Trigger denials — run as each affected user on their OWN row (the only
+--    row the UPDATE USING clause lets through), so the identity trigger is
+--    the only possible failure cause.
 -- ----------------------------------------------------------------------
-reset role;
-
-select throws_ok(
+set local "request.jwt.claims" = '{"sub":"f2020202-0202-4002-8202-0000000000a3"}';
+select throws_matching(
   $$ update public.users set school_id = 'f2020202-0202-4002-8202-1000000000b1'
       where id = 'f2020202-0202-4002-8202-2000000000a3' $$,
   'identity columns are immutable via row-level access',
   'trigger: user cannot be moved to another school');
 
-select throws_ok(
+set local "request.jwt.claims" = '{"sub":"f2020202-0202-4002-8202-0000000000a1"}';
+select throws_matching(
   $$ update public.users set is_active = false
       where id = 'f2020202-0202-4002-8202-2000000000a1' $$,
   'identity columns are immutable via row-level access',
@@ -104,14 +106,15 @@ select throws_ok(
 -- ----------------------------------------------------------------------
 set local role authenticated;
 set local "request.jwt.claims" = '{"sub":"f2020202-0202-4002-8202-0000000000a3"}';
-select throws_ok(
+select throws_matching(
   $$ insert into public.user_roles (user_id, role)
       values ('f2020202-0202-4002-8202-2000000000a3', 'SCHOOL_ADMIN') $$,
-  '42501', -- SQLSTATE insufficient_privilege (RLS violation)
+  'row-level security policy', -- no authenticated INSERT policy on user_roles
   'RLS: parent cannot self-grant SCHOOL_ADMIN through user_roles');
 
 -- ----------------------------------------------------------------------
--- 5. Inactive users resolve to nothing (fail closed at RLS helpers).
+-- 5. Inactive users lose tenant context (fail closed at RLS helpers):
+--    school reads go dark; only their own profile row remains visible.
 -- ----------------------------------------------------------------------
 set local role authenticated;
 set local "request.jwt.claims" = '{"sub":"f2020202-0202-4002-8202-0000000000c1"}';
@@ -121,7 +124,7 @@ select is(
 
 select is(
   (select count(*)::int from public.users where school_id = 'f2020202-0202-4002-8202-1000000000a1'),
-  0, 'inactive user sees zero School-A users');
+  1, 'inactive user sees only their own row (tenant data stays dark)');
 
 -- ----------------------------------------------------------------------
 -- 6. Unauthenticated claim yields no tenant context.
@@ -139,12 +142,12 @@ select is(
 -- ----------------------------------------------------------------------
 reset role;
 
--- Authenticated School A admin sees ALL School-A users (fixture count = 6).
+-- Authenticated School A admin sees ALL School-A users (fixture count = 4).
 set local role authenticated;
 set local "request.jwt.claims" = '{"sub":"f2020202-0202-4002-8202-0000000000a1"}';
 select is(
   (select count(*)::int from public.users where school_id = 'f2020202-0202-4002-8202-1000000000a1'),
-  6, 'admin reads all School-A users (fixture-sized)');
+  4, 'admin reads all School-A users (fixture-sized)');
 
 -- School A users are never visible to School B.
 set local role authenticated;

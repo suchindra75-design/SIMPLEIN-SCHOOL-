@@ -1,9 +1,11 @@
 -- SIMPLEIN SCHOOL ERP · Phase 5 live pgTAP RLS suite.
 -- Conventions: see phase2_rls.sql. exams / exam_subjects / exam_schedules under test.
--- Assertion calls (count must match the plan below): is(…) 14 read/scope checks
--- + throws_ok(…) 4 + throws_matching(…) 4. Time-range rules are enforced at the
+-- Assertion calls (count must match the plan below): is(…) 12 read/scope checks
+-- + throws_matching(…) 8. Time-range rules are enforced at the
 -- SERVICE layer for exam subjects (lib/validation/exams.ts) and are not repeated
--- here because no DB CHECK exists by design.
+-- here because no DB CHECK exists by design. The connecting role bypasses RLS,
+-- so tenant triggers see every row and report real mismatches; CHECK/unique
+-- errors surface directly.
 
 create extension if not exists pgtap;
 begin;
@@ -15,7 +17,8 @@ insert into auth.users (instance_id, id, aud, role, email, encrypted_password, e
   ('00000000-0000-0000-0000-000000000000','f5050505-0505-4005-8505-0000000000a2','authenticated','authenticated','t5.teacherA@phase.tests','',now(),now(),now(),'{"provider":"email","providers":["email"]}','{}'),
   ('00000000-0000-0000-0000-000000000000','f5050505-0505-4005-8505-0000000000a3','authenticated','authenticated','t5.teacherA2@phase.tests','',now(),now(),now(),'{"provider":"email","providers":["email"]}','{}'),
   ('00000000-0000-0000-0000-000000000000','f5050505-0505-4005-8505-0000000000a4','authenticated','authenticated','t5.parentA@phase.tests','',now(),now(),now(),'{"provider":"email","providers":["email"]}','{}'),
-  ('00000000-0000-0000-0000-000000000000','f5050505-0505-4005-8505-0000000000b1','authenticated','authenticated','t5.admB@phase.tests','',now(),now(),now(),'{"provider":"email","providers":["email"]}','{}')
+  ('00000000-0000-0000-0000-000000000000','f5050505-0505-4005-8505-0000000000b1','authenticated','authenticated','t5.admB@phase.tests','',now(),now(),now(),'{"provider":"email","providers":["email"]}','{}'),
+  ('00000000-0000-0000-0000-000000000000','f5050505-0505-4005-8505-0000000000b2','authenticated','authenticated','t5.teacherB@phase.tests','',now(),now(),now(),'{"provider":"email","providers":["email"]}','{}')
 on conflict (id) do nothing;
 
 insert into public.schools (id, name, slug) values
@@ -33,7 +36,8 @@ insert into public.users (id, auth_user_id, school_id, email, full_name) values
   ('f5050505-0505-4005-8505-2000000000a2','f5050505-0505-4005-8505-0000000000a2','f5050505-0505-4005-8505-1000000000a1','phase5.teacherA@phase.tests','Teacher A'),
   ('f5050505-0505-4005-8505-2000000000a3','f5050505-0505-4005-8505-0000000000a3','f5050505-0505-4005-8505-1000000000a1','phase5.teacherA2@phase.tests','Teacher A2'),
   ('f5050505-0505-4005-8505-2000000000a4','f5050505-0505-4005-8505-0000000000a4','f5050505-0505-4005-8505-1000000000a1','phase5.parentA@phase.tests','Parent A'),
-  ('f5050505-0505-4005-8505-2000000000b1','f5050505-0505-4005-8505-0000000000b1','f5050505-0505-4005-8505-1000000000b1','phase5.adminB@phase.tests','Admin B')
+  ('f5050505-0505-4005-8505-2000000000b1','f5050505-0505-4005-8505-0000000000b1','f5050505-0505-4005-8505-1000000000b1','phase5.adminB@phase.tests','Admin B'),
+  ('f5050505-0505-4005-8505-2000000000b2','f5050505-0505-4005-8505-0000000000b2','f5050505-0505-4005-8505-1000000000b1','phase5.teacherB@phase.tests','Teacher B')
 on conflict (id) do nothing;
 
 insert into public.user_roles (user_id, role) values
@@ -41,7 +45,8 @@ insert into public.user_roles (user_id, role) values
   ('f5050505-0505-4005-8505-2000000000a2','TEACHER'),
   ('f5050505-0505-4005-8505-2000000000a3','TEACHER'),
   ('f5050505-0505-4005-8505-2000000000a4','PARENT'),
-  ('f5050505-0505-4005-8505-2000000000b1','SCHOOL_ADMIN')
+  ('f5050505-0505-4005-8505-2000000000b1','SCHOOL_ADMIN'),
+  ('f5050505-0505-4005-8505-2000000000b2','TEACHER')
 on conflict do nothing;
 
 insert into public.classes (id, school_id, name, order_index) values
@@ -52,7 +57,8 @@ on conflict (id) do nothing;
 
 insert into public.teachers (id, school_id, user_id, employee_no, first_name, display_name) values
   ('f5050505-0505-4005-8505-2000000000a2','f5050505-0505-4005-8505-1000000000a1','f5050505-0505-4005-8505-2000000000a2','E1','Ravi','Ravi'),
-  ('f5050505-0505-4005-8505-2000000000a3','f5050505-0505-4005-8505-1000000000a1','f5050505-0505-4005-8505-2000000000a3','E2','Priya','Priya')
+  ('f5050505-0505-4005-8505-2000000000a3','f5050505-0505-4005-8505-1000000000a1','f5050505-0505-4005-8505-2000000000a3','E2','Priya','Priya'),
+  ('f5050505-0505-4005-8505-2000000000b2','f5050505-0505-4005-8505-1000000000b1','f5050505-0505-4005-8505-2000000000b2','EB1','Far Teacher','Far Teacher')
 on conflict (id) do nothing;
 
 insert into public.subjects (id, school_id, name, code) values
@@ -129,18 +135,18 @@ select is((select count(*)::int from public.exams where school_id='f5050505-0505
 
 -- Modification boundary: teacher/parent cannot create exams.
 set local "request.jwt.claims" = '{"sub":"f5050505-0505-4005-8505-0000000000a2"}';
-select throws_ok(
+select throws_matching(
   $$ insert into public.exams (school_id, academic_year_id, class_id, name, starts_on, ends_on) values
       ('f5050505-0505-4005-8505-1000000000a1','f5050505-0505-4005-8505-1000000000a1','f5050505-0505-4005-8505-1000000000a1','X','2026-10-01','2026-10-31') $$,
-  '42501','teacher cannot create an exam (admin-only writes)');
+  'row-level security policy','teacher cannot create an exam (admin-only writes)');
 
 set local "request.jwt.claims" = '{"sub":"f5050505-0505-4005-8505-0000000000a4"}';
-select throws_ok(
+select throws_matching(
   $$ insert into public.exams (school_id, academic_year_id, class_id, name, starts_on, ends_on) values
       ('f5050505-0505-4005-8505-1000000000a1','f5050505-0505-4005-8505-1000000000a1','f5050505-0505-4005-8505-1000000000a1','X','2026-10-01','2026-10-31') $$,
-  '42501','parent cannot create an exam (admin-only writes)');
+  'row-level security policy','parent cannot create an exam (admin-only writes)');
 
--- ------------------------- trigger assertions (superuser) -------------------------
+-- ------------------------- trigger assertions (connecting role) -------------------------
 reset role;
 
 select throws_matching(
@@ -155,18 +161,18 @@ select throws_matching(
 
 select throws_matching(
   $$ insert into public.exam_schedules (school_id, exam_subject_id, invigilator_id) values
-      ('f5050505-0505-4005-8505-1000000000a1','f5050505-0505-4005-8505-1000000000a1','f5050505-0505-4005-8505-2000000000b1') $$,
+      ('f5050505-0505-4005-8505-1000000000a1','f5050505-0505-4005-8505-1000000000a1','f5050505-0505-4005-8505-2000000000b2') $$,
   'cross-tenant reference','trigger: schedule cannot reference School B invigilator');
 
-select throws_ok(
+select throws_matching(
   $$ insert into public.exams (school_id, academic_year_id, class_id, name, starts_on, ends_on) values
       ('f5050505-0505-4005-8505-1000000000a1','f5050505-0505-4005-8505-1000000000a1','f5050505-0505-4005-8505-1000000000a1','Unit Test 1','2026-10-01','2026-10-31') $$,
-  '23505','duplicate exam name for the same class/year prevented');
+  'duplicate key value','duplicate exam name for the same class/year prevented');
 
-select throws_ok(
+select throws_matching(
   $$ insert into public.exam_subjects (school_id, exam_id, subject_id, max_marks, passing_marks) values
       ('f5050505-0505-4005-8505-1000000000a1','f5050505-0505-4005-8505-1000000000a1','f5050505-0505-4005-8505-1000000000a1',100,101) $$,
-  '23514','CHECK violation: passing_marks may not exceed max_marks');
+  'violates check constraint','CHECK violation: passing_marks may not exceed max_marks');
 
 select throws_matching(
   $$ update public.exams set school_id='f5050505-0505-4005-8505-1000000000b1'

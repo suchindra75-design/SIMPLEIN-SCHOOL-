@@ -11,6 +11,7 @@ insert into auth.users (instance_id, id, aud, role, email, encrypted_password, e
   ('00000000-0000-0000-0000-000000000000','f3030303-0303-4003-8303-0000000000a2','authenticated','authenticated','t3.teacherA@phase.tests','',now(),now(),now(),'{"provider":"email","providers":["email"]}','{}'),
   ('00000000-0000-0000-0000-000000000000','f3030303-0303-4003-8303-0000000000a3','authenticated','authenticated','t3.parentA@phase.tests','',now(),now(),now(),'{"provider":"email","providers":["email"]}','{}'),
   ('00000000-0000-0000-0000-000000000000','f3030303-0303-4003-8303-0000000000b1','authenticated','authenticated','t3.admB@phase.tests','',now(),now(),now(),'{"provider":"email","providers":["email"]}','{}'),
+  ('00000000-0000-0000-0000-000000000000','f3030303-0303-4003-8303-0000000000b2','authenticated','authenticated','t3.teacherB@phase.tests','',now(),now(),now(),'{"provider":"email","providers":["email"]}','{}'),
   ('00000000-0000-0000-0000-000000000000','f3030303-0303-4003-8303-0000000000b3','authenticated','authenticated','t3.parB@phase.tests','',now(),now(),now(),'{"provider":"email","providers":["email"]}','{}')
 on conflict (id) do nothing;
 
@@ -29,6 +30,7 @@ insert into public.users (id, auth_user_id, school_id, email, full_name) values
   ('f3030303-0303-4003-8303-2000000000a2','f3030303-0303-4003-8303-0000000000a2','f3030303-0303-4003-8303-1000000000a1','phase3.teacherA@phase.tests','Teacher A'),
   ('f3030303-0303-4003-8303-2000000000a3','f3030303-0303-4003-8303-0000000000a3','f3030303-0303-4003-8303-1000000000a1','phase3.parentA@phase.tests','Parent A'),
   ('f3030303-0303-4003-8303-2000000000b1','f3030303-0303-4003-8303-0000000000b1','f3030303-0303-4003-8303-1000000000b1','phase3.adminB@phase.tests','Admin B'),
+  ('f3030303-0303-4003-8303-2000000000b2','f3030303-0303-4003-8303-0000000000b2','f3030303-0303-4003-8303-1000000000b1','phase3.teacherB@phase.tests','Teacher B'),
   ('f3030303-0303-4003-8303-2000000000b3','f3030303-0303-4003-8303-0000000000b3','f3030303-0303-4003-8303-1000000000b1','phase3.parentB@phase.tests','Parent B')
 on conflict (id) do nothing;
 
@@ -37,6 +39,7 @@ insert into public.user_roles (user_id, role) values
   ('f3030303-0303-4003-8303-2000000000a2','TEACHER'),
   ('f3030303-0303-4003-8303-2000000000a3','PARENT'),
   ('f3030303-0303-4003-8303-2000000000b1','SCHOOL_ADMIN'),
+  ('f3030303-0303-4003-8303-2000000000b2','TEACHER'),
   ('f3030303-0303-4003-8303-2000000000b3','PARENT')
 on conflict do nothing;
 
@@ -126,40 +129,46 @@ set local "request.jwt.claims" = '{"sub":"f3030303-0303-4003-8303-0000000000a1"}
 update public.students set status='inactive' where id='f3030303-0303-4003-8303-1000000000b1';
 select is((select count(*)::int from public.students where id='f3030303-0303-4003-8303-1000000000b1' and status='inactive'),0,'admin A update of School B student had zero effect');
 
--- ------------------------- trigger assertions (superuser) -------------------------
+-- ------------------------- trigger assertions (connecting role) -------------------------
+-- The connecting role bypasses RLS (like the trusted server ops), so parent
+-- lookups see every row and the tenant triggers report the real mismatch
+-- ("cross-tenant …"). Authenticated sessions would read the same parents as
+-- nonexistent instead (see phase6) — same denial, earlier layer.
 reset role;
 
-select throws_ok(
+select throws_matching(
   $$ insert into public.sections (id, school_id, class_id, name) values
       ('f3030303-0303-4003-8303-900000000091','f3030303-0303-4003-8303-1000000000a1','f3030303-0303-4003-8303-1000000000b1','X') $$,
-  'cross-tenant', 'trigger: section cannot reference School B class');
+  'cross-tenant reference', 'trigger: section cannot reference School B class');
 
-select throws_ok(
+select throws_matching(
   $$ insert into public.teachers (id, school_id, user_id, employee_no, first_name, display_name) values
       ('f3030303-0303-4003-8303-900000000092','f3030303-0303-4003-8303-1000000000a1','f3030303-0303-4003-8303-2000000000b1','EX','X','X') $$,
-  'cross-tenant', 'trigger: teacher cannot be linked to another school user');
+  'cross-tenant reference', 'trigger: teacher cannot be linked to another school user');
 
-select throws_ok(
+select throws_matching(
   $$ insert into public.parents (id, school_id, user_id, full_name) values
       ('f3030303-0303-4003-8303-900000000093','f3030303-0303-4003-8303-1000000000a1','f3030303-0303-4003-8303-2000000000b3','X') $$,
-  'cross-tenant', 'trigger: parent cannot be linked to another school user');
+  'cross-tenant reference', 'trigger: parent cannot be linked to another school user');
 
-select throws_ok(
+select throws_matching(
   $$ insert into public.students (id, school_id, admission_no, first_name, display_name, class_id, section_id) values
       ('f3030303-0303-4003-8303-900000000094','f3030303-0303-4003-8303-1000000000a1','900','X','X','f3030303-0303-4003-8303-1000000000b1','f3030303-0303-4003-8303-1000000000a1') $$,
-  'cross-tenant', 'trigger: student cannot reference School B class');
+  'cross-tenant reference', 'trigger: student cannot reference School B class');
 
-select throws_ok(
+select throws_matching(
   $$ insert into public.student_parents (student_id, parent_id, relation) values
       ('f3030303-0303-4003-8303-1000000000a1','f3030303-0303-4003-8303-2000000000b3','guardian') $$,
-  'cross-tenant', 'trigger: student-parent link cannot cross schools');
+  'cross-tenant link', 'trigger: student-parent link cannot cross schools');
 
-select throws_ok(
+select throws_matching(
   $$ insert into public.teacher_subjects (school_id, teacher_id, subject_id, section_id) values
       ('f3030303-0303-4003-8303-1000000000a1','f3030303-0303-4003-8303-2000000000a2','f3030303-0303-4003-8303-1000000000b1','f3030303-0303-4003-8303-1000000000a1') $$,
-  'cross-tenant', 'trigger: teacher assignment cannot reference School B subject');
+  'cross-tenant reference', 'trigger: teacher assignment cannot reference School B subject');
 
-select throws_ok(
+set local role authenticated;
+set local "request.jwt.claims" = '{"sub":"f3030303-0303-4003-8303-0000000000a1"}';
+select throws_matching(
   $$ update public.students set school_id='f3030303-0303-4003-8303-1000000000b1'
       where id='f3030303-0303-4003-8303-1000000000a1' $$,
   'school_id is immutable', 'trigger: school_id can never change on a student row');
@@ -167,16 +176,16 @@ select throws_ok(
 -- RLS write boundary: teacher/parent cannot insert.
 set local role authenticated;
 set local "request.jwt.claims" = '{"sub":"f3030303-0303-4003-8303-0000000000a2"}';
-select throws_ok(
+select throws_matching(
   $$ insert into public.students (school_id, admission_no, first_name, display_name) values
       ('f3030303-0303-4003-8303-1000000000a1','999','X','X') $$,
-  '42501','teacher cannot insert a student (admin-only writes)');
+  'row-level security policy','teacher cannot insert a student (admin-only writes)');
 
 set local "request.jwt.claims" = '{"sub":"f3030303-0303-4003-8303-0000000000a3"}';
-select throws_ok(
+select throws_matching(
   $$ insert into public.students (school_id, admission_no, first_name, display_name) values
       ('f3030303-0303-4003-8303-1000000000a1','998','X','X') $$,
-  '42501','parent cannot insert a student (admin-only writes)');
+  'row-level security policy','parent cannot insert a student (admin-only writes)');
 
 -- Audit-log read scope: only admins of own school.
 set local "request.jwt.claims" = '{"sub":"f3030303-0303-4003-8303-0000000000a2"}';
