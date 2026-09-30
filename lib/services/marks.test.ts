@@ -369,6 +369,37 @@ describe("parent results (published-only)", () => {
   });
 });
 
+describe("student results (published-only, Phase 14)", () => {
+  const studentCtx = () => baseCtx(["STUDENT"], "u-student");
+  const studentDb = (opts?: { locked?: boolean; published?: boolean }) => {
+    const s = seed(opts);
+    const me = (s.students as Row[]).find((r) => r["id"] === "s1");
+    if (me !== undefined) me["user_id"] = "u-student";
+    return createFakeDb(s) as unknown as DbClient;
+  };
+
+  it("student sees own published result", async () => {
+    const result = await getStudentResult(studentDb({ published: true }), studentCtx(), "s1", "ex-7");
+    expect(result.published).toBe(true);
+    expect(result.subjects[0]?.marksObtained).toBe(85);
+  });
+
+  it("student cannot see unpublished results", async () => {
+    await expect(
+      getStudentResult(studentDb({ published: false }), studentCtx(), "s1", "ex-7"),
+    ).rejects.toThrow(NotFoundError);
+  });
+
+  it("student cannot see another student's result — 404", async () => {
+    await expect(
+      getStudentResult(studentDb({ published: true }), studentCtx(), "s2", "ex-7"),
+    ).rejects.toThrow(TenantBoundaryError);
+    await expect(
+      getStudentResult(studentDb({ published: true }), studentCtx(), "sb1", "ex-b"),
+    ).rejects.toThrow(NotFoundError);
+  });
+});
+
 describe("result calculation (pure)", () => {
   it("absent subjects count against (0 obtained, full max)", () => {
     const result = calculateResult(

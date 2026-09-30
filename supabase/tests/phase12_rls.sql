@@ -2,7 +2,7 @@
 -- Conventions: see phase2_rls.sql. Student self-access (students.user_id +
 -- STUDENT role), promotion enrollments, and PYQs + pyqs bucket under test
 -- (migration 0012). One transaction; rolls back at the end.
--- Assertion calls (count must match the plan below): is(…) 27 +
+-- Assertion calls (count must match the plan below): is(…) 31 +
 -- throws_matching(…) 10 = 37. RLS checks run `set local role authenticated`
 -- + SET request.jwt.claims. Trigger/integrity assertions run as the connecting
 -- role (bypasses RLS), so tenant triggers see every row and report real
@@ -11,7 +11,7 @@
 
 create extension if not exists pgtap;
 begin;
-select plan(37); -- 37 assertions
+select plan(41); -- 41 assertions
 
 -- ------------------------- fixture -------------------------
 insert into auth.users (instance_id, id, aud, role, email, encrypted_password, email_confirmed_at, created_at, updated_at, raw_app_meta_data, raw_user_meta_data) values
@@ -195,12 +195,18 @@ select is((select count(*)::int from public.marks where student_id='f2121212-121
 select is((select count(*)::int from public.marks where school_id='f2121212-1212-4121-8121-1000000000b1'),0,'B: cross-school marks denied');
 select is((select count(*)::int from public.report_cards where student_id='f2121212-1212-4121-8121-6000000000a1'),1,'B: student reads only own published cards');
 select is((select count(*)::int from public.report_cards where status='DRAFT'),0,'B: student reads zero DRAFT cards');
--- Exam subjects are invisible to students at RLS, so the marks tenant trigger
--- reports the reference (same layering as phase6 C2/C3).
+-- Migration 0014 grants students own-class exam_subject reads, so the marks
+-- tenant trigger passes and RLS denies the write itself.
 select throws_matching(
   $$ insert into public.marks (school_id, exam_subject_id, student_id, marks_obtained) values
       ('f2121212-1212-4121-8121-1000000000a1','f2121212-1212-4121-8121-8100000000a1','f2121212-1212-4121-8121-6000000000a1',90) $$,
-  'does not exist','B: student cannot insert marks (read-only role)');
+  'row-level security policy','B: student cannot insert marks (read-only role)');
+
+-- B2. Exam context reads (migration 0014): own class only, any publish state.
+select is((select count(*)::int from public.exams where school_id='f2121212-1212-4121-8121-1000000000a1'),2,'B2: student reads own-class exams');
+select is((select count(*)::int from public.exams where school_id='f2121212-1212-4121-8121-1000000000b1'),0,'B2: student reads zero cross-school exams');
+select is((select count(*)::int from public.exam_subjects where school_id='f2121212-1212-4121-8121-1000000000a1'),2,'B2: student reads own-class exam subjects');
+select is((select count(*)::int from public.exam_subjects where school_id='f2121212-1212-4121-8121-1000000000b1'),0,'B2: student reads zero cross-school subjects');
 
 -- C. Promotion (admin-only writes; duplicate enrollment blocked; pointers move).
 set local "request.jwt.claims" = '{"sub":"f2121212-1212-4121-8121-0000000000a4"}';

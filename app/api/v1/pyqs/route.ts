@@ -4,7 +4,7 @@ import { requireAuth } from "@/lib/auth/session";
 import { routeErrorResponse } from "@/lib/services/errors";
 import { listPyqs } from "@/lib/services/pyqs";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { paginationSchema } from "@/lib/validation/common";
+import { paginationSchema, queryBoolSchema } from "@/lib/validation/common";
 
 export const dynamic = "force-dynamic";
 
@@ -13,7 +13,7 @@ const listQuerySchema = paginationSchema.extend({
   subjectId: z.string().uuid().optional(),
   yearLabel: z.string().max(20).optional(),
   examBoardName: z.string().max(120).optional(),
-  includeInactive: z.coerce.boolean().optional(),
+  includeInactive: queryBoolSchema.optional(),
 });
 
 /** Browse the school's PYQ bank (filterable). All roles read. */

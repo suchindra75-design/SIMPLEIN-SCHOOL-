@@ -7,7 +7,7 @@ import {
   listUsers,
 } from "@/lib/services/users";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { paginationSchema } from "@/lib/validation/common";
+import { paginationSchema, queryBoolSchema } from "@/lib/validation/common";
 import { APP_ROLES } from "@/lib/auth/rbac";
 import { userCreateSchema } from "@/lib/validation/people";
 
@@ -15,7 +15,7 @@ export const dynamic = "force-dynamic";
 
 const listQuerySchema = paginationSchema.extend({
   role: z.enum(APP_ROLES).optional(),
-  isActive: z.coerce.boolean().optional(),
+  isActive: queryBoolSchema.optional(),
   search: z.string().max(200).optional(),
 });
 

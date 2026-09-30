@@ -27,7 +27,23 @@ import type { TimetableSlotCreateInput, TimetableSlotUpdateInput } from "@/lib/v
  */
 
 const SLOT_COLUMNS =
-  "id, school_id, academic_year_id, section_id, subject_id, teacher_id, day_of_week, period_index, starts_at, ends_at, room, subjects(name), teachers(display_name), sections(name), classes(name)";
+  "id, school_id, academic_year_id, section_id, subject_id, teacher_id, day_of_week, period_index, starts_at, ends_at, room, subjects(name), teachers(display_name), sections(name, classes(name))";
+
+/**
+ * Flatten the nested section→class embed back to the DTO shape.
+ * (timetable_slots has no direct classes FK, so PostgREST cannot embed
+ * classes(name) at the top level — see Phase 14 runtime E2E.)
+ */
+function flattenSlotClass<T extends { sections?: unknown; classes?: unknown }>(rows: T[]): T[] {
+  return rows.map((r) => {
+    const sec = r.sections as { name?: string; classes?: { name: string } | null } | null | undefined;
+    return {
+      ...r,
+      sections: sec === null || sec === undefined ? null : { name: sec.name ?? "" },
+      classes: sec?.classes ?? r.classes ?? null,
+    };
+  });
+}
 
 /* ------------------------------ scope helpers --------------------------- */
 
@@ -129,7 +145,7 @@ export async function listSectionTimetable(
     .order("day_of_week")
     .order("period_index");
   throwForPostgrest(error);
-  return { slots: toCamel<TimetableSlotDto[]>(data ?? []) };
+  return { slots: flattenSlotClass(toCamel<TimetableSlotDto[]>(data ?? [])) };
 }
 
 /** Weekly grid for a teacher (admin or self-teacher). */
@@ -163,7 +179,7 @@ export async function listTeacherTimetable(
     .order("day_of_week")
     .order("period_index");
   throwForPostgrest(error);
-  return { slots: toCamel<TimetableSlotDto[]>(data ?? []) };
+  return { slots: flattenSlotClass(toCamel<TimetableSlotDto[]>(data ?? [])) };
 }
 
 /** Caller-scoped timetable: teacher → own entries; parent → children's sections. */
@@ -211,7 +227,7 @@ export async function listMyTimetable(
     .order("day_of_week")
     .order("period_index");
   throwForPostgrest(slotError);
-  return { slots: toCamel<TimetableSlotDto[]>(slots ?? []) };
+  return { slots: flattenSlotClass(toCamel<TimetableSlotDto[]>(slots ?? [])) };
 }
 
 /* -------------------------------- mutations ------------------------------ */

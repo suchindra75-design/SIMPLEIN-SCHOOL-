@@ -4,7 +4,7 @@ import { requireAuth } from "@/lib/auth/session";
 import { routeErrorResponse } from "@/lib/services/errors";
 import { listNotices } from "@/lib/services/notices";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { paginationSchema } from "@/lib/validation/common";
+import { paginationSchema, queryBoolSchema } from "@/lib/validation/common";
 
 export const dynamic = "force-dynamic";
 
@@ -12,7 +12,7 @@ const listQuerySchema = paginationSchema.extend({
   category: z
     .enum(["GENERAL", "CLASS", "SECTION", "EXAM", "HOLIDAY", "URGENT"])
     .optional(),
-  includeInactive: z.coerce.boolean().optional(),
+  includeInactive: queryBoolSchema.optional(),
 });
 
 /** Audience-filtered notice feed (expired excluded; server-side targeting). */

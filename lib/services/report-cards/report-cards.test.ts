@@ -273,6 +273,41 @@ describe("parent-child scope (published-only)", () => {
   });
 });
 
+describe("student self reads (published-only, Phase 14)", () => {
+  const studentCtx = () => baseCtx(["STUDENT"], "u-student");
+  const studentDb = (opts?: { published?: boolean }) => {
+    const s = seed(opts);
+    const me = (s.students as Row[]).find((r) => r["id"] === "s1");
+    if (me !== undefined) me["user_id"] = "u-student";
+    return createFakeDb(s) as unknown as DbClient;
+  };
+
+  it("student previews own PUBLISHED report card + PDF URL", async () => {
+    const payload = await buildReportCard(studentDb({ published: true }), studentCtx(), "s1", "ex-7");
+    expect(payload.published).toBe(true);
+    const url = await getReportCardPdfUrl(studentDb({ published: true }), studentCtx(), "rc1");
+    expect(url.startsWith("https://signed.test/report-cards/")).toBe(true);
+  });
+
+  it("student is blocked from UNPUBLISHED cards", async () => {
+    await expect(
+      buildReportCard(studentDb({ published: false }), studentCtx(), "s1", "ex-7"),
+    ).rejects.toThrow(NotFoundError);
+    await expect(
+      getReportCardPdfUrl(studentDb({ published: false }), studentCtx(), "rc1"),
+    ).rejects.toThrow(NotFoundError);
+  });
+
+  it("student cannot read another student's card — 404", async () => {
+    await expect(
+      buildReportCard(studentDb({ published: true }), studentCtx(), "s2", "ex-7"),
+    ).rejects.toThrow(TenantBoundaryError);
+    await expect(
+      getReportCardPdfUrl(studentDb({ published: true }), studentCtx(), "rc2"),
+    ).rejects.toThrow(TenantBoundaryError);
+  });
+});
+
 describe("marks/grades/percentage + attendance included", () => {
   it("reuses the existing calculations (Math 85 + English absent)", async () => {
     const payload = await buildReportCard(db({ published: true }), adminCtx(), "s1", "ex-7");

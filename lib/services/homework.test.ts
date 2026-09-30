@@ -402,3 +402,18 @@ describe("audit logging", () => {
     expect(audits[0]?.payload).toMatchObject({ school_id: A });
   });
 });
+
+describe("nested section→class embed mapping (Phase 14)", () => {
+  it("flattens sections.classes into the DTO shape", async () => {
+    const s = seed();
+    for (const hw of s.homework as Row[]) {
+      hw["sections"] = { name: "A", classes: { name: "Grade 7" } };
+      delete hw["classes"];
+    }
+    const client = createFakeDb(s) as unknown as DbClient;
+    const { homework } = await listHomework(client, adminCtx(), { page: 1, limit: 50 });
+    expect(homework.length).toBeGreaterThan(0);
+    expect(homework[0]?.sections).toEqual({ name: "A" });
+    expect(homework[0]?.classes).toEqual({ name: "Grade 7" });
+  });
+});

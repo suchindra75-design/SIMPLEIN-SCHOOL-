@@ -4,14 +4,14 @@ import { requireAuth } from "@/lib/auth/session";
 import { routeErrorResponse } from "@/lib/services/errors";
 import { createTeacher, listTeachers } from "@/lib/services/teachers";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { paginationSchema } from "@/lib/validation/common";
+import { paginationSchema, queryBoolSchema } from "@/lib/validation/common";
 import { teacherCreateSchema } from "@/lib/validation/people";
 
 export const dynamic = "force-dynamic";
 
 const listQuerySchema = paginationSchema.extend({
   search: z.string().max(200).optional(),
-  isActive: z.coerce.boolean().optional(),
+  isActive: queryBoolSchema.optional(),
 });
 
 export async function GET(request: Request) {

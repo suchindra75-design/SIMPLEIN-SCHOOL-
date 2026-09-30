@@ -444,6 +444,29 @@ describe("notification recipient isolation + fan-out", () => {
     expect(await unreadCount(client, parentCtx())).toBe(0);
   });
 
+  it("student reads own inbox (Phase 14: STUDENT role was rejected)", async () => {
+    const s = seed();
+    const users = (s.users ?? []) as Row[];
+    const notifs = (s.notifications ?? []) as Row[];
+    users.push({ id: "u-student", school_id: A, email: "s@a.example", full_name: "Stu", is_active: true });
+    notifs.push({
+      id: "notifS", school_id: A, user_id: "u-student", type: "ACCOUNT",
+      title: "Welcome", message: "Portal access", entity: null, entity_id: null,
+      is_read: false, read_at: null, created_at: "2026-09-22T10:00:00Z",
+    });
+    const client = createFakeDb(s) as unknown as DbClient;
+    const studentCtx = () => baseCtx(["STUDENT"], "u-student");
+    const { notifications } = await listNotifications(client, studentCtx(), { page: 1, limit: 50 });
+    expect(notifications.map((n) => n.id)).toEqual(["notifS"]);
+    expect(await unreadCount(client, studentCtx())).toBe(1);
+    await markNotificationRead(client, studentCtx(), "notifS");
+    expect(await unreadCount(client, studentCtx())).toBe(0);
+    // Another student's row stays invisible.
+    await expect(markNotificationRead(client, studentCtx(), "notif1")).rejects.toThrow(
+      NotFoundError,
+    );
+  });
+
   it("fanOutNotification dedupes recipients", async () => {
     const client = db();
     // sec7a + CLASS c7 both resolve to overlapping recipient sets.

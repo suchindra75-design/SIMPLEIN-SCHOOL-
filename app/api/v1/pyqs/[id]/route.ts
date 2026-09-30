@@ -4,6 +4,7 @@ import { routeErrorResponse } from "@/lib/services/errors";
 import { setPyqActive, updatePyq } from "@/lib/services/pyqs";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { pyqUpdateSchema } from "@/lib/validation/pyqs";
+import { queryBoolSchema } from "@/lib/validation/common";
 import { z } from "zod";
 
 export const dynamic = "force-dynamic";
@@ -32,7 +33,7 @@ export async function POST(
   try {
     const ctx = await requireAuth();
     const { active } = z
-      .object({ active: z.coerce.boolean() })
+      .object({ active: queryBoolSchema })
       .parse(Object.fromEntries(new URL(request.url).searchParams));
     const db = await createServerSupabaseClient();
     return ok(await setPyqActive(db, ctx, (await params).id, active));

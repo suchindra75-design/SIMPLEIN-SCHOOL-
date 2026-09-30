@@ -4,12 +4,12 @@ import { requireAuth } from "@/lib/auth/session";
 import { routeErrorResponse } from "@/lib/services/errors";
 import { listNotifications } from "@/lib/services/notifications";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { paginationSchema } from "@/lib/validation/common";
+import { paginationSchema, queryBoolSchema } from "@/lib/validation/common";
 
 export const dynamic = "force-dynamic";
 
 const listQuerySchema = paginationSchema.extend({
-  unreadOnly: z.coerce.boolean().optional(),
+  unreadOnly: queryBoolSchema.optional(),
   type: z
     .enum(["NOTICE", "HOMEWORK", "EXAM", "RESULT", "ATTENDANCE", "ACCOUNT"])
     .optional(),

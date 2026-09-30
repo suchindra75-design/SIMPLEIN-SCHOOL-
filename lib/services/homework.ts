@@ -31,7 +31,24 @@ import type { HomeworkCreateInput, HomeworkUpdateInput } from "@/lib/validation/
  */
 
 const HOMEWORK_COLUMNS =
-  "id, school_id, academic_year_id, section_id, subject_id, teacher_id, title, description, assigned_on, due_date, is_active, created_at, subjects(name), sections(name), classes(name), teachers(display_name)";
+  "id, school_id, academic_year_id, section_id, subject_id, teacher_id, title, description, assigned_on, due_date, is_active, created_at, subjects(name), sections(name, classes(name)), teachers(display_name)";
+
+/**
+ * Flatten the nested section→class embed back to the DTO shape.
+ * (homework has no direct classes FK, so PostgREST cannot embed
+ * classes(name) at the top level — see Phase 14 runtime E2E.)
+ */
+function flattenHomeworkClass<T>(rows: T[]): T[] {
+  return rows.map((r) => {
+    const rec = r as Record<string, unknown>;
+    const sec = rec["sections"] as { name?: string; classes?: { name: string } | null } | null | undefined;
+    return {
+      ...rec,
+      sections: sec === null || sec === undefined ? null : { name: sec.name ?? "" },
+      classes: sec?.classes ?? rec["classes"] ?? null,
+    } as unknown as T;
+  });
+}
 const ATTACHMENT_COLUMNS =
   "id, school_id, homework_id, bucket, path, original_name, mime, bytes, uploaded_by, created_at";
 
@@ -223,11 +240,13 @@ export async function listHomework(
   throwForPostgrest(error);
   return {
     homework: toCamel<HomeworkDto[]>(
-      (data ?? []).map((h) => ({
-        ...(h as Record<string, unknown>),
-        attachments:
-          (h as { homework_attachments?: unknown }).homework_attachments ?? [],
-      })),
+      flattenHomeworkClass(
+        (data ?? []).map((h) => ({
+          ...(h as Record<string, unknown>),
+          attachments:
+            (h as { homework_attachments?: unknown }).homework_attachments ?? [],
+        })),
+      ),
     ),
     total: count ?? 0,
   };
@@ -239,7 +258,7 @@ export async function getHomework(
   ctx: SessionContext,
   id: string,
 ): Promise<{ homework: HomeworkDto; attachments: HomeworkAttachmentDto[] }> {
-  authorizeRoles(ctx, ["SCHOOL_ADMIN", "TEACHER", "PARENT"]);
+  authorizeRoles(ctx, ["SCHOOL_ADMIN", "TEACHER", "PARENT", "STUDENT"]);
   const { data, error } = await db
     .from("homework")
     .select(HOMEWORK_COLUMNS)
@@ -259,8 +278,9 @@ export async function getHomework(
     .eq("homework_id", id)
     .eq("school_id", ctx.profile.schoolId);
   throwForPostgrest(attError);
+  const flat = flattenHomeworkClass([data])[0] as unknown as Record<string, unknown>;
   return {
-    homework: toCamel<HomeworkDto>(data),
+    homework: toCamel<HomeworkDto>(flat),
     attachments: toCamel<HomeworkAttachmentDto[]>(attachments ?? []),
   };
 }
@@ -508,7 +528,7 @@ export async function getHomeworkAttachmentUrl(
   ctx: SessionContext,
   attachmentId: string,
 ): Promise<string> {
-  authorizeRoles(ctx, ["SCHOOL_ADMIN", "TEACHER", "PARENT"]);
+  authorizeRoles(ctx, ["SCHOOL_ADMIN", "TEACHER", "PARENT", "STUDENT"]);
   const { data, error } = await db
     .from("homework_attachments")
     .select(ATTACHMENT_COLUMNS)

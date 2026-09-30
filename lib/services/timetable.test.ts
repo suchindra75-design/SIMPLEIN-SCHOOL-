@@ -374,3 +374,17 @@ describe("audit logging", () => {
     expect(audits[0]?.payload).toMatchObject({ school_id: A });
   });
 });
+
+describe("nested section→class embed mapping (Phase 14)", () => {
+  it("flattens sections.classes into the DTO shape", async () => {
+    const s = seed();
+    for (const slot of s.timetable_slots as Row[]) {
+      slot["sections"] = { name: "A", classes: { name: "Grade 7" } };
+    }
+    const client = createFakeDb(s) as unknown as DbClient;
+    const { slots } = await listSectionTimetable(client, adminCtx(), "sec7a");
+    expect(slots.length).toBeGreaterThan(0);
+    expect(slots[0]?.sections).toEqual({ name: "A" });
+    expect(slots[0]?.classes).toEqual({ name: "Grade 7" });
+  });
+});

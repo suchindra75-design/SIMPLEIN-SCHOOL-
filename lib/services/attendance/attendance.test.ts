@@ -350,9 +350,11 @@ describe("enrollment + relationship integrity", () => {
 
   it("rejects future attendance dates", async () => {
     const fake = createFakeDb(seed());
+    // A date safely beyond the +1-day tolerance (hardcoded dates rot).
+    const future = new Date(Date.now() + 10 * 86400000).toISOString().slice(0, 10);
     await expect(
       saveAttendance(fake as unknown as DbClient, teacherCtx(), "sec7a", {
-        date: "2026-10-01",
+        date: future,
         records: [{ studentId: "s1", status: "PRESENT" }],
       }),
     ).rejects.toThrow(ConflictError);

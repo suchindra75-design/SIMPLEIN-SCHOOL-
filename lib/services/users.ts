@@ -40,7 +40,7 @@ export async function listUsers(
   const from = (f.page - 1) * f.limit;
   let query = db
     .from("users")
-    .select("id, email, full_name, phone, is_active, created_at, user_roles(role)", {
+    .select("id, email, full_name, phone, is_active, created_at, user_roles!user_roles_user_id_fkey(role)", {
       count: "exact",
     })
     .eq("school_id", ctx.profile.schoolId)
@@ -52,7 +52,7 @@ export async function listUsers(
     query = query.or(`full_name.ilike.${q},email.ilike.${q}`);
   }
   if (f.role !== undefined) {
-    query = query.eq("user_roles.role", f.role);
+    query = query.eq("user_roles!user_roles_user_id_fkey.role", f.role);
   }
   const { data, error, count } = await query;
   throwForPostgrest(error);
@@ -68,7 +68,7 @@ export async function getUser(
   requireAdmin(ctx);
   const { data, error } = await db
     .from("users")
-    .select("id, email, full_name, phone, is_active, created_at, user_roles(role)")
+    .select("id, email, full_name, phone, is_active, created_at, user_roles!user_roles_user_id_fkey(role)")
     .eq("id", id)
     .eq("school_id", ctx.profile.schoolId)
     .single();

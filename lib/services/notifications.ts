@@ -252,7 +252,7 @@ export async function listNotifications(
   ctx: SessionContext,
   f: NotificationFilters,
 ): Promise<{ notifications: NotificationDto[]; total: number }> {
-  authorizeRoles(ctx, ["SCHOOL_ADMIN", "TEACHER", "PARENT"]);
+  authorizeRoles(ctx, ["SCHOOL_ADMIN", "TEACHER", "PARENT", "STUDENT"]);
   const from = (f.page - 1) * f.limit;
   let query = db
     .from("notifications")
@@ -274,7 +274,7 @@ export async function unreadCount(
   db: DbClient,
   ctx: SessionContext,
 ): Promise<number> {
-  authorizeRoles(ctx, ["SCHOOL_ADMIN", "TEACHER", "PARENT"]);
+  authorizeRoles(ctx, ["SCHOOL_ADMIN", "TEACHER", "PARENT", "STUDENT"]);
   const { count, error } = await db
     .from("notifications")
     .select("id", { count: "exact", head: true })
@@ -290,7 +290,7 @@ export async function markNotificationRead(
   ctx: SessionContext,
   id: string,
 ): Promise<{ id: string }> {
-  authorizeRoles(ctx, ["SCHOOL_ADMIN", "TEACHER", "PARENT"]);
+  authorizeRoles(ctx, ["SCHOOL_ADMIN", "TEACHER", "PARENT", "STUDENT"]);
   const { data, error } = await db
     .from("notifications")
     .update({ is_read: true, read_at: new Date().toISOString() })
@@ -307,7 +307,7 @@ export async function markAllNotificationsRead(
   db: DbClient,
   ctx: SessionContext,
 ): Promise<{ updated: boolean }> {
-  authorizeRoles(ctx, ["SCHOOL_ADMIN", "TEACHER", "PARENT"]);
+  authorizeRoles(ctx, ["SCHOOL_ADMIN", "TEACHER", "PARENT", "STUDENT"]);
   const { error } = await db
     .from("notifications")
     .update({ is_read: true, read_at: new Date().toISOString() })

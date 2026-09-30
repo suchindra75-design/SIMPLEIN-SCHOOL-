@@ -61,6 +61,14 @@ async function assertReportCardAccess(
     }
     return;
   }
+  if (ctx.roles.includes("STUDENT")) {
+    const { getStudentScope } = await import("@/lib/services/students");
+    const scope = await getStudentScope(db, ctx);
+    if (scope === null || scope.studentId !== studentId) {
+      throw new TenantBoundaryError();
+    }
+    return;
+  }
   throw new TenantBoundaryError();
 }
 
@@ -116,7 +124,7 @@ export async function buildReportCard(
   studentId: string,
   examId: string,
 ): Promise<ReportCardPayload> {
-  authorizeRoles(ctx, ["SCHOOL_ADMIN", "TEACHER", "PARENT"]);
+  authorizeRoles(ctx, ["SCHOOL_ADMIN", "TEACHER", "PARENT", "STUDENT"]);
   // Reuse the Phase 6 result calculation (tenant + scope + publish gating).
   const result = await getStudentResult(db, ctx, studentId, examId);
 
@@ -296,7 +304,7 @@ export async function getReportCardPdfUrl(
   ctx: SessionContext,
   reportCardId: string,
 ): Promise<string> {
-  authorizeRoles(ctx, ["SCHOOL_ADMIN", "TEACHER", "PARENT"]);
+  authorizeRoles(ctx, ["SCHOOL_ADMIN", "TEACHER", "PARENT", "STUDENT"]);
   const { data, error } = await db
     .from("report_cards")
     .select(REPORT_CARD_COLUMNS)
@@ -305,7 +313,10 @@ export async function getReportCardPdfUrl(
     .single();
   throwForPostgrest(error, "Report card not found");
   const row = toCamel<ReportCardDto>(data);
-  if (ctx.roles.includes("PARENT") && row.status !== "PUBLISHED") {
+  if (
+    (ctx.roles.includes("PARENT") || ctx.roles.includes("STUDENT")) &&
+    row.status !== "PUBLISHED"
+  ) {
     throw new NotFoundError("Report card is not published yet");
   }
   await assertReportCardAccess(db, ctx, row.studentId);

@@ -4,6 +4,7 @@ import { requireAuth } from "@/lib/auth/session";
 import { routeErrorResponse } from "@/lib/services/errors";
 import { listHomework } from "@/lib/services/homework";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { queryBoolSchema } from "@/lib/validation/common";
 
 export const dynamic = "force-dynamic";
 
@@ -12,7 +13,7 @@ const listQuerySchema = z.object({
   subjectId: z.string().uuid().optional(),
   dueFrom: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   dueBefore: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-  includeInactive: z.coerce.boolean().optional(),
+  includeInactive: queryBoolSchema.optional(),
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(20),
 });
