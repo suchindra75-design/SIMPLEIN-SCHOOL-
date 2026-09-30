@@ -1,4 +1,4 @@
-# SIMPLEIN SCHOOL ERP — Production Readiness (V1, Phase 13)
+# SIMPLEIN SCHOOL ERP — Production Readiness (V1, Phase 15)
 
 Status of what EXISTS, what is REQUIRED, and what is NOT yet done.
 Nothing on this page claims a third-party service is configured unless it
@@ -8,20 +8,19 @@ actually is in your deployment.
 
 ## 1. Blockers (must fix before production)
 
-1. **Live RLS verification.** All RLS policies are authored (migrations
-   0002–0012) and service-boundary behavior is unit-tested (273 tests), but
-   the policies have **never been executed against a real Postgres/Supabase
-   instance**. Required: provision staging Supabase → apply all migrations →
-   run `supabase/tests/phase2_rls.sql` … `phase12_rls.sql` as two tenants →
-   fix any failures. See docs/SECURITY.md §4.
-2. **Migrations have never been applied anywhere.** All 12 migration files
-   exist but no environment runs them yet. Apply to staging first; verify
-   order (0001 → 0012) and idempotency.
+1. ~~**Live RLS verification.**~~ ✅ **DONE (Phase 14):** migrations
+   0001–0015 applied on staging; `phase2..12_rls.sql` — 282+ assertions,
+   all green; runtime E2E across all four roles green.
+2. ~~**Migrations never applied.**~~ ✅ **DONE on staging** (0001–0015,
+   forward-only via `db push`). Production project NOT created — apply
+   there per `docs/PRODUCTION_DEPLOYMENT.md` §4–§5.
 3. **Supabase Auth email delivery** must be configured (SMTP sender) for
    password-reset emails to work; not configured by this codebase.
-4. **Content-Security-Policy** is not set (see SECURITY.md §14). Add a
-   nonce-based CSP or an acceptable `unsafe-inline` policy decision before a
-   public launch.
+4. **Content-Security-Policy** is not set (see SECURITY.md §14). Nonce-based
+   CSP design required before public launch — deliberately NOT `unsafe-inline`.
+5. **Backups/PITR, monitoring/error-tracking, CI pipeline** — all required,
+   none configured (see `docs/BACKUP_AND_RECOVERY.md`, `docs/MONITORING.md`,
+   `docs/CI_CD.md`).
 
 ## 2. Required production environment variables
 

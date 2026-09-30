@@ -10,7 +10,8 @@ export const dynamic = "force-dynamic";
 /**
  * Approve promotion for a batch (explicit admin action — never automatic).
  * Creates next-year enrollments (history preserved); hold/graduate handled
- * safely; duplicate promotion prevented (409). Admin only, audited.
+ * safely; per-student failures (incl. duplicate promotion) are collected in
+ * the 201 payload. Admin only, audited.
  */
 export async function POST(request: Request) {
   try {

@@ -52,7 +52,23 @@ export async function listUsers(
     query = query.or(`full_name.ilike.${q},email.ilike.${q}`);
   }
   if (f.role !== undefined) {
-    query = query.eq("user_roles!user_roles_user_id_fkey.role", f.role);
+    // Role filtering cannot join user_roles inline: that table holds TWO
+    // FKs to users (user_id, granted_by), and a hinted join cannot be
+    // filtered by alias in the same query (Phase 14.5 runtime E2E).
+    // Resolve matching same-school user ids first (single extra query).
+    const { data: roleRows, error: roleError } = await db
+      .from("user_roles")
+      .select("user_id, users!user_roles_user_id_fkey(school_id)")
+      .eq("role", f.role);
+    throwForPostgrest(roleError);
+    const rows = (roleRows ?? []) as unknown as {
+      user_id: string;
+      users: { school_id: string } | null;
+    }[];
+    const ids = rows
+      .filter((r) => r.users?.school_id === ctx.profile.schoolId)
+      .map((r) => r.user_id);
+    query = query.in("id", ids.length > 0 ? ids : ["00000000-0000-0000-0000-000000000000"]);
   }
   const { data, error, count } = await query;
   throwForPostgrest(error);

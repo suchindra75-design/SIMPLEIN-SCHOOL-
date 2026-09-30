@@ -22,6 +22,15 @@ limitation — not an assumed behavior.
   roles only — SCHOOL_ADMIN is onboarding-only) or by the onboarding flow.
   Admin password resets never set a known password; Supabase reset links only.
 - **Logout:** server-side `signOut()` clears cookies (API route + server action).
+- **Phase 15 auth hardening status (verified, no changes):** password policy
+  is Supabase-owned (no custom rules in repo); password reset is Supabase
+  email-link only with NO app UI — requires SMTP configured on the project
+  (unconfigured: pre-launch blocker); email confirmation enforced at
+  provisioning (`email_confirm: true`); disable/enable works via the
+  service-role path with Auth ban sync (migration 0015; live-proven);
+  privilege escalation blocked (matrix + trigger + no self-disable, no
+  SCHOOL_ADMIN grants); MFA: no MFA in V1 by design decision (deferred —
+  revisit with pilot security review, not silently).
 
 ## 2. RBAC
 
@@ -47,18 +56,17 @@ limitation — not an assumed behavior.
 - 273 automated tests include explicit cross-school denial suites for every
   module (School A → School B must fail).
 
-## 4. Row Level Security — ⚠️ NOT LIVE-VERIFIED
+## 4. Row Level Security — ✅ LIVE-VERIFIED on staging (Phase 14)
 
-- Policies for all ~35 tables are authored in migrations 0002–0012
+- Policies for all ~35 tables are authored in migrations 0002–0015
   (`supabase/migrations/`), including link-scoped helpers
   (`teacher_can_access_section`, `parent_can_access_student`,
-  `current_student_id`) and student published-only gating.
-- **The policies have NEVER been executed against a live Postgres/Supabase
-  instance** (no local tooling exists in the dev environment). Per-module
-  SQL verification scripts are ready in `supabase/tests/phase2..12_rls.sql`.
-- **BLOCKER:** a staging Supabase database must be provisioned and the RLS
-  scripts executed before production launch. Until then, treat RLS as
-  "authored, unit-tested at the service boundary, unverified at the database."
+  `current_student_id`), student published-only gating, the
+  `exam_subject_is_published()` helper (0013), and own-class student exam
+  reads (0014).
+- **Executed live:** `supabase/tests/phase2..12_rls.sql` — 282+ assertions,
+  all passing against staging PostgreSQL (plus runtime E2E across all four
+  roles). Re-run after any RLS-affecting change.
 
 ## 5. Parent-child access
 
