@@ -1,4 +1,5 @@
 import { ShellHeader } from "@/app/components/ShellHeader";
+import { TeacherNav } from "@/app/components/TeacherNav";
 import { requireDashboard } from "@/lib/auth/dashboard";
 
 /** Authenticated shell — never statically prerendered (session required). */
@@ -17,18 +18,10 @@ export default async function TeacherLayout({
         role="TEACHER"
         name={ctx.profile.fullName}
         school={ctx.school}
-        nav={[
-          "Dashboard",
-          "My Classes",
-          "Students",
-          "Attendance",
-          "Exams/Marks",
-          "Homework",
-          "Timetable",
-          "Notices",
-          "Profile",
-        ]}
       />
+      <div className="border-b bg-gray-50/50 p-4">
+        <TeacherNav />
+      </div>
       <div className="p-4">{children}</div>
     </div>
   );

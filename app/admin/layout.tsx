@@ -1,3 +1,4 @@
+import { AdminNav } from "@/app/components/AdminNav";
 import { ShellHeader } from "@/app/components/ShellHeader";
 import { requireDashboard } from "@/lib/auth/dashboard";
 
@@ -20,18 +21,10 @@ export default async function AdminLayout({
         role="SCHOOL_ADMIN"
         name={ctx.profile.fullName}
         school={ctx.school}
-        nav={[
-          "Dashboard",
-          "Students",
-          "Parents",
-          "Teachers",
-          "Classes",
-          "Attendance",
-          "Exams",
-          "Fees",
-          "Settings",
-        ]}
       />
+      <div className="border-b bg-gray-50/50 p-4">
+        <AdminNav />
+      </div>
       <div className="p-4">{children}</div>
     </div>
   );

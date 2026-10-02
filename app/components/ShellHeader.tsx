@@ -6,27 +6,24 @@ interface ShellHeaderProps {
   role: AppRole;
   name: string;
   school: School;
-  nav: string[];
+  nav?: string[];
 }
 
 /** Shared authenticated shell header: who is signed in, where, as what. */
-export function ShellHeader({ role, name, school, nav }: ShellHeaderProps) {
+export function ShellHeader({ role, name, school }: ShellHeaderProps) {
   return (
-    <header className="border-b p-4">
+    <header className="border-b bg-white p-4 shadow-xs">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="font-semibold">{school.name}</h1>
+          <h1 className="text-lg font-bold text-gray-900">{school.name}</h1>
           <p className="text-sm text-gray-600">
-            {name} · {role}
+            {name} · <span className="inline-block rounded bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-700">{role}</span>
           </p>
         </div>
-        <LogoutButton />
+        <div className="flex items-center gap-3">
+          <LogoutButton />
+        </div>
       </div>
-      <nav className="mt-3 flex gap-4 text-sm text-gray-600" aria-label="Modules">
-        {nav.map((item) => (
-          <span key={item}>{item}</span>
-        ))}
-      </nav>
     </header>
   );
 }
