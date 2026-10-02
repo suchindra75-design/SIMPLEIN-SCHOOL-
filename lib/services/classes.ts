@@ -16,7 +16,7 @@ export async function listClasses(
   db: DbClient,
   ctx: SessionContext,
 ): Promise<{ classes: ClassDto[] }> {
-  authorizeRoles(ctx, ["SCHOOL_ADMIN", "TEACHER", "PARENT"]);
+  authorizeRoles(ctx, ["SCHOOL_ADMIN", "TEACHER", "PARENT", "STUDENT"]);
   const { data, error } = await db
     .from("classes")
     .select("id, name, order_index, is_active, sections(id, name, order_index, is_active)")

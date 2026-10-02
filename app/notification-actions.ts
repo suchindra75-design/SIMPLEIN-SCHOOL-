@@ -166,7 +166,7 @@ export async function markNotificationReadAction(
   id: string,
 ): Promise<ActionState> {
   try {
-    const ctx = await requireRole(["SCHOOL_ADMIN", "TEACHER", "PARENT"]);
+    const ctx = await requireRole(["SCHOOL_ADMIN", "TEACHER", "PARENT", "STUDENT"]);
     const db = await createServerSupabaseClient();
     await markNotificationRead(db, ctx, id);
     revalidatePath("/notifications");
@@ -178,7 +178,7 @@ export async function markNotificationReadAction(
 
 export async function markAllNotificationsReadAction(): Promise<ActionState> {
   try {
-    const ctx = await requireRole(["SCHOOL_ADMIN", "TEACHER", "PARENT"]);
+    const ctx = await requireRole(["SCHOOL_ADMIN", "TEACHER", "PARENT", "STUDENT"]);
     const db = await createServerSupabaseClient();
     await markAllNotificationsRead(db, ctx);
     revalidatePath("/notifications");

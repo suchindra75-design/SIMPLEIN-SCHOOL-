@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
 
 /** Notification inbox (all roles): list, unread state, mark read/all. */
 export default async function NotificationsPage() {
-  const ctx = await requireRole(["SCHOOL_ADMIN", "TEACHER", "PARENT"]);
+  const ctx = await requireRole(["SCHOOL_ADMIN", "TEACHER", "PARENT", "STUDENT"]);
   const db = await createServerSupabaseClient();
   const { notifications } = await listNotifications(db, ctx, {
     page: 1,
