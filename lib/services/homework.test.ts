@@ -201,7 +201,7 @@ describe("teacher section/subject scope", () => {
       subjectId: "sub-e", // t1 is class teacher → all subjects allowed
       title: "Reading task",
       description: "Read chapter 5",
-      dueDate: "2026-10-01",
+      dueDate: "2026-12-15",
     });
     expect(result.id).toBeDefined();
     expect(fake.callsTo("homework", "insert")).toHaveLength(1);
@@ -213,7 +213,7 @@ describe("teacher section/subject scope", () => {
       subjectId: "sub-m",
       title: "Math drill",
       description: "Chapter 2",
-      dueDate: "2026-10-01",
+      dueDate: "2026-12-15",
     });
     expect(fake.callsTo("homework", "insert")).toHaveLength(1);
     const fake2 = createFakeDb(seed());
@@ -222,7 +222,7 @@ describe("teacher section/subject scope", () => {
         subjectId: "sub-e", // t2 is NOT the class teacher and NOT assigned English
         title: "Nope",
         description: "Nope",
-        dueDate: "2026-10-01",
+        dueDate: "2026-12-15",
       }),
     ).rejects.toThrow(TenantBoundaryError);
     expect(fake2.callsTo("homework", "insert")).toHaveLength(0);
