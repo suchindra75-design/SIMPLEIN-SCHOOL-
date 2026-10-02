@@ -22,3 +22,5 @@ next-env.d.ts
 # Test / coverage
 coverage/
 tsconfig.tsbuildinfo
+.vercel
+.env*

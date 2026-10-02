@@ -74,7 +74,7 @@ Creating and configuring the production Supabase instance requires human provide
     ```sql
     SELECT id, name, public FROM storage.buckets;
     ```
-  - Confirm `public = false` across all 6 storage buckets (`student-photos`, `teacher-photos`, `homework-attachments`, `notice-attachments`, `fee-receipts`, `pyqs`).
+  - Confirm `public = false` across all 7 storage buckets (`student-photos`, `teacher-photos`, `report-cards`, `homework-attachments`, `notice-attachments`, `fee-receipts`, `pyqs`).
 
 - [ ] **5. Execute Production pgTAP RLS Suite:**
   - Run `supabase/tests/phase2_rls.sql` through `phase12_rls.sql` against the database to confirm 286 RLS assertions pass green.
@@ -144,11 +144,26 @@ Creating and configuring the production Supabase instance requires human provide
 
 ## 8. STORAGE & FILE SECURITY AUDIT
 
-### Storage Breakdown:
-- **Application Storage Implementation (`[IMPLEMENTED]`)**:
-  All 6 storage buckets (`student-photos`, `teacher-photos`, `homework-attachments`, `notice-attachments`, `fee-receipts`, `pyqs`), path isolation builders (`schools/{schoolId}/...`), MIME allowlists, size limits, and short-lived signed URL generation (600s expiration) are fully built and verified in application code (`lib/services/storage.ts`).
-- **Production Supabase Storage Configuration (`[NOT CONFIGURED] / [BLOCKED]`)**:
-  Production buckets cannot be provisioned or verified until the separate production Supabase project is created and linked.
+### 1. Storage Architecture Overview `[VERIFIED]`:
+- **7 Production Storage Buckets:** All defined across migrations 0001–0015 (`student-photos`, `teacher-photos`, `report-cards`, `homework-attachments`, `notice-attachments`, `fee-receipts`, `pyqs`).
+- **Private Buckets:** All 7 buckets are explicitly configured as private (`public = false`). Direct public unauthenticated access to storage object URLs is completely blocked by Supabase Storage.
+- **Cross-Tenant Storage RLS Enforced:** Every bucket's `SELECT` and write policies enforce path matching on `(storage.foldername(name))[1] = 'schools'` AND `(storage.foldername(name))[2] = public.current_school_id()::text`. Users belonging to School A cannot read or write objects belonging to School B.
+- **Unauthenticated Direct Access Blocked:** For unauthenticated requests (`auth.uid()` is `NULL`), `public.current_school_id()` evaluates to `NULL`. Since `... = NULL::text` evaluates to `NULL` (falsy in SQL boolean checks), unauthenticated direct requests are rejected by Storage RLS.
+- **Strict Write Policies:** Storage mutation policies enforce both school path tenancy AND administrative/teacher privileges:
+  - `is_school_admin()` is required for writing to `student-photos`, `teacher-photos`, `report-cards`, `notice-attachments`, `fee-receipts`, and `pyqs`.
+  - `is_school_admin() OR has_app_role('TEACHER')` is required for writing to `homework-attachments`.
+- **Fine-Grained Authorization at Application Layer:** Fine-grained access control (e.g. parent-student link verification via `student_parents`, teacher section assignments, publication flags) is evaluated in Next.js API routes and service methods (`lib/services/storage.ts`, `lib/services/homework.ts`, `lib/services/fees.ts`, `lib/services/notices.ts`, `lib/services/pyqs.ts`) before issuing access tokens.
+- **Short-Lived Signed URLs:** Storage assets are served to authenticated clients exclusively via short-lived HMAC-signed URLs (`createSignedUrl` with `expiresIn = 600` seconds / 10 minutes).
+- **Migration Assessment:** **No migration 0016 required** for the current Storage authorization architecture.
+
+### 2. Residual Architectural Risk & Mitigation Strategy `[DOCUMENTED]`:
+- **Residual Risk:** Storage `SELECT` RLS is tenant-wide within a school (`(storage.foldername(name))[2] = current_school_id()::text`). A same-school authenticated user who obtains or guesses another entity's exact path (e.g., another student's fee receipt or report card path within the same school) may potentially access that object directly through the Supabase Storage authenticated REST API (`/storage/v1/object/authenticated/...`).
+- **Mitigation & Architectural Design:** The application UI and client SDKs never expose direct bucket storage endpoints to end users. All file access flows through server API routes and server actions that enforce strict business logic and RBAC checks prior to generating temporary, time-bound signed URLs (`600s`).
+- **Future Hardening Opportunity:** If direct authenticated client-side Storage API access is ever enabled in future versions, entity-level join policies can be added to `storage.objects` to tie paths directly to database records (e.g., validating parent linkage via `student_parents`). For V1, the two-tier model (Storage RLS for tenant boundary + Service Layer for fine-grained authorization) provides robust multi-tenant protection.
+
+### 3. Production Supabase Storage Configuration Status:
+- **Application Storage Implementation (`[IMPLEMENTED]`)**: All 7 buckets, tenant-prefixed path builders (`buildPhotoPath`, `buildAttachmentPath`), MIME allowlists, size limits, and signed URL generation are fully built and verified in `lib/services/storage.ts`.
+- **Production Supabase Storage Configuration (`[NOT CONFIGURED] / [BLOCKED]`)**: Physical provisioning of the 7 private buckets in the production Supabase environment is blocked on human creation of the production Supabase project.
 
 ---
 
@@ -347,7 +362,7 @@ All 24 operational infrastructure areas are classified below using **strictly va
 | **5. Authentication (App Code)** | `[IMPLEMENTED]` | `lib/auth/session.ts`, `lib/auth/rbac.ts` | Complete Auth code & session logic | Security Lead |
 | **5b. Auth (Production Supabase)** | `[DOCUMENTED ONLY]` | `docs/PRODUCTION_DEPLOYMENT.md` §4 | Configure production Site URL & redirect allowlist in Supabase | Security Lead |
 | **6. SMTP / Email** | `[BLOCKED]` | `docs/PRODUCTION_READINESS.md` §1.3 | Input custom production SMTP credentials in Supabase Auth | System Admin |
-| **7a. Storage (App Code)** | `[IMPLEMENTED]` | `lib/services/storage.ts` | 6 private buckets & signed URL generation built | Infrastructure Admin |
+| **7a. Storage (App Code)** | `[IMPLEMENTED]` | `lib/services/storage.ts` | 7 private buckets & signed URL generation built | Infrastructure Admin |
 | **7b. Storage (Production Supabase)** | `[NOT CONFIGURED]` | `docs/PRODUCTION_DEPLOYMENT.md` §4 | Provision & verify private storage buckets on prod Supabase | Infrastructure Admin |
 | **8. Database Backups** | `[DOCUMENTED ONLY]` | `docs/BACKUP_AND_RECOVERY.md` | Enable Point-In-Time-Recovery (PITR) in Supabase Dashboard | Lead DBA |
 | **9. Restore Drill** | `[NOT PERFORMED]` | `docs/BACKUP_AND_RECOVERY.md` | Perform one full database restore drill into scratch project | Lead DBA |
