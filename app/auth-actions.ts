@@ -11,16 +11,34 @@ import { loginSchema } from "@/lib/validation/auth";
  */
 
 export async function loginAction(formData: FormData): Promise<never> {
-  const parsed = loginSchema.safeParse({
-    email: formData.get("email"),
-    password: formData.get("password"),
-  });
-  if (!parsed.success) {
+  const roleRaw = (formData.get("role") as string | null)?.toUpperCase() ?? "ADMIN";
+  const role = ["STUDENT", "PARENT", "TEACHER", "ADMIN", "SCHOOL_ADMIN"].includes(roleRaw)
+    ? (roleRaw as "STUDENT" | "PARENT" | "TEACHER" | "ADMIN" | "SCHOOL_ADMIN")
+    : "ADMIN";
+
+  const rawIdentifier =
+    (formData.get("identifier") as string | null) ??
+    (formData.get("email") as string | null) ??
+    "";
+  const password = (formData.get("password") as string | null) ?? "";
+
+  if (!rawIdentifier.trim() || !password) {
+    redirect("/login?error=invalid");
+  }
+
+  const { resolveIdentifierToEmail } = await import("@/lib/services/identity");
+  const resolved = await resolveIdentifierToEmail(role, rawIdentifier);
+
+  if (resolved === null || !resolved.email) {
     redirect("/login?error=invalid");
   }
 
   const supabase = await createServerSupabaseClient();
-  const { error } = await supabase.auth.signInWithPassword(parsed.data);
+  const { error } = await supabase.auth.signInWithPassword({
+    email: resolved.email,
+    password,
+  });
+
   if (error !== null) {
     redirect("/login?error=invalid");
   }

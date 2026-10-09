@@ -27,13 +27,14 @@ export default async function ParentDetailPage({
   } catch {
     notFound();
   }
-  const { children } = await listChildren(db, ctx, id);
-  // Candidates for linking: active students, first page of 100 (refine via Students).
-  const { students } = await listStudents(db, ctx, {
-    status: "active",
-    page: 1,
-    limit: 100,
-  });
+  const [{ children }, { students }] = await Promise.all([
+    listChildren(db, ctx, id),
+    listStudents(db, ctx, {
+      status: "active",
+      page: 1,
+      limit: 100,
+    }),
+  ]);
 
   return (
     <main>

@@ -376,6 +376,7 @@ describe("audit logging", () => {
       subjectId: "sub-m",
       title: "New homework",
       description: "Chapter 6",
+      assignedOn: "2026-10-01",
       dueDate: "2026-10-02",
     });
     await updateHomework(client, teacherCtx(), "hw1", { dueDate: "2026-09-28" });

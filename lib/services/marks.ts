@@ -186,11 +186,10 @@ export async function listMarkableSubjects(
   const all = toCamel<ExamSubjectStateDto[]>(data ?? []);
   if (isAdmin(ctx)) return { subjects: all };
   if (!ctx.roles.includes("TEACHER")) return { subjects: [] };
-  const filtered: ExamSubjectStateDto[] = [];
-  for (const s of all) {
-    if (await teacherCanEnterMarks(db, ctx, s)) filtered.push(s);
-  }
-  return { subjects: filtered };
+  const checks = await Promise.all(
+    all.map((s) => teacherCanEnterMarks(db, ctx, s)),
+  );
+  return { subjects: all.filter((_, i) => checks[i]) };
 }
 
 export interface MarksGrid {

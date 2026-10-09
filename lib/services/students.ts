@@ -205,6 +205,8 @@ export async function assertStudentAccess(
   throw new TenantBoundaryError();
 }
 
+import { cache } from "react";
+
 export interface StudentScope {
   studentId: string;
   classId: string | null;
@@ -212,22 +214,32 @@ export interface StudentScope {
 }
 
 /** Resolve the caller's student scope (null when the user has no student profile). */
-export async function getStudentScope(
-  db: DbClient,
-  ctx: SessionContext,
-): Promise<StudentScope | null> {
-  const { data, error } = await db
-    .from("students")
-    .select("id, class_id, section_id")
-    .eq("user_id", ctx.profile.id)
-    .eq("school_id", ctx.profile.schoolId)
-    .eq("status", "active")
-    .maybeSingle();
-  if (error !== null) throw new Error(error.message);
-  if (data === null) return null;
-  const row = data as { id: string; class_id: string | null; section_id: string | null };
-  return { studentId: row.id, classId: row.class_id, sectionId: row.section_id };
-}
+export const getStudentScope = cache(
+  async (
+    db: DbClient,
+    ctx: SessionContext,
+  ): Promise<StudentScope | null> => {
+    const { data, error } = await db
+      .from("students")
+      .select("id, class_id, section_id")
+      .eq("user_id", ctx.profile.id)
+      .eq("school_id", ctx.profile.schoolId)
+      .eq("status", "active")
+      .maybeSingle();
+    if (error !== null) throw new Error(error.message);
+    if (data === null) return null;
+    const row = data as {
+      id: string;
+      class_id: string | null;
+      section_id: string | null;
+    };
+    return {
+      studentId: row.id,
+      classId: row.class_id,
+      sectionId: row.section_id,
+    };
+  },
+);
 
 /** Admin only. */
 export async function createStudent(

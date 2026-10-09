@@ -37,6 +37,17 @@ function str(form: FormData, key: string): string | undefined {
   return t === "" ? undefined : t;
 }
 
+function revalidateNoticePaths() {
+  revalidatePath("/admin/notices");
+  revalidatePath("/teacher/notices");
+  revalidatePath("/parent/notices");
+  revalidatePath("/student/notices");
+  revalidatePath("/notifications");
+  revalidatePath("/teacher");
+  revalidatePath("/parent");
+  revalidatePath("/student");
+}
+
 export async function createNoticeAction(
   _prev: ActionState,
   form: FormData,
@@ -50,7 +61,8 @@ export async function createNoticeAction(
       | "SECTION"
       | "TEACHERS"
       | "PARENTS";
-    await createNotice(db, ctx, {
+    const publishNow = form.get("publishNow") === "on" || form.get("isPublished") === "on";
+    const result = await createNotice(db, ctx, {
       title: str(form, "title") ?? "",
       content: str(form, "content") ?? "",
       category: str(form, "category") ?? "GENERAL",
@@ -61,7 +73,10 @@ export async function createNoticeAction(
       },
       expiresAt: str(form, "expiresAt") ?? null,
     });
-    revalidatePath("/admin/notices");
+    if (publishNow) {
+      await setNoticePublished(db, ctx, result.id, true);
+    }
+    revalidateNoticePaths();
     return { success: true };
   } catch (error) {
     return err(error);
@@ -82,7 +97,7 @@ export async function updateNoticeAction(
       category: str(form, "category"),
       expiresAt: str(form, "expiresAt") ?? null,
     });
-    revalidatePath("/admin/notices");
+    revalidateNoticePaths();
     return { success: true };
   } catch (error) {
     return err(error);
@@ -97,7 +112,7 @@ export async function setNoticePublishedAction(
     const ctx = await requireRole("SCHOOL_ADMIN");
     const db = await createServerSupabaseClient();
     await setNoticePublished(db, ctx, id, published);
-    revalidatePath("/admin/notices");
+    revalidateNoticePaths();
     return { success: true };
   } catch (error) {
     return err(error);
@@ -109,7 +124,7 @@ export async function deleteNoticeAction(id: string): Promise<ActionState> {
     const ctx = await requireRole("SCHOOL_ADMIN");
     const db = await createServerSupabaseClient();
     await deleteNotice(db, ctx, id);
-    revalidatePath("/admin/notices");
+    revalidateNoticePaths();
     return { success: true };
   } catch (error) {
     return err(error);
@@ -190,6 +205,14 @@ export async function markAllNotificationsReadAction(): Promise<ActionState> {
 
 /* --------------------------------- fees ---------------------------------- */
 
+function revalidateFeePaths() {
+  revalidatePath("/admin/fees");
+  revalidatePath("/student/fees");
+  revalidatePath("/parent/fees");
+  revalidatePath("/student");
+  revalidatePath("/parent");
+}
+
 export async function createFeeStructureAction(
   _prev: ActionState,
   form: FormData,
@@ -217,7 +240,7 @@ export async function createFeeStructureAction(
       dueDate: str(form, "dueDate") ?? null,
       components,
     });
-    revalidatePath("/admin/fees");
+    revalidateFeePaths();
     return { success: true };
   } catch (error) {
     return err(error);
@@ -243,7 +266,7 @@ export async function assignFeesAction(
       totalAmount: totalRaw === undefined ? null : Number(totalRaw),
       dueDate: str(form, "dueDate") ?? null,
     });
-    revalidatePath("/admin/fees");
+    revalidateFeePaths();
     return { success: true };
   } catch (error) {
     return err(error);
@@ -269,7 +292,7 @@ export async function recordPaymentAction(
         | "OTHER",
       referenceNo: str(form, "referenceNo") ?? null,
     });
-    revalidatePath("/admin/fees");
+    revalidateFeePaths();
     return { success: true };
   } catch (error) {
     return err(error);
@@ -284,7 +307,7 @@ export async function verifyPaymentAction(
     const db = await createServerSupabaseClient();
     const { verifyPaymentRecord } = await import("@/lib/services/fees");
     await verifyPaymentRecord(db, ctx, recordId);
-    revalidatePath("/admin/fees");
+    revalidateFeePaths();
     return { success: true };
   } catch (error) {
     return err(error);
@@ -303,7 +326,7 @@ export async function voidPaymentAction(
     const reason = str(form, "reason") ?? "";
     if (reason.length < 3) return { error: "Provide a void reason" };
     await voidPaymentRecord(db, ctx, recordId, { reason });
-    revalidatePath("/admin/fees");
+    revalidateFeePaths();
     return { success: true };
   } catch (error) {
     return err(error);
@@ -330,7 +353,7 @@ export async function uploadReceiptAction(
       size: file.size,
       bytes: await file.arrayBuffer(),
     });
-    revalidatePath("/admin/fees");
+    revalidateFeePaths();
     return { success: true };
   } catch (error) {
     return err(error);

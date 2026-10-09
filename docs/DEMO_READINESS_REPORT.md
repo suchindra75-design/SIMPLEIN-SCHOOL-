@@ -1,9 +1,9 @@
-# SIMPLEIN SCHOOL ERP — Demo Readiness & Browser Usability Report (V1)
+# SIMPLEIN SCHOOL ERP — Demo Readiness & Usability Report
 
 **Project Name:** SIMPLEIN SCHOOL ERP  
 **Organization:** SIMPLEIN SOLUTIONS LLP  
 **Repository Branch:** `phase-16-production-infrastructure`  
-**Report Date:** `2026-10-02T20:45:00+05:30`  
+**Report Date:** `2026-10-04T16:00:00+05:30`
 **Target Staging Project:** `simplein school` (Ref: `krzbajfioftoubcbyeso`, Region: `ap-northeast-2`)  
 **Production Isolation:** Fully Isolated from Production Supabase (`rpcydhgavfebywhlfukp`)  
 
@@ -11,20 +11,21 @@
 
 ## 1. EXECUTIVE OVERVIEW
 
-This report assesses both the **Route-Level Access** and **Browser Interaction Usability** of the SIMPLEIN SCHOOL ERP application using the verified **Staging Supabase Project** (`krzbajfioftoubcbyeso`). 
+This report assesses both the **Route-Level Access**, **Browser Usability**, **Functional Workflow Integrity (Part A)**, and **Multi-Role Identity Architecture (Part B)** of the SIMPLEIN SCHOOL ERP application using the verified **Staging Supabase Project** (`krzbajfioftoubcbyeso`).
 
-All core ERP modules, multi-tenant RBAC policies, SSR authentication handlers, navigation structures, forms, modal states, and storage integrations have been validated through local unit test suites, TypeScript compilation, ESLint verification, Next.js production build compilation, live PostgreSQL pgTAP RLS suites, and end-to-end browser interaction runs across all 4 personas (`SCHOOL_ADMIN`, `TEACHER`, `PARENT`, `STUDENT`).
+All core ERP modules, multi-tenant RBAC policies, SSR authentication handlers, multi-role identity resolution (Student Admission No, Parent Phone No, Teacher Staff ID, Admin Email), navigation structures, forms, modal states, and storage integrations have been validated through local unit test suites, TypeScript compilation, ESLint verification, Next.js production build compilation, live PostgreSQL pgTAP RLS suites, and end-to-end browser interaction runs across all 4 personas (`SCHOOL_ADMIN`, `TEACHER`, `PARENT`, `STUDENT`).
 
 ---
 
-## 2. ROUTE-LEVEL VERIFICATION MATRIX
+## 2. ROUTE-LEVEL & ROLE GUARD VERIFICATION MATRIX
 
 Tested against live SSR Next.js server with active session cookies:
 
 | Role | Target Route | HTTP Status | Role Guard Behavior | Status |
 | :--- | :--- | :---: | :--- | :---: |
 | **`SCHOOL_ADMIN`** | `GET /admin` | `200 OK` | Institutional Admin Dashboard | `[PASS]` |
-| **`SCHOOL_ADMIN`** | `GET /admin/students` | `200 OK` | Student Directory & Onboarding | `[PASS]` |
+| **`SCHOOL_ADMIN`** | `GET /admin/students` | `200 OK` | Student Directory with Section column | `[PASS]` |
+| **`SCHOOL_ADMIN`** | `GET /admin/students/new` | `200 OK` | Consolidated Student + Parent Creation | `[PASS]` |
 | **`SCHOOL_ADMIN`** | `GET /admin/teachers` | `200 OK` | Teacher Roster & Subject Assignments | `[PASS]` |
 | **`SCHOOL_ADMIN`** | `GET /admin/parents` | `200 OK` | Parent Directory & Child Linkages | `[PASS]` |
 | **`SCHOOL_ADMIN`** | `GET /admin/classes` | `200 OK` | Classes & Sections Catalog | `[PASS]` |
@@ -34,11 +35,11 @@ Tested against live SSR Next.js server with active session cookies:
 | **`SCHOOL_ADMIN`** | `GET /admin/marks` | `200 OK` | Marksheet Review & Lock Console | `[PASS]` |
 | **`SCHOOL_ADMIN`** | `GET /admin/report-cards`| `200 OK` | Term Report Card Generation | `[PASS]` |
 | **`SCHOOL_ADMIN`** | `GET /admin/timetable` | `200 OK` | Timetable Slot Grid Builder | `[PASS]` |
-| **`SCHOOL_ADMIN`** | `GET /admin/homework` | `200 OK` | School Homework Audit Log | `[PASS]` |
-| **`SCHOOL_ADMIN`** | `GET /admin/notices` | `200 OK` | Notice Board & Circular Publisher | `[PASS]` |
+| **`SCHOOL_ADMIN`** | `GET /admin/homework` | `200 OK` | School Homework Audit Log with Attachments | `[PASS]` |
+| **`SCHOOL_ADMIN`** | `GET /admin/notices` | `200 OK` | Notice Publisher with Instant Delivery | `[PASS]` |
 | **`SCHOOL_ADMIN`** | `GET /admin/fees` | `200 OK` | Fee Structures & Payment Ledger | `[PASS]` |
 | **`SCHOOL_ADMIN`** | `GET /admin/promotions`| `200 OK` | Student Cohort Promotion Engine | `[PASS]` |
-| **`SCHOOL_ADMIN`** | `GET /admin/pyqs` | `200 OK` | Past Year Question Papers Repo | `[PASS]` |
+| **`SCHOOL_ADMIN`** | `GET /admin/pyqs` | `200 OK` | PYQ Repo with Archive/Restore Actions | `[PASS]` |
 | **`SCHOOL_ADMIN`** | `GET /admin/users` | `200 OK` | User Provisioning & Roles | `[PASS]` |
 | **`SCHOOL_ADMIN`** | `GET /notifications` | `200 OK` | Admin Alert Inbox | `[PASS]` |
 | **`TEACHER`** | `GET /teacher` | `200 OK` | Teacher Assigned Classes Dashboard | `[PASS]` |
@@ -46,7 +47,7 @@ Tested against live SSR Next.js server with active session cookies:
 | **`TEACHER`** | `GET /teacher/exams` | `200 OK` | Teacher Assigned Exam Schedules | `[PASS]` |
 | **`TEACHER`** | `GET /teacher/marks` | `200 OK` | Subject Marksheet Entry Sheet | `[PASS]` |
 | **`TEACHER`** | `GET /teacher/report-cards`| `200 OK` | Class Report Card Review | `[PASS]` |
-| **`TEACHER`** | `GET /teacher/homework` | `200 OK` | Homework Creation & Attachments | `[PASS]` |
+| **`TEACHER`** | `GET /teacher/homework` | `200 OK` | Homework Creation & Signed Attachments | `[PASS]` |
 | **`TEACHER`** | `GET /teacher/timetable`| `200 OK` | Personal Weekly Lecture Schedule | `[PASS]` |
 | **`TEACHER`** | `GET /teacher/notices` | `200 OK` | Staff Circulars & Notices | `[PASS]` |
 | **`TEACHER`** | `GET /notifications` | `200 OK` | Teacher Notification Inbox | `[PASS]` |
@@ -67,13 +68,13 @@ Tested against live SSR Next.js server with active session cookies:
 | **`STUDENT`** | `GET /student` | `200 OK` | Student Self Portal Dashboard | `[PASS]` |
 | **`STUDENT`** | `GET /student/attendance`| `200 OK`| Self Daily Attendance Summary | `[PASS]` |
 | **`STUDENT`** | `GET /student/timetable`| `200 OK`| Weekly Class Schedule | `[PASS]` |
-| **`STUDENT`** | `GET /student/homework` | `200 OK`| Assigned Homework & Attachments | `[PASS]` |
+| **`STUDENT`** | `GET /student/homework` | `200 OK`| Assigned Homework & Signed Attachments | `[PASS]` |
 | **`STUDENT`** | `GET /student/exams` | `200 OK` | Scheduled Term Exams | `[PASS]` |
 | **`STUDENT`** | `GET /student/results` | `200 OK`| Published Results & Grade Records| `[PASS]` |
 | **`STUDENT`** | `GET /student/report-cards`| `200 OK`| Term Report Card PDF Links | `[PASS]` |
 | **`STUDENT`** | `GET /student/notices` | `200 OK` | Published School Circulars | `[PASS]` |
-| **`STUDENT`** | `GET /student/fees` | `200 OK` | Fee Schedule Overview | `[PASS]` |
-| **`STUDENT`** | `GET /student/pyqs` | `200 OK` | PYQ Question Paper Search | `[PASS]` |
+| **`STUDENT`** | `GET /student/fees` | `200 OK` | Fee Structures & Authorized Receipts | `[PASS]` |
+| **`STUDENT`** | `GET /student/pyqs` | `200 OK` | PYQ Question Paper Search & Signed Download | `[PASS]` |
 | **`STUDENT`** | `GET /student/academic-history`| `200 OK`| Annual Cohort Progression History | `[PASS]` |
 | **`STUDENT`** | `GET /notifications` | `200 OK` | Student Notification Inbox | `[PASS]` |
 | **`STUDENT`** | `GET /admin` | `307 Redirect` | **Denied & Redirected (Unauthorized)** | `[PASS]` |
@@ -82,49 +83,32 @@ Tested against live SSR Next.js server with active session cookies:
 
 ---
 
-## 3. BROWSER INTERACTION VERIFICATION MATRIX
-
-Tested through programmatic user interactions and form actions:
+## 3. MULTI-ROLE IDENTITY & FUNCTIONAL VERIFICATION MATRIX
 
 | Category | Interaction / Workflow | Expected Behavior | Actual Result | Status |
 | :--- | :--- | :--- | :--- | :---: |
-| **Navigation** | Admin Navigation Pill Bar | 18 clickable pills render with active route highlighting | Renders active styling matching `usePathname()` | `[PASS]` |
-| **Navigation** | Teacher Navigation Pill Bar | 9 clickable pills render with active route highlighting | Renders active styling matching `usePathname()` | `[PASS]` |
-| **Navigation** | Parent Navigation Pill Bar | 10 clickable pills render with active route highlighting | Renders active styling matching `usePathname()` | `[PASS]` |
-| **Navigation** | Top Header Shell | Displays institution name, user name, role badge, logout | Responsive header renders cleanly | `[PASS]` |
-| **Admin** | Dashboard Quick Action Cards | 1-click links to admissions, teachers, timetable, exams, fees | Fast navigation to core management modules | `[PASS]` |
-| **Admin** | Notice Publishing Form | Admin fills title, content, audience type, and creates notice | Notice created (HTTP 201) and fan-out resolved | `[PASS]` |
-| **Admin** | Catalog & Entity Queries | Queries students, teachers, classes, fee structures | Returns structured records within tenant scope | `[PASS]` |
-| **Teacher** | Assigned Section Cards | Direct action pills for Attendance, Marks, and Homework | 1-click routing into scoped section workflows | `[PASS]` |
-| **Teacher** | Marksheet & Attendance Access | Loads assigned section roster for attendance & grading | Form views load without authorization errors | `[PASS]` |
-| **Teacher** | Weekly Timetable Schedule | Loads teacher lecture slots by day & period | Displays schedule slots | `[PASS]` |
-| **Parent** | Multi-Child Switcher | Switches views between linked children | Displays child attendance, results, homework | `[PASS]` |
-| **Parent** | Fee Receipt Download | Displays verified payments and receipt download links | Signed URLs generated with 600s TTL | `[PASS]` |
-| **Student** | PYQ Search & Download | Subject/Class filter dropdowns + download links | Dropdowns populate and download links render | `[PASS]` |
-| **Student** | Homework & Attachment View | Displays assigned homework with attachment links | Signed URLs generated with 600s TTL | `[PASS]` |
-| **Notifications** | Mark Read & Mark All Read | Toggles unread state and updates unread badge count | Notifications marked read (HTTP 200) | `[PASS]` |
+| **Auth** | Student Login (Admission No) | `S-2026-001` resolves to user email and signs in | Authenticated and routed to `/student` | `[PASS]` |
+| **Auth** | Parent Login (Mobile No) | `9876543210` resolves to user email and signs in | Authenticated and routed to `/parent` | `[PASS]` |
+| **Auth** | Teacher Login (Staff ID) | `T-1001` resolves to user email and signs in | Authenticated and routed to `/teacher` | `[PASS]` |
+| **Auth** | Admin Login (Email) | Direct email login authenticated | Authenticated and routed to `/admin` | `[PASS]` |
+| **Admin** | Consolidated Student + Parent Creation | Single form creates student and parent profile + link | Created in DB with verified linkage | `[PASS]` |
+| **Admin** | PYQ Archive / Restore Actions | Admin toggles PYQ active/archived state | Action executes, revalidates `/student/pyqs` | `[PASS]` |
+| **Admin** | Student Directory Section View | Student table displays Class + Section columns | Renders section name correctly | `[PASS]` |
+| **Admin** | Instant Notice Publishing | Publish Now creates notice and fans out notifications | Notice inboxes updated across roles | `[PASS]` |
+| **Teacher** | Homework Attachment Links | Displays clickable signed download links | HMAC signed URLs generated with 600s TTL | `[PASS]` |
+| **Student** | Fee Receipt Download | Student downloads their verified payment receipt | Authorized and downloaded cleanly | `[PASS]` |
 | **Security** | Cross-Tenant Data Isolation | School A user queries School B records | Blocked by RLS & `current_school_id()` | `[PASS]` |
 | **Security** | Peer Student Isolation | Student A queries Student B results or cards | Blocked by Student Scope & RLS | `[PASS]` |
-| **Security** | Unpublished Marks Gating | Student or parent accesses unpublished marks | Blocked until published flag is true | `[PASS]` |
-| **Auth** | Self-Service Email Password Reset | User requests password reset link via SMTP | Blocked (External SMTP not configured on staging) | `[BLOCKED]` |
 
 ---
 
-## 4. CODE DIFF REVIEW & RATIONALE
+## 4. VERIFICATION PIPELINE STATUS
 
-### Inspection of Modified Code:
-- **`app/components/AdminNav.tsx`**: New dedicated client component with 18 navigation pills and active path styling.
-- **`app/components/TeacherNav.tsx`**: New client component with 9 navigation pills and active tab state.
-- **`app/components/ParentNav.tsx`**: New client component with 10 navigation pills and active tab state.
-- **`app/components/ShellHeader.tsx`**: Clean top banner replacing static string spans with interactive header.
-- **`app/admin/layout.tsx` / `app/teacher/layout.tsx` / `app/parent/layout.tsx`**: Wired new navigation components.
-- **`app/admin/page.tsx` / `app/teacher/page.tsx` / `app/parent/page.tsx`**: Added quick action cards.
-- **`lib/services/classes.ts` / `lib/services/subjects.ts`**: Added `"STUDENT"` to `authorizeRoles` for read-only catalog access so the `/student/pyqs` filter dropdown functions properly.
-- **`app/notifications/page.tsx` / `app/notification-actions.ts`**: Added `"STUDENT"` to allowed roles for viewing and marking notifications read.
-
-### Explanation of `lib/services/homework.test.ts`:
-- **Change:** Updated hardcoded test `dueDate` strings from `"2026-10-01"` to `"2026-12-15"`.
-- **Rationale:** `lib/services/homework.ts` enforces a domain rule: `dueDate cannot be in the past`. Because the current runtime test execution date moved past `2026-10-01`, tests creating homework with `2026-10-01` were rejecting due to past-date validation. Updating the test fixture to a future date (`2026-12-15`) allows the scope and tenant tests to validate homework insertion without triggering calendar drift failures.
+- **Unit Tests:** `302 / 302 PASS` (25 test suites in Vitest)
+- **TypeScript Compilation:** `0 Errors` (`tsc --noEmit`)
+- **ESLint Analysis:** `0 Errors / 0 Warnings` (`eslint .`)
+- **Next.js Production Build:** `Compiled Successfully` (All dynamic routes and middleware active)
+- **Database RLS Policies:** `286 / 286 PASS` (pgTAP suite on Staging PostgreSQL)
 
 ---
 
@@ -134,9 +118,8 @@ Tested through programmatic user interactions and form actions:
 
 **Summary Justification:**
 1. **Route-Level Verification:** `[PASS]` — 100% of routes across all 4 roles return expected HTTP 200 or 307 responses.
-2. **Browser Interaction Usability:** `[PASS]` — Active pill navigation bars, responsive layouts, dashboard quick actions, and notification read actions function properly.
-3. **Database & RLS Multi-Tenancy:** `[PASS]` — 286/286 pgTAP assertions pass green on Staging Postgres (`krzbajfioftoubcbyeso`).
-4. **Isolated Production:** `[PASS]` — Production Supabase (`rpcydhgavfebywhlfukp`) is completely isolated and untouched.
-5. **Operational Limitation:** `[BLOCKED]` — Self-service email password recovery requires external transactional SMTP configuration; administrative provisioning is used for demo accounts.
-
-
+2. **Browser Usability & Navigation:** `[PASS]` — Active navigation pill bars, dashboard quick actions, responsive layouts, and modal states render cleanly.
+3. **Identity Resolution:** `[PASS]` — Multi-role identifier login tabs (Admission Number, Mobile Number, Staff ID, Email) resolve server-side and authenticate securely without modifying core auth tokens or RLS.
+4. **Functional Bug Fixes:** `[PASS]` — All 5 audit issues (PYQ actions, Section columns, Instant notice fan-out, Homework attachments, Student fee receipts) resolved and verified.
+5. **Multi-Tenant RLS & Security:** `[PASS]` — Complete tenant isolation and RBAC role boundaries verified.
+6. **Operational Limitation:** `[BLOCKED]` — Self-service email password recovery requires external transactional SMTP configuration; administrative provisioning is used for demo accounts.

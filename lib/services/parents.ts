@@ -127,38 +127,42 @@ export async function updateParent(
   return { id };
 }
 
+import { cache } from "react";
+
 export interface ParentScope {
   parentId: string;
   studentIds: Set<string>;
 }
 
 /** Resolve the caller's parent scope (null when the user is not a parent). */
-export async function getParentScope(
-  db: DbClient,
-  ctx: SessionContext,
-): Promise<ParentScope | null> {
-  const { data, error } = await db
-    .from("parents")
-    .select("id")
-    .eq("user_id", ctx.profile.id)
-    .eq("school_id", ctx.profile.schoolId)
-    .eq("is_active", true)
-    .maybeSingle();
-  if (error !== null) throw new Error(error.message);
-  if (data === null) return null;
-  const parentId = (data as { id: string }).id;
-  const { data: links, error: linkError } = await db
-    .from("student_parents")
-    .select("student_id")
-    .eq("parent_id", parentId);
-  throwForPostgrest(linkError);
-  return {
-    parentId,
-    studentIds: new Set(
-      (links as { student_id: string }[]).map((l) => l.student_id),
-    ),
-  };
-}
+export const getParentScope = cache(
+  async (
+    db: DbClient,
+    ctx: SessionContext,
+  ): Promise<ParentScope | null> => {
+    const { data, error } = await db
+      .from("parents")
+      .select("id")
+      .eq("user_id", ctx.profile.id)
+      .eq("school_id", ctx.profile.schoolId)
+      .eq("is_active", true)
+      .maybeSingle();
+    if (error !== null) throw new Error(error.message);
+    if (data === null) return null;
+    const parentId = (data as { id: string }).id;
+    const { data: links, error: linkError } = await db
+      .from("student_parents")
+      .select("student_id")
+      .eq("parent_id", parentId);
+    throwForPostgrest(linkError);
+    return {
+      parentId,
+      studentIds: new Set(
+        (links as { student_id: string }[]).map((l) => l.student_id),
+      ),
+    };
+  },
+);
 
 /** Children of a parent. Admin or the parent themselves. */
 export async function listChildren(

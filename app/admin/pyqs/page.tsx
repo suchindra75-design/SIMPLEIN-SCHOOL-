@@ -64,7 +64,7 @@ export default async function AdminPyqsPage({
                   {p.examBoardName}
                 </span>
                 <span className="ml-auto">
-                  <form action={archivePyqAction.bind(null, p.id)}>
+                  <form action={(p.isActive ? archivePyqAction : restorePyqAction).bind(null, p.id)}>
                     <button type="submit" className="rounded border px-2 py-1 text-xs text-red-700 hover:bg-red-50">
                       {p.isActive ? "Archive" : "Restore"}
                     </button>

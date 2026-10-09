@@ -227,6 +227,8 @@ async function getTeacherRow(
   return data as TeacherRow & Record<string, unknown>;
 }
 
+import { cache } from "react";
+
 /* ------------------------- assignments & scope ------------------------- */
 
 export interface TeacherScope {
@@ -235,42 +237,49 @@ export interface TeacherScope {
 }
 
 /** Resolve the caller's teacher scope (null when the user is not a teacher). */
-export async function getTeacherScope(
-  db: DbClient,
-  ctx: SessionContext,
-): Promise<TeacherScope | null> {
-  const { data, error } = await db
-    .from("teachers")
-    .select("id")
-    .eq("user_id", ctx.profile.id)
-    .eq("school_id", ctx.profile.schoolId)
-    .eq("is_active", true)
-    .maybeSingle();
-  if (error !== null) throw new Error(error.message);
-  if (data === null) return null;
-  const teacherId = (data as { id: string }).id;
-  const { data: classTeacher, error: e1 } = await db
-    .from("sections")
-    .select("id")
-    .eq("class_teacher_id", teacherId)
-    .eq("school_id", ctx.profile.schoolId);
-  throwForPostgrest(e1);
-  const { data: assigned, error: e2 } = await db
-    .from("teacher_subjects")
-    .select("section_id")
-    .eq("teacher_id", teacherId)
-    .eq("school_id", ctx.profile.schoolId);
-  throwForPostgrest(e2);
-  return {
-    teacherId,
-    sectionIds: teacherSectionIds({
-      classTeacherSectionIds: (classTeacher as { id: string }[]).map((s) => s.id),
-      assignedSectionIds: (assigned as { section_id: string }[]).map(
-        (s) => s.section_id,
-      ),
-    }),
-  };
-}
+export const getTeacherScope = cache(
+  async (
+    db: DbClient,
+    ctx: SessionContext,
+  ): Promise<TeacherScope | null> => {
+    const { data, error } = await db
+      .from("teachers")
+      .select("id")
+      .eq("user_id", ctx.profile.id)
+      .eq("school_id", ctx.profile.schoolId)
+      .eq("is_active", true)
+      .maybeSingle();
+    if (error !== null) throw new Error(error.message);
+    if (data === null) return null;
+    const teacherId = (data as { id: string }).id;
+    const [{ data: classTeacher, error: e1 }, { data: assigned, error: e2 }] =
+      await Promise.all([
+        db
+          .from("sections")
+          .select("id")
+          .eq("class_teacher_id", teacherId)
+          .eq("school_id", ctx.profile.schoolId),
+        db
+          .from("teacher_subjects")
+          .select("section_id")
+          .eq("teacher_id", teacherId)
+          .eq("school_id", ctx.profile.schoolId),
+      ]);
+    throwForPostgrest(e1);
+    throwForPostgrest(e2);
+    return {
+      teacherId,
+      sectionIds: teacherSectionIds({
+        classTeacherSectionIds: (classTeacher as { id: string }[]).map(
+          (s) => s.id,
+        ),
+        assignedSectionIds: (assigned as { section_id: string }[]).map(
+          (s) => s.section_id,
+        ),
+      }),
+    };
+  },
+);
 
 /** Sections taught by a teacher (dashboard + scope checks). Admin or self. */
 export async function listTeacherSections(

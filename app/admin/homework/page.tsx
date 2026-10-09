@@ -121,6 +121,17 @@ export default async function AdminHomeworkPage({
                 </span>
               </div>
               <p className="mt-1 text-gray-700">{h.description}</p>
+              {h.attachments !== undefined && h.attachments.length > 0 && (
+                <p className="mt-2 text-xs text-gray-600">
+                  Attachments:{" "}
+                  {h.attachments.map((a, i) => (
+                    <span key={a.id}>
+                      {i > 0 && " · "}
+                      <AttachmentLink homeworkId={h.id} attachmentId={a.id} label={a.originalName} />
+                    </span>
+                  ))}
+                </p>
+              )}
               <div className="mt-2">
                 <SmartForm
                   action={updateHomeworkAction.bind(null, h.id, "/admin/homework")}

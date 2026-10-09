@@ -13,16 +13,19 @@ export default async function NewStudentPage() {
   const typed = classes;
   return (
     <main>
-      <h2 className="mb-4 text-xl font-semibold">Add student</h2>
+      <h2 className="mb-4 text-xl font-semibold">Add student & parent</h2>
+      <p className="mb-6 text-sm text-gray-600">
+        Consolidated enrollment: enter student details and linked parent/guardian information in one workflow.
+      </p>
       <SmartForm
         action={createStudentAction}
         redirectTo="/admin/students"
-        submitLabel="Create student"
+        submitLabel="Create student & parent link"
         fields={[
-          { name: "admissionNo", label: "Admission number", required: true },
-          { name: "firstName", label: "First name", required: true },
+          { name: "admissionNo", label: "Admission number *", required: true, placeholder: "e.g. S-2026-001" },
+          { name: "firstName", label: "First name *", required: true },
           { name: "middleName", label: "Middle name" },
-          { name: "lastName", label: "Last name" },
+          { name: "lastName", label: "Last name *" },
           { name: "dob", label: "Date of birth", type: "date" },
           {
             name: "gender",
@@ -52,9 +55,22 @@ export default async function NewStudentPage() {
             ),
           },
           { name: "rollNumber", label: "Roll number" },
-          { name: "guardianPhone", label: "Guardian phone", type: "tel" },
           { name: "admissionDate", label: "Admission date", type: "date" },
           { name: "address", label: "Address", type: "textarea" },
+          { name: "parentName", label: "Parent / Guardian Name", placeholder: "Full Name" },
+          { name: "parentPhone", label: "Parent Mobile Number (Login Identifier)", type: "tel", placeholder: "10-digit mobile" },
+          { name: "parentEmail", label: "Parent Email (Optional)", type: "email" },
+          {
+            name: "parentRelation",
+            label: "Parent Relationship",
+            type: "select",
+            options: [
+              { value: "father", label: "Father" },
+              { value: "mother", label: "Mother" },
+              { value: "guardian", label: "Guardian" },
+              { value: "other", label: "Other" },
+            ],
+          },
         ]}
       />
     </main>

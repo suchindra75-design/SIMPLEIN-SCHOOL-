@@ -31,16 +31,17 @@ export default async function AdminFeesPage({
   const sp = await searchParams;
   const ctx = await requireRole("SCHOOL_ADMIN");
   const db = await createServerSupabaseClient();
-  const { structures } = await listFeeStructures(db, ctx);
-  const [{ academicYears }, { classes }] = await Promise.all([
-    listAcademicYears(db, ctx),
-    listClasses(db, ctx),
-  ]);
-  const { students } = await listStudents(db, ctx, {
-    status: "active",
-    page: 1,
-    limit: 100,
-  });
+  const [{ structures }, { academicYears }, { classes }, { students }] =
+    await Promise.all([
+      listFeeStructures(db, ctx),
+      listAcademicYears(db, ctx),
+      listClasses(db, ctx),
+      listStudents(db, ctx, {
+        status: "active",
+        page: 1,
+        limit: 100,
+      }),
+    ]);
 
   // Student fee panel: ?studentId=
   const studentId = sp["studentId"] !== undefined && UUID_RE.test(sp["studentId"]) ? sp["studentId"] : "";

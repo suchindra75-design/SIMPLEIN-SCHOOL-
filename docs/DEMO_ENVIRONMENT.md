@@ -83,14 +83,19 @@ The demo environment provisions four distinct user personas to showcase the full
 ```
 
 ### Authentication Mechanics:
-1. **Login:** Standard email and password authentication via `app/login` with `@supabase/ssr` session cookie management.
-2. **Session Persistence:** Secure, HttpOnly, SameSite=Lax session cookies refreshed on every request by `middleware.ts`.
-3. **Role Routing:** Post-login redirection automatically routes each user to their role-specific home (`roleHome()`):
+1. **Multi-Role Identifier Login:** Users can authenticate via role-specific tabs on `app/login`:
+   - `STUDENT`: Login with **Admission Number** (e.g. `S-2026-001`) or email + password.
+   - `PARENT`: Login with **Mobile Phone Number** (e.g. `9876543210`) or email + password.
+   - `TEACHER`: Login with **Employee / Staff ID** (e.g. `T-1001`) or email + password.
+   - `SCHOOL_ADMIN`: Login with **Email Address** + password.
+2. **Server-Side Identity Resolution:** The server securely resolves non-email identifiers (`admission_no`, `phone`, `employee_no`) to the corresponding internal user account email via `lib/services/identity.ts` before executing Supabase authentication.
+3. **Session Persistence:** Secure, HttpOnly, SameSite=Lax session cookies refreshed on every request by `middleware.ts`.
+4. **Role Routing:** Post-login redirection automatically routes each user to their role-specific home (`roleHome()`):
    - `SCHOOL_ADMIN` -> `/admin`
    - `TEACHER` -> `/teacher`
    - `PARENT` -> `/parent`
    - `STUDENT` -> `/student`
-4. **Fail-Closed Security:** Inactive accounts or unprovisioned profiles fail closed and are routed to `/login?error=disabled` or `/no-access`.
+5. **Fail-Closed Security:** Inactive accounts or unprovisioned profiles fail closed and are routed to `/login?error=disabled` or `/no-access`.
 
 ---
 

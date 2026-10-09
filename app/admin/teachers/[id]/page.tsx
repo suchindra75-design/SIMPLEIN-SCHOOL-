@@ -31,9 +31,11 @@ export default async function TeacherDetailPage({
   } catch {
     notFound();
   }
-  const { assignments } = await listTeacherAssignments(db, ctx, id);
-  const { classes } = await listClasses(db, ctx);
-  const { subjects } = await listSubjects(db, ctx);
+  const [{ assignments }, { classes }, { subjects }] = await Promise.all([
+    listTeacherAssignments(db, ctx, id),
+    listClasses(db, ctx),
+    listSubjects(db, ctx),
+  ]);
   const sectionOptions = classes.flatMap((c) =>
     (c.sections ?? []).map((s) => ({ value: s.id, label: `${c.name} ${s.name}` })),
   );
