@@ -30,14 +30,18 @@ export default async function TeacherHomeworkPage({
   const sp = await searchParams;
   const ctx = await requireRole("TEACHER");
   const db = await createServerSupabaseClient();
-  const scope = await getTeacherScope(db, ctx);
+  const [scope, { subjects }] = await Promise.all([
+    getTeacherScope(db, ctx),
+    listSubjects(db, ctx),
+  ]);
   const { sections } =
-    scope === null ? { sections: [] } : await listTeacherSections(db, ctx, scope.teacherId);
+    scope === null
+      ? { sections: [] }
+      : await listTeacherSections(db, ctx, scope.teacherId);
   const sectionId =
     sp["sectionId"] !== undefined && UUID_RE.test(sp["sectionId"])
       ? sp["sectionId"]
       : (sections[0]?.id ?? "");
-  const { subjects } = await listSubjects(db, ctx);
   const { homework } =
     sectionId === "" ? { homework: [] } : await listHomework(db, ctx, { sectionId, page: 1, limit: 50 });
 
@@ -96,6 +100,17 @@ export default async function TeacherHomeworkPage({
                     </span>
                   </div>
                   <p className="mt-1 text-gray-700">{h.description}</p>
+                  {h.attachments !== undefined && h.attachments.length > 0 && (
+                    <p className="mt-2 text-xs text-gray-600">
+                      Attachments:{" "}
+                      {h.attachments.map((a, i) => (
+                        <span key={a.id}>
+                          {i > 0 && " · "}
+                          <AttachmentLink homeworkId={h.id} attachmentId={a.id} label={a.originalName} />
+                        </span>
+                      ))}
+                    </p>
+                  )}
                   <div className="mt-2">
                     <SmartForm
                       action={updateHomeworkAction.bind(null, h.id, `/teacher/homework?sectionId=${sectionId}`)}

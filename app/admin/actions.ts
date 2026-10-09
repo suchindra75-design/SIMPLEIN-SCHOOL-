@@ -98,7 +98,16 @@ export async function createStudentAction(
   try {
     const ctx = await requireRole("SCHOOL_ADMIN");
     const db = await createServerSupabaseClient();
-    await createStudent(db, ctx, {
+    const parentPhone = str(form, "parentPhone");
+    const parentName = str(form, "parentName");
+    const parentEmail = str(form, "parentEmail");
+    const parentRelation = (str(form, "parentRelation") ?? "guardian") as
+      | "father"
+      | "mother"
+      | "guardian"
+      | "other";
+
+    const studentResult = await createStudent(db, ctx, {
       admissionNo: str(form, "admissionNo") ?? "",
       firstName: str(form, "firstName") ?? "",
       middleName: str(form, "middleName"),
@@ -106,13 +115,47 @@ export async function createStudentAction(
       dob: str(form, "dob"),
       gender: (str(form, "gender") as "male" | "female" | "other" | undefined),
       address: str(form, "address"),
-      guardianPhone: str(form, "guardianPhone"),
+      guardianPhone: str(form, "guardianPhone") ?? parentPhone,
       admissionDate: str(form, "admissionDate"),
       classId: optUuid(str(form, "classId")) ?? null,
       sectionId: optUuid(str(form, "sectionId")) ?? null,
       rollNumber: str(form, "rollNumber"),
     });
+
+    if (parentPhone !== undefined || parentName !== undefined) {
+      // Check if parent with this phone already exists in the same school
+      let parentId: string | undefined;
+      if (parentPhone !== undefined) {
+        const { data: existingParent } = await db
+          .from("parents")
+          .select("id")
+          .eq("school_id", ctx.profile.schoolId)
+          .eq("phone", parentPhone)
+          .maybeSingle();
+        if (existingParent !== null) {
+          parentId = existingParent.id;
+        }
+      }
+
+      if (!parentId) {
+        const newParent = await createParent(db, ctx, {
+          fullName: parentName ?? "Parent",
+          phone: parentPhone,
+          email: parentEmail,
+          address: str(form, "address"),
+        });
+        parentId = newParent.id;
+      }
+
+      await linkChild(db, ctx, parentId, studentResult.id, {
+        parentId,
+        relation: parentRelation,
+        isPrimary: true,
+      });
+    }
+
     revalidatePath("/admin/students");
+    revalidatePath("/admin/parents");
     return { success: true };
   } catch (error) {
     return err(error);
@@ -1025,6 +1068,7 @@ export async function createPyqAction(
     },
   );
   revalidatePath("/admin/pyqs");
+  revalidatePath("/student/pyqs");
 }
 
 export async function updatePyqAction(
@@ -1041,6 +1085,7 @@ export async function updatePyqAction(
     title: str(form, "title") ?? null,
   });
   revalidatePath("/admin/pyqs");
+  revalidatePath("/student/pyqs");
   return { success: true };
 }
 
@@ -1050,6 +1095,7 @@ export async function archivePyqAction(id: string): Promise<void> {
   const { setPyqActive } = await import("@/lib/services/pyqs");
   await setPyqActive(db, ctx, id, false);
   revalidatePath("/admin/pyqs");
+  revalidatePath("/student/pyqs");
 }
 
 export async function restorePyqAction(id: string): Promise<void> {
@@ -1058,4 +1104,5 @@ export async function restorePyqAction(id: string): Promise<void> {
   const { setPyqActive } = await import("@/lib/services/pyqs");
   await setPyqActive(db, ctx, id, true);
   revalidatePath("/admin/pyqs");
+  revalidatePath("/student/pyqs");
 }

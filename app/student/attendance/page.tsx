@@ -21,11 +21,13 @@ export default async function StudentAttendancePage() {
       </main>
     );
   }
-  const summary = await getStudentSummary(db, ctx, scope.studentId, {});
-  const { records } = await getStudentAttendance(db, ctx, scope.studentId, {
-    page: 1,
-    limit: 100,
-  });
+  const [summary, { records }] = await Promise.all([
+    getStudentSummary(db, ctx, scope.studentId, {}),
+    getStudentAttendance(db, ctx, scope.studentId, {
+      page: 1,
+      limit: 100,
+    }),
+  ]);
 
   return (
     <main>

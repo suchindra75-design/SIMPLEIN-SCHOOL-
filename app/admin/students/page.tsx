@@ -23,10 +23,11 @@ export default async function StudentsPage({
 }) {
   const sp = await searchParams;
   const ctx = await requireRole("SCHOOL_ADMIN");
-  const db = await createServerSupabaseClient();
   let students: StudentDto[] = [];
   let total = 0;
   let loadError: string | undefined;
+  let classes: { id: string; name: string; sections?: { id: string; name: string }[] }[] = [];
+  const db = await createServerSupabaseClient();
   try {
     const filters = studentFiltersSchema.parse({
       search: sp["search"],
@@ -36,11 +37,21 @@ export default async function StudentsPage({
       page: sp["page"],
       limit: 20,
     });
-    ({ students, total } = await listStudents(db, ctx, filters));
+    const [studentsRes, classesRes] = await Promise.all([
+      listStudents(db, ctx, filters),
+      listClasses(db, ctx),
+    ]);
+    students = studentsRes.students;
+    total = studentsRes.total;
+    classes = classesRes.classes;
   } catch (error) {
     loadError = error instanceof Error ? error.message : "Failed to load";
+    if (classes.length === 0) {
+      try {
+        ({ classes } = await listClasses(db, ctx));
+      } catch {}
+    }
   }
-  const { classes } = await listClasses(db, ctx);
   const classOptions = classes.map((c) => ({
     value: c.id,
     label: c.name,
@@ -91,6 +102,7 @@ export default async function StudentsPage({
               <th className="py-2">Name</th>
               <th>Admission no</th>
               <th>Class</th>
+              <th>Section</th>
               <th>Roll</th>
               <th>Status</th>
             </tr>
@@ -104,10 +116,8 @@ export default async function StudentsPage({
                   </Link>
                 </td>
                 <td>{s.admissionNo}</td>
-                <td>
-                  {s.classes?.name ?? "—"}
-                  {s.sections?.name ? ` ${s.sections.name}` : ""}
-                </td>
+                <td>{s.classes?.name ?? "—"}</td>
+                <td>{s.sections?.name ?? "—"}</td>
                 <td>{s.rollNumber ?? "—"}</td>
                 <td>
                   <StatusBadge active={s.status === "active"} />

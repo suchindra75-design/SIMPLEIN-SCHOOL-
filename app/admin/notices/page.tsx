@@ -27,12 +27,14 @@ export default async function AdminNoticesPage({
   const sp = await searchParams;
   const ctx = await requireRole("SCHOOL_ADMIN");
   const db = await createServerSupabaseClient();
-  const { classes } = await listClasses(db, ctx);
-  const { notices } = await listNotices(db, ctx, {
-    includeInactive: sp["includeInactive"] === "true",
-    page: 1,
-    limit: 100,
-  });
+  const [{ classes }, { notices }] = await Promise.all([
+    listClasses(db, ctx),
+    listNotices(db, ctx, {
+      includeInactive: sp["includeInactive"] === "true",
+      page: 1,
+      limit: 100,
+    }),
+  ]);
   const sectionOptions = classes.flatMap((c) =>
     (c.sections ?? []).map((s) => ({
       value: s.id,
@@ -143,7 +145,7 @@ export default async function AdminNoticesPage({
       <h3 className="mb-2 mt-8 font-semibold">New notice</h3>
       <SmartForm
         action={createNoticeAction}
-        submitLabel="Create notice (unpublished)"
+        submitLabel="Create notice"
         fields={[
           { name: "title", label: "Title", required: true },
           { name: "content", label: "Content", type: "textarea", required: true },
@@ -180,11 +182,15 @@ export default async function AdminNoticesPage({
             options: sectionOptions,
           },
           { name: "expiresAt", label: "Expiry date (optional)", type: "date" },
+          {
+            name: "publishNow",
+            label: "Publish immediately (deliver to recipients & send notifications)",
+            type: "checkbox",
+          },
         ]}
       />
       <p className="mt-2 text-xs text-gray-500">
-        Notices are created unpublished — publish to fan out in-app
-        notifications to the targeted audience.
+        Published notices fan out in-app notifications to all users in the targeted audience.
       </p>
     </main>
   );

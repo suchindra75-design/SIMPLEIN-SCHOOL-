@@ -33,10 +33,13 @@ export default async function ClassDetailPage({
   } catch {
     notFound();
   }
-  const { sections } = await listSections(db, ctx, id);
-  const { classSubjects } = await listClassSubjects(db, ctx, id);
-  const { subjects } = await listSubjects(db, ctx);
-  const { teachers } = await listTeachers(db, ctx, { page: 1, limit: 100 });
+  const [{ sections }, { classSubjects }, { subjects }, { teachers }] =
+    await Promise.all([
+      listSections(db, ctx, id),
+      listClassSubjects(db, ctx, id),
+      listSubjects(db, ctx),
+      listTeachers(db, ctx, { page: 1, limit: 100 }),
+    ]);
   const teacherOptions = teachers.map((t) => ({
     value: t.id,
     label: t.displayName,

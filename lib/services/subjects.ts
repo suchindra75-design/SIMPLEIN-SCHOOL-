@@ -15,7 +15,7 @@ export async function listSubjects(
   db: DbClient,
   ctx: SessionContext,
 ): Promise<{ subjects: SubjectDto[] }> {
-  authorizeRoles(ctx, ["SCHOOL_ADMIN", "TEACHER", "PARENT"]);
+  authorizeRoles(ctx, ["SCHOOL_ADMIN", "TEACHER", "PARENT", "STUDENT"]);
   const { data, error } = await db
     .from("subjects")
     .select("id, name, code, order_index, is_active")

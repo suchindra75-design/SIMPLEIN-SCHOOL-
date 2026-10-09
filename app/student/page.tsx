@@ -31,21 +31,23 @@ export default async function StudentDashboardPage() {
     );
   }
 
-  const [attendance, { exams }, { homework }, { notices }, { slots }, { fees }] =
-    await Promise.all([
-      getStudentSummary(db, ctx, scope.studentId, {}),
-      listExams(db, ctx, { page: 1, limit: 5 }),
-      listHomework(db, ctx, { page: 1, limit: 5 }),
-      listNotices(db, ctx, { page: 1, limit: 5 }),
-      listMyTimetable(db, ctx),
-      listStudentFees(db, ctx, scope.studentId),
-    ]);
-  const { records: recentAttendance } = await getStudentAttendance(
-    db,
-    ctx,
-    scope.studentId,
-    { page: 1, limit: 5 },
-  );
+  const [
+    attendance,
+    { exams },
+    { homework },
+    { notices },
+    { slots },
+    { fees },
+    { records: recentAttendance },
+  ] = await Promise.all([
+    getStudentSummary(db, ctx, scope.studentId, {}),
+    listExams(db, ctx, { page: 1, limit: 5 }),
+    listHomework(db, ctx, { page: 1, limit: 5 }),
+    listNotices(db, ctx, { page: 1, limit: 5 }),
+    listMyTimetable(db, ctx),
+    listStudentFees(db, ctx, scope.studentId),
+    getStudentAttendance(db, ctx, scope.studentId, { page: 1, limit: 5 }),
+  ]);
   const feeDue = fees.reduce((sum, f) => sum + f.due, 0);
 
   return (

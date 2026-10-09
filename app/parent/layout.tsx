@@ -1,3 +1,4 @@
+import { ParentNav } from "@/app/components/ParentNav";
 import { ShellHeader } from "@/app/components/ShellHeader";
 import { requireDashboard } from "@/lib/auth/dashboard";
 
@@ -17,19 +18,10 @@ export default async function ParentLayout({
         role="PARENT"
         name={ctx.profile.fullName}
         school={ctx.school}
-        nav={[
-          "Dashboard",
-          "My Children",
-          "Academics",
-          "Attendance",
-          "Results",
-          "Timetable",
-          "Homework",
-          "Notices",
-          "Fees",
-          "Profile",
-        ]}
       />
+      <div className="border-b bg-gray-50/50 p-4">
+        <ParentNav />
+      </div>
       <div className="p-4">{children}</div>
     </div>
   );

@@ -1,0 +1,47 @@
+name: SIMPLEIN SCHOOL ERP — CI Pipeline
+
+on:
+  push:
+    branches: [ main, phase-16-production-infrastructure ]
+  pull_request:
+    branches: [ main, phase-16-production-infrastructure ]
+
+jobs:
+  validate:
+    name: Typecheck, Lint, Test & Build
+    runs-on: ubuntu-latest
+    env:
+      # Safe CI build placeholders (never production secrets)
+      NEXT_PUBLIC_SUPABASE_URL: https://ci-placeholder.supabase.co
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ci-placeholder-anon-key
+      SUPABASE_SERVICE_ROLE_KEY: ci-placeholder-service-role-key
+      ONBOARDING_SECRET: ci-placeholder-onboarding-secret
+      NEXT_PUBLIC_APP_URL: http://localhost:3000
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint Code
+        run: npm run lint
+
+      - name: Unit Tests
+        run: npm test
+
+      - name: Verify Environment Check
+        run: node scripts/check-env.mjs
+
+      - name: Next.js Production Build
+        run: npm run build

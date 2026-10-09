@@ -593,13 +593,13 @@ export async function setPaymentReceipt(
   return { id: (data as { id: string }).id };
 }
 
-/** Signed receipt URL; same scope as the fee read (parents included). */
+/** Signed receipt URL; same scope as the fee read (parents and students included). */
 export async function getPaymentReceiptUrl(
   db: DbClient,
   ctx: SessionContext,
   recordId: string,
 ): Promise<string> {
-  authorizeRoles(ctx, ["SCHOOL_ADMIN", "PARENT"]);
+  authorizeRoles(ctx, ["SCHOOL_ADMIN", "PARENT", "STUDENT"]);
   const { data, error } = await db
     .from("fee_payment_records")
     .select(RECORD_COLUMNS)

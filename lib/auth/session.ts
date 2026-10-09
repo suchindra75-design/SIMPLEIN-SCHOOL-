@@ -1,3 +1,4 @@
+import { cache } from "react";
 import {
   hasPermission,
   type Action,
@@ -60,6 +61,8 @@ export interface ProfileRow {
   full_name: string;
   phone: string | null;
   is_active: boolean;
+  schools?: SchoolRow | null;
+  user_roles?: RoleRow[];
 }
 
 export interface SchoolRow {
@@ -241,7 +244,7 @@ function adaptSupabase(client: SupabaseServerClient): SessionDataClient {
       const { data, error } = await client
         .from("users")
         .select(
-          "id, auth_user_id, school_id, email, full_name, phone, is_active",
+          "id, auth_user_id, school_id, email, full_name, phone, is_active, schools(id, name, slug, timezone, logo_path, primary_color, is_active), user_roles!user_roles_user_id_fkey(role)",
         )
         .eq("auth_user_id", authUserId)
         .maybeSingle();
@@ -290,20 +293,37 @@ async function defaultClient(): Promise<SessionDataClient> {
  * Resolve the full session, or null when there is no Supabase session.
  * Throws InactiveUserError / MissingProfileError for broken provisioning.
  * Never throws for anonymous callers — use requireAuth() to reject them.
+ * Memoized per server request via React cache().
  */
-export async function getCurrentUser(
-  client?: SessionDataClient,
-): Promise<SessionContext | null> {
-  const source = client ?? (await defaultClient());
-  const authUserId = await source.getAuthUserId();
-  if (authUserId === null) return null;
-  const profile = await source.getProfile(authUserId);
-  const roles =
-    profile === null ? [] : await source.getRoles(profile.id);
-  const school =
-    profile === null ? null : await source.getSchool(profile.school_id);
-  return resolveSessionContext(authUserId, profile, roles, school);
-}
+export const getCurrentUser = cache(
+  async (client?: SessionDataClient): Promise<SessionContext | null> => {
+    const source = client ?? (await defaultClient());
+    const authUserId = await source.getAuthUserId();
+    if (authUserId === null) return null;
+    const profile = await source.getProfile(authUserId);
+    if (profile === null) return null;
+
+    const rawSchool = profile.schools ?? null;
+    const rawRoles = profile.user_roles;
+
+    let roles: RoleRow[];
+    let school: SchoolRow | null;
+
+    if (rawRoles !== undefined && rawSchool !== undefined) {
+      roles = rawRoles;
+      school = rawSchool;
+    } else {
+      const [fetchedRoles, fetchedSchool] = await Promise.all([
+        source.getRoles(profile.id),
+        source.getSchool(profile.school_id),
+      ]);
+      roles = fetchedRoles;
+      school = fetchedSchool;
+    }
+
+    return resolveSessionContext(authUserId, profile, roles, school);
+  },
+);
 
 /** Current application profile, or null when unauthenticated. */
 export async function getCurrentProfile(
