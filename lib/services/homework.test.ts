@@ -201,6 +201,7 @@ describe("teacher section/subject scope", () => {
       subjectId: "sub-e", // t1 is class teacher → all subjects allowed
       title: "Reading task",
       description: "Read chapter 5",
+      assignedOn: "2026-10-01",
       dueDate: "2026-12-15",
     });
     expect(result.id).toBeDefined();
@@ -213,6 +214,7 @@ describe("teacher section/subject scope", () => {
       subjectId: "sub-m",
       title: "Math drill",
       description: "Chapter 2",
+      assignedOn: "2026-10-01",
       dueDate: "2026-12-15",
     });
     expect(fake.callsTo("homework", "insert")).toHaveLength(1);

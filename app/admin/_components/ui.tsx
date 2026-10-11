@@ -1,6 +1,8 @@
 import Link from "next/link";
+import React from "react";
+import { Plus, Search, RotateCcw } from "lucide-react";
 
-/** Shared functional UI primitives for admin management pages. */
+/** Shared functional UI primitives for admin management pages with institutional design. */
 
 export function PageHeader({
   title,
@@ -12,14 +14,19 @@ export function PageHeader({
   actionLabel?: string;
 }) {
   return (
-    <div className="mb-4 flex items-center justify-between">
-      <h2 className="text-xl font-semibold">{title}</h2>
+    <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-[#DCDCE0] pb-4">
+      <div>
+        <h2 className="text-xl font-bold tracking-tight text-[#191919] font-serif">
+          {title}
+        </h2>
+      </div>
       {actionHref !== undefined && (
         <Link
           href={actionHref}
-          className="rounded bg-blue-600 px-3 py-1.5 text-sm text-white"
+          className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-md bg-[#191919] hover:bg-[#2D2D30] text-white text-xs font-semibold btn-interactive shadow-xs"
         >
-          {actionLabel ?? "New"}
+          <Plus className="w-3.5 h-3.5" />
+          <span>{actionLabel ?? "New Record"}</span>
         </Link>
       )}
     </div>
@@ -29,7 +36,7 @@ export function PageHeader({
 export function ErrorAlert({ error }: { error?: string }) {
   if (error === undefined) return null;
   return (
-    <p role="alert" className="mb-4 rounded bg-red-50 p-3 text-sm text-red-700">
+    <p role="alert" className="mb-4 rounded-md border border-red-300 bg-red-50/80 p-3 text-xs text-red-800 font-mono">
       {error}
     </p>
   );
@@ -37,7 +44,7 @@ export function ErrorAlert({ error }: { error?: string }) {
 
 export function EmptyState({ message }: { message: string }) {
   return (
-    <div className="rounded border border-dashed p-8 text-center text-sm text-gray-500">
+    <div className="rounded-lg border border-dashed border-[#DCDCE0] bg-[#F8F8F9] p-8 text-center text-xs text-[#6E6E73] font-mono">
       {message}
     </div>
   );
@@ -51,15 +58,15 @@ export function SearchBar({
   values: Record<string, string | undefined>;
 }) {
   return (
-    <form method="get" className="mb-4 flex flex-wrap items-end gap-3">
+    <form method="get" className="mb-5 flex flex-wrap items-end gap-3 p-4 bg-[#F8F8F9] rounded-lg border border-[#DCDCE0] shadow-2xs card-interactive">
       {fields.map((f) =>
         f.options !== undefined ? (
-          <label key={f.name} className="text-sm">
-            <span className="mb-1 block text-gray-600">{f.label}</span>
+          <label key={f.name} className="text-xs">
+            <span className="mb-1 block font-semibold text-[#191919]">{f.label}</span>
             <select
               name={f.name}
               defaultValue={values[f.name] ?? ""}
-              className="rounded border px-2 py-1.5"
+              className="rounded-md border border-[#DCDCE0] bg-[#F1F1F2] px-3 py-1.5 text-xs text-[#191919] focus:outline-hidden focus:border-[#191919] focus:bg-[#F8F8F9] transition-colors duration-150"
             >
               <option value="">All</option>
               {f.options.map((o) => (
@@ -70,23 +77,34 @@ export function SearchBar({
             </select>
           </label>
         ) : (
-          <label key={f.name} className="text-sm">
-            <span className="mb-1 block text-gray-600">{f.label}</span>
+          <label key={f.name} className="text-xs flex-1 min-w-[200px]">
+            <span className="mb-1 block font-semibold text-[#191919]">{f.label}</span>
             <input
               name={f.name}
               type={f.type ?? "text"}
               defaultValue={values[f.name] ?? ""}
-              className="rounded border px-2 py-1.5"
+              placeholder={`Filter by ${f.label.toLowerCase()}...`}
+              className="w-full rounded-md border border-[#DCDCE0] bg-[#F1F1F2] px-3 py-1.5 text-xs text-[#191919] focus:outline-hidden focus:border-[#191919] focus:bg-[#F8F8F9] transition-colors duration-150"
             />
           </label>
         ),
       )}
-      <button type="submit" className="rounded border px-3 py-1.5 text-sm">
-        Search
-      </button>
-      <Link href="?" className="rounded border px-3 py-1.5 text-sm text-gray-600">
-        Clear
-      </Link>
+      <div className="flex items-center gap-2">
+        <button
+          type="submit"
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-[#191919] hover:bg-[#2D2D30] text-white text-xs font-semibold btn-interactive shadow-2xs cursor-pointer"
+        >
+          <Search className="w-3.5 h-3.5" />
+          <span>Filter</span>
+        </button>
+        <Link
+          href="?"
+          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-md border border-[#DCDCE0] bg-[#F8F8F9] hover:bg-[#E7E7E9] text-[#191919] text-xs font-medium btn-interactive"
+        >
+          <RotateCcw className="w-3 h-3" />
+          <span>Reset</span>
+        </Link>
+      </div>
     </form>
   );
 }
@@ -113,20 +131,28 @@ export function Pagination({
     return `?${sp.toString()}`;
   };
   return (
-    <div className="mt-4 flex items-center gap-3 text-sm">
-      <span className="text-gray-600">
-        Page {page} of {pages} ({total} total)
+    <div className="mt-4 flex items-center justify-between text-xs text-[#6E6E73] font-mono">
+      <span>
+        Page <span className="font-bold text-[#191919]">{page}</span> of {pages} ({total} total records)
       </span>
-      {page > 1 && (
-        <Link href={href(page - 1)} className="rounded border px-2 py-1">
-          Previous
-        </Link>
-      )}
-      {page < pages && (
-        <Link href={href(page + 1)} className="rounded border px-2 py-1">
-          Next
-        </Link>
-      )}
+      <div className="flex items-center gap-2">
+        {page > 1 && (
+          <Link
+            href={href(page - 1)}
+            className="px-2.5 py-1 rounded-md border border-[#DCDCE0] bg-[#F8F8F9] hover:bg-[#E7E7E9] text-[#191919] font-medium btn-interactive"
+          >
+            Previous
+          </Link>
+        )}
+        {page < pages && (
+          <Link
+            href={href(page + 1)}
+            className="px-2.5 py-1 rounded-md border border-[#DCDCE0] bg-[#F8F8F9] hover:bg-[#E7E7E9] text-[#191919] font-medium btn-interactive"
+          >
+            Next
+          </Link>
+        )}
+      </div>
     </div>
   );
 }
@@ -134,11 +160,16 @@ export function Pagination({
 export function StatusBadge({ active }: { active: boolean }) {
   return (
     <span
-      className={`rounded px-2 py-0.5 text-xs ${
-        active ? "bg-green-100 text-green-800" : "bg-gray-200 text-gray-600"
+      className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-mono font-bold tracking-wider uppercase border ${
+        active
+          ? "bg-zinc-950 text-white border-zinc-950"
+          : "bg-zinc-100 text-zinc-500 border-zinc-300"
       }`}
     >
-      {active ? "Active" : "Inactive"}
+      <span
+        className={`w-1.5 h-1.5 rounded-full ${active ? "bg-emerald-400" : "bg-zinc-400"}`}
+      />
+      <span>{active ? "Active" : "Inactive"}</span>
     </span>
   );
 }

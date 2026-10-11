@@ -5,6 +5,16 @@
  * Presence-only: prints variable NAMES with OK/MISSING status.
  * NEVER prints secret values. Exit 1 when a required var is missing.
  */
+import { existsSync } from "node:fs";
+
+if (existsSync(".env.local") && typeof process.loadEnvFile === "function") {
+  try {
+    process.loadEnvFile(".env.local");
+  } catch {
+    // continue
+  }
+}
+
 const REQUIRED = [
   "NEXT_PUBLIC_SUPABASE_URL",
   "NEXT_PUBLIC_SUPABASE_ANON_KEY",

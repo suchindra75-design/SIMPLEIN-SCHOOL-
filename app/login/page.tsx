@@ -1,6 +1,14 @@
 import { redirect } from "next/navigation";
-import { LoginForm } from "@/app/login/form";
+import { headers } from "next/headers";
+import { LoginForm } from "./login-form";
 import { getCurrentUser, roleHome } from "@/lib/auth/session";
+import {
+  detectPortal,
+  getPortalBaseUrl,
+  isRoleAllowedForPortal,
+  validateSafeRedirect,
+  type PortalType,
+} from "@/lib/auth/portal";
 
 /** Session-aware page — never statically prerendered. */
 export const dynamic = "force-dynamic";
@@ -8,25 +16,64 @@ export const dynamic = "force-dynamic";
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; next?: string }>;
+  searchParams: Promise<{ error?: string; next?: string; portal?: string }>;
 }) {
   const params = await searchParams;
-  // Already signed in → send to the role dashboard (validates session too:
-  // disabled/unprovisioned accounts fall through to the form with an error).
+
+  let portal: PortalType = "unified";
+  let host = "";
+
+  try {
+    const headerStore = await headers();
+    const portalHeader = headerStore.get("x-portal") as PortalType | null;
+    host = headerStore.get("x-portal-host") || headerStore.get("host") || "";
+    portal = portalHeader ?? detectPortal(host, params.portal);
+  } catch {
+    portal = detectPortal(null, params.portal);
+  }
+
+  // If already signed in:
   try {
     const ctx = await getCurrentUser();
     if (ctx !== null) {
-      redirect(params.next ?? roleHome(ctx.roles));
+      // If signed in, verify they match the current portal
+      if (portal === "staff" && !isRoleAllowedForPortal("staff", ctx.roles)) {
+        // Redirect to family portal
+        const familyUrl = getPortalBaseUrl("family", host);
+        redirect(`${familyUrl}${roleHome(ctx.roles)}`);
+      } else if (portal === "family" && !isRoleAllowedForPortal("family", ctx.roles)) {
+        // Redirect to staff portal
+        const staffUrl = getPortalBaseUrl("staff", host);
+        redirect(`${staffUrl}${roleHome(ctx.roles)}`);
+      } else {
+        const safeDestination = validateSafeRedirect(params.next, roleHome(ctx.roles));
+        redirect(safeDestination);
+      }
     }
-  } catch {
-    // Inactive/unprovisioned: show the login form with an explanatory error.
+  } catch (e: unknown) {
+    if (
+      typeof e === "object" &&
+      e !== null &&
+      "digest" in e &&
+      typeof (e as { digest: unknown }).digest === "string" &&
+      (e as { digest: string }).digest.startsWith("NEXT_REDIRECT")
+    ) {
+      throw e;
+    }
+    // Inactive/unprovisioned: fall through to show the login form
   }
 
+  const staffBaseUrl = getPortalBaseUrl("staff", host);
+  const familyBaseUrl = getPortalBaseUrl("family", host);
+
   return (
-    <main className="mx-auto max-w-sm p-8">
-      <h1 className="text-2xl font-bold">SIMPLEIN SCHOOL ERP</h1>
-      <p className="mt-1 text-sm text-gray-600">Sign in to your school account</p>
-      <LoginForm error={params.error} />
-    </main>
+    <LoginForm
+      initialError={params.error}
+      initialPortal={portal}
+      nextPath={params.next}
+      staffBaseUrl={staffBaseUrl}
+      familyBaseUrl={familyBaseUrl}
+      currentHost={host}
+    />
   );
 }

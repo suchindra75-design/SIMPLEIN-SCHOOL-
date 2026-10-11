@@ -1,3 +1,4 @@
+import React from "react";
 import { requireRole } from "@/lib/auth/session";
 import {
   markAllNotificationsReadAction,
@@ -7,6 +8,8 @@ import { ConfirmButton } from "@/app/admin/_components/forms";
 import { listNotifications, unreadCount } from "@/lib/services/notifications";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { EmptyState } from "@/app/admin/_components/ui";
+import { Bell, CheckCheck, Clock } from "lucide-react";
+import { formatFriendlyDate } from "@/lib/domain";
 
 export const dynamic = "force-dynamic";
 
@@ -17,56 +20,73 @@ export default async function NotificationsPage() {
   const { notifications } = await listNotifications(db, ctx, {
     page: 1,
     limit: 50,
-  });
-  const unread = await unreadCount(db, ctx);
+  }).catch(() => ({ notifications: [], total: 0 }));
+  const unread = await unreadCount(db, ctx).catch(() => 0);
 
   return (
-    <main>
-      <h2 className="text-xl font-semibold">Notifications</h2>
-      <p className="mt-1 text-sm text-gray-600">
-        {ctx.profile.fullName} · {unread} unread
-      </p>
-
-      {unread > 0 && (
-        <div className="mt-4">
-          <ConfirmButton
-            label="Mark all as read"
-            confirmMessage="Mark all notifications as read?"
-            run={markAllNotificationsReadAction}
-          />
+    <div className="max-w-4xl mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-zinc-200 pb-4">
+        <div>
+          <div className="flex items-center gap-2">
+            <Bell className="w-5 h-5 text-zinc-950" />
+            <h1 className="text-xl font-bold tracking-tight text-zinc-950 font-serif">
+              Notification Centre
+            </h1>
+          </div>
+          <p className="text-xs text-zinc-500 font-mono mt-1">
+            {ctx.profile.fullName} • {unread} unread dispatch{unread === 1 ? "" : "es"}
+          </p>
         </div>
-      )}
+
+        {unread > 0 && (
+          <div>
+            <ConfirmButton
+              label="Mark All as Read"
+              confirmMessage="Mark all notifications as read?"
+              run={markAllNotificationsReadAction}
+            />
+          </div>
+        )}
+      </div>
 
       {notifications.length === 0 ? (
-        <div className="mt-4">
-          <EmptyState message="No notifications yet." />
-        </div>
+        <EmptyState message="No notifications in your inbox at this time." />
       ) : (
-        <ul className="mt-4 space-y-2 text-sm">
+        <div className="space-y-3">
           {notifications.map((n) => (
-            <li
+            <div
               key={n.id}
-              className={`rounded border p-3 ${n.isRead ? "" : "bg-blue-50/50"}`}
+              className={`rounded-lg border p-4 transition-colors ${
+                n.isRead
+                  ? "bg-white border-zinc-200 text-zinc-700"
+                  : "bg-zinc-50/90 border-zinc-900/30 text-zinc-950 shadow-2xs"
+              }`}
             >
-              <div className="flex flex-wrap items-center gap-3">
-                <span className="rounded bg-gray-100 px-2 py-0.5 text-xs text-gray-600">
-                  {n.type}
-                </span>
-                <span className="font-medium">{n.title}</span>
-                {!n.isRead && (
-                  <span className="rounded bg-blue-100 px-2 py-0.5 text-xs text-blue-800">
-                    New
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                <div className="flex items-center gap-2">
+                  <span className="px-2 py-0.5 rounded bg-zinc-100 text-zinc-800 font-mono text-[10px] font-semibold border border-zinc-200 uppercase">
+                    {n.type}
                   </span>
-                )}
-                <span className="ml-auto text-xs text-gray-500">
-                  {n.createdAt.slice(0, 16).replace("T", " ")}
+                  <span className="font-bold text-xs text-zinc-950 font-serif">
+                    {n.title}
+                  </span>
+                  {!n.isRead && (
+                    <span className="w-2 h-2 rounded-full bg-zinc-950" />
+                  )}
+                </div>
+                <span className="text-[10px] text-zinc-400 font-mono flex items-center gap-1">
+                  <Clock className="w-3 h-3" />
+                  {formatFriendlyDate(n.createdAt)}
                 </span>
               </div>
+
               {n.message !== "" && (
-                <p className="mt-1 text-gray-700">{n.message}</p>
+                <p className="text-xs text-zinc-600 leading-relaxed font-sans">{n.message}</p>
               )}
+
               {!n.isRead && (
-                <div className="mt-2">
+                <div className="mt-3 pt-2 border-t border-zinc-100 flex justify-end">
                   <ConfirmButton
                     label="Mark as read"
                     confirmMessage="Mark this notification as read?"
@@ -74,10 +94,10 @@ export default async function NotificationsPage() {
                   />
                 </div>
               )}
-            </li>
+            </div>
           ))}
-        </ul>
+        </div>
       )}
-    </main>
+    </div>
   );
 }
