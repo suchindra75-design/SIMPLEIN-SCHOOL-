@@ -236,6 +236,14 @@ type SupabaseServerClient = Awaited<
 function adaptSupabase(client: SupabaseServerClient): SessionDataClient {
   return {
     async getAuthUserId() {
+      try {
+        const { headers } = await import("next/headers");
+        const headerStore = await headers();
+        const forwardedId = headerStore.get("x-auth-user-id");
+        if (forwardedId) return forwardedId;
+      } catch {
+        // Fallback for tests or contexts without headers()
+      }
       const { data, error } = await client.auth.getUser();
       if (error !== null || data.user === null) return null;
       return data.user.id;

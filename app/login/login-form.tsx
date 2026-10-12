@@ -423,7 +423,16 @@ export function LoginForm({
                 setIsPending(true);
                 try {
                   await loginAction(formData);
-                } catch (e) {
+                } catch (e: unknown) {
+                  if (
+                    typeof e === "object" &&
+                    e !== null &&
+                    "digest" in e &&
+                    typeof (e as { digest: unknown }).digest === "string" &&
+                    (e as { digest: string }).digest.startsWith("NEXT_REDIRECT")
+                  ) {
+                    throw e;
+                  }
                   setIsPending(false);
                   throw e;
                 }

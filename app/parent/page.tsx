@@ -24,8 +24,16 @@ export default async function ParentDashboardPage({
 }) {
   const ctx = await requireRole("PARENT");
   const db = await createServerSupabaseClient();
-  const scope = await getParentScope(db, ctx);
-  const sp = await searchParams;
+  const [[scope, noticesResult], sp] = await Promise.all([
+    Promise.all([
+      getParentScope(db, ctx),
+      listNotices(db, ctx, {
+        page: 1,
+        limit: 5,
+      }).catch(() => ({ notices: [], total: 0 })),
+    ]),
+    searchParams,
+  ]);
 
   const { children } =
     scope === null
@@ -33,11 +41,6 @@ export default async function ParentDashboardPage({
       : await listChildren(db, ctx, scope.parentId).catch(() => ({ children: [] }));
   const activeChild =
     children.find((c) => c.id === sp.child) ?? children[0] ?? null;
-
-  const noticesResult = await listNotices(db, ctx, {
-    page: 1,
-    limit: 5,
-  }).catch(() => ({ notices: [], total: 0 }));
 
   const quickActions = [
     { label: "Child Attendance", href: "/parent/attendance", desc: "Daily attendance logs & monthly summary" },

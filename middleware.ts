@@ -37,6 +37,7 @@ export async function middleware(request: NextRequest) {
   }
 
   // 2. Host-based portal detection
+  const startMs = performance.now();
   const host = request.headers.get("host") || request.nextUrl.host;
   const portalQuery = request.nextUrl.searchParams.get("portal");
   const portal = detectPortal(host, portalQuery);
@@ -65,6 +66,7 @@ export async function middleware(request: NextRequest) {
 
   // Set request headers so downstream Server Components can read portal context
   const requestHeaders = new Headers(request.headers);
+  requestHeaders.delete("x-auth-user-id");
   requestHeaders.set("x-portal", portal);
   requestHeaders.set("x-portal-host", host);
 
@@ -120,6 +122,19 @@ export async function middleware(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
+  if (user !== null) {
+    requestHeaders.set("x-auth-user-id", user.id);
+    const prevCookies = supabaseResponse.cookies.getAll();
+    supabaseResponse = NextResponse.next({
+      request: {
+        headers: requestHeaders,
+      },
+    });
+    for (const c of prevCookies) {
+      supabaseResponse.cookies.set(c);
+    }
+  }
+
   // 5. First-line route protection (role layouts re-verify server-side)
   const isProtected = PROTECTED_PREFIXES.some(
     (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`),
@@ -130,6 +145,12 @@ export async function middleware(request: NextRequest) {
     loginUrl.pathname = "/login";
     loginUrl.searchParams.set("next", pathname);
     return NextResponse.redirect(loginUrl);
+  }
+
+  const durationMs = Math.round(performance.now() - startMs);
+  supabaseResponse.headers.set("Server-Timing", `mw;dur=${durationMs}`);
+  if (process.env.NODE_ENV === "development") {
+    console.log(`[MW] ${request.method} ${pathname} (${durationMs}ms)`);
   }
 
   return supabaseResponse;

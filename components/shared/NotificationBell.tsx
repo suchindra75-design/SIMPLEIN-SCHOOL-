@@ -16,18 +16,29 @@ export function NotificationBell({
   const [count, setCount] = useState(unreadCount);
 
   useEffect(() => {
-    // Optionally fetch live unread count
+    setCount(unreadCount);
+  }, [unreadCount]);
+
+  useEffect(() => {
+    let cancelled = false;
+
     fetch("/api/v1/notifications/unread-count")
       .then((res) => {
         if (res.ok) return res.json();
         return null;
       })
       .then((data) => {
-        if (data && typeof data.unreadCount === "number") {
-          setCount(data.unreadCount);
+        if (cancelled) return;
+        const unread = data?.data?.unread ?? data?.unread;
+        if (typeof unread === "number") {
+          setCount(unread);
         }
       })
       .catch(() => {});
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   return (

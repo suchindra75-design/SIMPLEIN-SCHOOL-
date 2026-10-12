@@ -9,6 +9,7 @@ import { createFakeDb, type Row } from "@/lib/test/fake-db";
 import type { DbClient } from "@/lib/services/errors";
 import {
   addHomeworkAttachment,
+  assertHomeworkSectionAccess,
   createHomework,
   deleteHomework,
   getHomework,
@@ -251,6 +252,37 @@ describe("teacher section/subject scope", () => {
       TenantBoundaryError,
     );
     expect(fake.callsTo("homework", "update")).toHaveLength(0);
+  });
+
+  it("teacher cannot list an unassigned section's homework", async () => {
+    // t1 is assigned only to sec7a; sec7b is unassigned
+    await expect(
+      listHomework(db(), teacherCtx(), { sectionId: "sec7b", page: 1, limit: 50 }),
+    ).rejects.toThrow(TenantBoundaryError);
+  });
+
+  it("teacher cannot list homework for a section in another school", async () => {
+    // secb belongs to school B
+    await expect(
+      listHomework(db(), teacherCtx(), { sectionId: "secb", page: 1, limit: 50 }),
+    ).rejects.toThrow(TenantBoundaryError);
+  });
+
+  it("assertHomeworkSectionAccess enforces section scope", async () => {
+    // Assigned section: allowed
+    await expect(
+      assertHomeworkSectionAccess(db(), teacherCtx(), "sec7a"),
+    ).resolves.toBeUndefined();
+
+    // Unassigned section: rejected
+    await expect(
+      assertHomeworkSectionAccess(db(), teacherCtx(), "sec7b"),
+    ).rejects.toThrow(TenantBoundaryError);
+
+    // Cross-school section: rejected
+    await expect(
+      assertHomeworkSectionAccess(db(), teacherCtx(), "secb"),
+    ).rejects.toThrow(TenantBoundaryError);
   });
 });
 

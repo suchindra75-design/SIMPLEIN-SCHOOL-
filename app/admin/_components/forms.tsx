@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect } from "react";
+import { useActionState, useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { ActionState } from "@/app/admin/actions";
 
@@ -44,10 +44,12 @@ export function SmartForm({
 }) {
   const router = useRouter();
   const [state, formAction, pending] = useActionState(action, {});
+  const [isRedirecting, setIsRedirecting] = useState(false);
+
   useEffect(() => {
     if (state.success === true && redirectTo !== undefined) {
+      setIsRedirecting(true);
       router.push(redirectTo);
-      router.refresh();
     }
   }, [state.success, redirectTo, router]);
 
@@ -112,10 +114,10 @@ export function SmartForm({
       ))}
       <button
         type="submit"
-        disabled={pending}
+        disabled={pending || isRedirecting}
         className="rounded-md bg-[#191919] hover:bg-[#2D2D30] px-4 py-2 text-xs font-semibold text-white shadow-xs btn-interactive disabled:opacity-50 cursor-pointer"
       >
-        {pending ? "Saving…" : submitLabel}
+        {pending ? "Saving…" : isRedirecting ? "Redirecting…" : submitLabel}
       </button>
     </form>
   );
@@ -131,23 +133,29 @@ export function ConfirmButton({
   confirmMessage: string;
   run: () => Promise<ActionState>;
 }) {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+
   return (
     <button
       type="button"
-      className="rounded-md border border-[#DCDCE0] bg-[#F8F8F9] hover:bg-red-50 hover:border-red-300 hover:text-red-700 px-2.5 py-1 text-xs font-medium text-zinc-700 btn-interactive cursor-pointer"
+      disabled={isPending}
+      className="rounded-md border border-[#DCDCE0] bg-[#F8F8F9] hover:bg-red-50 hover:border-red-300 hover:text-red-700 px-2.5 py-1 text-xs font-medium text-zinc-700 btn-interactive cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
       onClick={() => {
         if (window.confirm(confirmMessage)) {
-          void run().then((state) => {
+          startTransition(async () => {
+            const state = await run();
             if (state.error !== undefined) {
               window.alert(state.error);
             } else {
-              window.location.reload();
+              router.refresh();
             }
           });
         }
       }}
     >
-      {label}
+      {isPending ? "Processing…" : label}
     </button>
   );
 }
+

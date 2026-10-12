@@ -17,11 +17,13 @@ export const dynamic = "force-dynamic";
 export default async function NotificationsPage() {
   const ctx = await requireRole(["SCHOOL_ADMIN", "TEACHER", "PARENT", "STUDENT"]);
   const db = await createServerSupabaseClient();
-  const { notifications } = await listNotifications(db, ctx, {
-    page: 1,
-    limit: 50,
-  }).catch(() => ({ notifications: [], total: 0 }));
-  const unread = await unreadCount(db, ctx).catch(() => 0);
+  const [{ notifications }, unread] = await Promise.all([
+    listNotifications(db, ctx, {
+      page: 1,
+      limit: 50,
+    }).catch(() => ({ notifications: [], total: 0 })),
+    unreadCount(db, ctx).catch(() => 0),
+  ]);
 
   return (
     <div className="max-w-4xl mx-auto p-4 sm:p-6 lg:p-8 space-y-6">

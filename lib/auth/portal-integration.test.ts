@@ -154,3 +154,17 @@ describe("Open Redirect & Safe Navigation Defenses", () => {
     );
   });
 });
+
+describe("Middleware Header Sanitization", () => {
+  it("strips client-provided x-auth-user-id to prevent header spoofing", async () => {
+    const req = new NextRequest("http://localhost:3000/login", {
+      headers: {
+        host: "localhost:3000",
+        "x-auth-user-id": "attacker-spoofed-user-id",
+      },
+    });
+
+    const res = await middleware(req);
+    expect(res.headers.get("x-middleware-request-x-auth-user-id")).toBeNull();
+  });
+});
