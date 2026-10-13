@@ -1,7 +1,24 @@
 const { createClient } = require("@supabase/supabase-js");
 
-const SUPABASE_URL = "https://krzbajfioftoubcbyeso.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtyemJhamZpb2Z0b3ViY2J5ZXNvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTA0NzczNzIsImV4cCI6MjEwNjA1MzM3Mn0.oLsq7EzVyyxRRcwGHxt1QIOdMpU2Rs8EXjJo0LUqa-Q";
+const REQUIRED_ENV = [
+  "NEXT_PUBLIC_SUPABASE_URL",
+  "NEXT_PUBLIC_SUPABASE_ANON_KEY",
+  "MEASURE_ADMIN_LOGIN",
+  "MEASURE_ADMIN_PASSWORD",
+];
+const missingEnv = REQUIRED_ENV.filter((name) => !process.env[name]);
+if (missingEnv.length > 0) {
+  console.error(`Missing required environment variables: ${missingEnv.join(", ")}`);
+  console.error(
+    "Use a dedicated test account (MEASURE_ADMIN_LOGIN must be an email). Example: node --env-file=.env.local scripts/measure_auth_and_api.cjs",
+  );
+  process.exit(1);
+}
+
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+const ADMIN_EMAIL = process.env.MEASURE_ADMIN_LOGIN;
+const ADMIN_PASSWORD = process.env.MEASURE_ADMIN_PASSWORD;
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
@@ -22,8 +39,8 @@ async function benchmarkAuthLogin() {
   for (let i = 0; i < 10; i++) {
     const start = performance.now();
     const { data, error } = await supabase.auth.signInWithPassword({
-      email: "admin@greenfield-demo.edu",
-      password: "Demo@1dce23a79c11!2026"
+      email: ADMIN_EMAIL,
+      password: ADMIN_PASSWORD
     });
     const elapsed = Math.round(performance.now() - start);
     if (error) {
@@ -39,8 +56,8 @@ async function benchmarkAuthLogin() {
 
 async function benchmarkAuthenticatedQuery() {
   const { data: authData, error: loginErr } = await supabase.auth.signInWithPassword({
-    email: "admin@greenfield-demo.edu",
-    password: "Demo@1dce23a79c11!2026"
+    email: ADMIN_EMAIL,
+    password: ADMIN_PASSWORD
   });
 
   if (loginErr) {

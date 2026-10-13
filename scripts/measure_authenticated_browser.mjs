@@ -1,15 +1,37 @@
-import { chromium } from "playwright";
 import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
 
 const BASE_URL = process.argv[2] || "https://simplein-school-demo-lu05tscvy-dev-b73d.vercel.app";
 const SAMPLES_PER_ROUTE = 5;
+// Preview deployments are protected by Vercel Authentication, so the bypass
+// secret is required alongside a dedicated test account for each role.
+const REQUIRED_ENV = [
+  "VERCEL_AUTOMATION_BYPASS_SECRET",
+  "MEASURE_ADMIN_LOGIN",
+  "MEASURE_ADMIN_PASSWORD",
+  "MEASURE_TEACHER_LOGIN",
+  "MEASURE_TEACHER_PASSWORD",
+  "MEASURE_PARENT_LOGIN",
+  "MEASURE_PARENT_PASSWORD",
+  "MEASURE_STUDENT_LOGIN",
+  "MEASURE_STUDENT_PASSWORD",
+];
+const missingEnv = REQUIRED_ENV.filter((name) => !process.env[name]);
+if (missingEnv.length > 0) {
+  console.error(`Missing required environment variables: ${missingEnv.join(", ")}`);
+  console.error("Example: node --env-file=.env.local scripts/measure_authenticated_browser.mjs <base-url>");
+  process.exit(1);
+}
+
+const BYPASS_SECRET = process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
 
 const ROLES_CONFIG = [
   {
     role: "SCHOOL_ADMIN",
     tabLabel: "Admin",
-    identifier: "admin@greenfield-demo.edu",
-    password: "Demo@1dce23a79c11!2026",
+    identifier: process.env.MEASURE_ADMIN_LOGIN,
+    password: process.env.MEASURE_ADMIN_PASSWORD,
     routes: [
       "/admin",
       "/admin/students",
@@ -21,8 +43,8 @@ const ROLES_CONFIG = [
   {
     role: "TEACHER",
     tabLabel: "Teacher",
-    identifier: "teacher.math@greenfield-demo.edu",
-    password: "Demo@ae1450b0ce06!2026",
+    identifier: process.env.MEASURE_TEACHER_LOGIN,
+    password: process.env.MEASURE_TEACHER_PASSWORD,
     routes: [
       "/teacher",
       "/teacher/attendance",
@@ -33,8 +55,8 @@ const ROLES_CONFIG = [
   {
     role: "PARENT",
     tabLabel: "Parent",
-    identifier: "parent.sharma@greenfield-demo.edu",
-    password: "Demo@56fa2671f39f!2026",
+    identifier: process.env.MEASURE_PARENT_LOGIN,
+    password: process.env.MEASURE_PARENT_PASSWORD,
     routes: [
       "/parent",
       "/parent/attendance",
@@ -44,8 +66,8 @@ const ROLES_CONFIG = [
   {
     role: "STUDENT",
     tabLabel: "Student",
-    identifier: "student.aarav@greenfield-demo.edu",
-    password: "Demo@b6ba92cf23e7!2026",
+    identifier: process.env.MEASURE_STUDENT_LOGIN,
+    password: process.env.MEASURE_STUDENT_PASSWORD,
     routes: [
       "/student",
       "/student/attendance",
@@ -76,6 +98,15 @@ async function main() {
   console.log(`Timestamp: ${new Date().toISOString()}`);
   console.log(`==================================================\n`);
 
+  let chromium;
+  try {
+    ({ chromium } = await import("playwright"));
+  } catch {
+    console.error("playwright is not installed. Run: npm install --no-save playwright && npx playwright install chromium");
+    process.exitCode = 1;
+    return;
+  }
+
   const browser = await chromium.launch({ headless: true });
   const allResults = [];
 
@@ -86,7 +117,7 @@ async function main() {
 
     const context = await browser.newContext({
       extraHTTPHeaders: {
-        "x-vercel-protection-bypass": "cO6qGpntPC5QpyJEhL3eh9NB9spkNvnQ"
+        "x-vercel-protection-bypass": BYPASS_SECRET
       }
     });
     const page = await context.newPage();
@@ -199,7 +230,8 @@ async function main() {
 
   await browser.close();
 
-  const outputPath = "/Users/apple/.gemini/antigravity-ide/brain/e6fe59b6-33e1-46d0-8ae1-83dfefea9f51/scratch/vercel_preview_optimized_benchmark.json";
+  const outputPath = fileURLToPath(new URL("../scratch/vercel_preview_optimized_benchmark.json", import.meta.url));
+  fs.mkdirSync(path.dirname(outputPath), { recursive: true });
   fs.writeFileSync(outputPath, JSON.stringify(allResults, null, 2));
   console.log(`Results saved to: ${outputPath}`);
 

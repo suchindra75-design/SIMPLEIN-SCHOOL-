@@ -7,11 +7,13 @@ out/
 next-env.d.ts
 
 # Env & secrets — NEVER commit real values
-.env
-.env*.local
-.env.local.save
+.env*
 !.env.example
-.staging-credentials.txt
+.staging-credentials*
+*.credentials*
+
+# Local one-off scripts and their output (may hold credentials or results)
+scratch/
 
 # OS / editor
 .DS_Store
@@ -23,4 +25,3 @@ next-env.d.ts
 coverage/
 tsconfig.tsbuildinfo
 .vercel
-.env*
