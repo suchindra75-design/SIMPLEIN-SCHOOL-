@@ -155,6 +155,32 @@ describe("Open Redirect & Safe Navigation Defenses", () => {
   });
 });
 
+describe("Anonymous access to protected pages", () => {
+  it("redirects anonymous /notifications requests to login", async () => {
+    const saved = {
+      url: process.env["NEXT_PUBLIC_SUPABASE_URL"],
+      key: process.env["NEXT_PUBLIC_SUPABASE_ANON_KEY"],
+    };
+    process.env["NEXT_PUBLIC_SUPABASE_URL"] = "https://example.invalid";
+    process.env["NEXT_PUBLIC_SUPABASE_ANON_KEY"] = "test-anon-key";
+    try {
+      const req = new NextRequest("http://localhost:3000/notifications", {
+        headers: { host: "localhost:3000" },
+      });
+      const res = await middleware(req);
+      expect(res.status).toBe(307);
+      expect(res.headers.get("location")).toBe(
+        "http://localhost:3000/login?next=%2Fnotifications",
+      );
+    } finally {
+      if (saved.url === undefined) delete process.env["NEXT_PUBLIC_SUPABASE_URL"];
+      else process.env["NEXT_PUBLIC_SUPABASE_URL"] = saved.url;
+      if (saved.key === undefined) delete process.env["NEXT_PUBLIC_SUPABASE_ANON_KEY"];
+      else process.env["NEXT_PUBLIC_SUPABASE_ANON_KEY"] = saved.key;
+    }
+  });
+});
+
 describe("Middleware Header Sanitization", () => {
   it("strips client-provided x-auth-user-id to prevent header spoofing", async () => {
     const req = new NextRequest("http://localhost:3000/login", {

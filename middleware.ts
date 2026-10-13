@@ -7,7 +7,13 @@ import {
   getPortalForPath,
 } from "@/lib/auth/portal";
 
-const PROTECTED_PREFIXES = ["/admin", "/teacher", "/parent", "/student"];
+const PROTECTED_PREFIXES = [
+  "/admin",
+  "/teacher",
+  "/parent",
+  "/student",
+  "/notifications",
+];
 
 // Per-process limiter (see lib/security/rate-limit.ts for the swap-in story).
 const globalForLimiter = globalThis as unknown as { rateLimiter?: RateLimiter };
