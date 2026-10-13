@@ -13,7 +13,6 @@ import {
   Eye,
   EyeOff,
   AlertCircle,
-  Sparkles,
   ChevronLeft,
   ExternalLink,
   Laptop,
@@ -28,8 +27,6 @@ interface RoleConfig {
   key: RoleKey;
   label: string;
   badge: string;
-  email: string;
-  passwordDefault: string;
   name: string;
   title: string;
   portal: "staff" | "family";
@@ -40,8 +37,6 @@ const roleConfigs: Record<RoleKey, RoleConfig> = {
     key: "admin",
     label: "Administrator",
     badge: "Principal's Office",
-    email: "admin.staging@simpleinschool.test",
-    passwordDefault: "8YNrMOAEySlsZwPnrx7C7AK4",
     name: "School Administrator",
     title: "Institutional Control & Operations",
     portal: "staff",
@@ -50,8 +45,6 @@ const roleConfigs: Record<RoleKey, RoleConfig> = {
     key: "teacher",
     label: "Faculty / Teacher",
     badge: "Academic Staff",
-    email: "teacher.staging@simpleinschool.test",
-    passwordDefault: "MHxRFzbIA8YGcz8Mn7JxPxjo",
     name: "Academic Faculty",
     title: "Class Teacher & Head of Department",
     portal: "staff",
@@ -60,8 +53,6 @@ const roleConfigs: Record<RoleKey, RoleConfig> = {
     key: "parent",
     label: "Parent / Guardian",
     badge: "Family Portal",
-    email: "parent.staging@simpleinschool.test",
-    passwordDefault: "xbzFTaBZ0uMj5y73gL1zb4hQ",
     name: "Guardian Portal",
     title: "Parental Supervision & Records",
     portal: "family",
@@ -70,8 +61,6 @@ const roleConfigs: Record<RoleKey, RoleConfig> = {
     key: "student",
     label: "Student",
     badge: "Scholar Terminal",
-    email: "student.staging@simpleinschool.test",
-    passwordDefault: "cPEQbPYIHwTerHdrrkV4eg4e",
     name: "Student Scholar",
     title: "Enrolled Scholar Terminal",
     portal: "family",
@@ -123,8 +112,8 @@ export function LoginForm({
   const [selectedRole, setSelectedRole] = useState<RoleKey>(defaultRole);
   const activeConfig = roleConfigs[selectedRole];
 
-  const [email, setEmail] = useState(activeConfig.email);
-  const [password, setPassword] = useState(activeConfig.passwordDefault);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isPending, setIsPending] = useState(false);
 
@@ -133,23 +122,18 @@ export function LoginForm({
     if (!availableRoles.includes(selectedRole)) {
       const nextRole: RoleKey = availableRoles[0];
       setSelectedRole(nextRole);
-      setEmail(roleConfigs[nextRole].email);
-      setPassword(roleConfigs[nextRole].passwordDefault);
+      setEmail("");
+      setPassword("");
     }
   }, [effectivePortal, availableRoles, selectedRole]);
 
   useEffect(() => {
-    setEmail(activeConfig.email);
-    setPassword(activeConfig.passwordDefault);
-  }, [selectedRole, activeConfig]);
+    setEmail("");
+    setPassword("");
+  }, [selectedRole]);
 
   const handleRoleChange = (key: RoleKey) => {
     setSelectedRole(key);
-  };
-
-  const handleQuickFill = () => {
-    setEmail(activeConfig.email);
-    setPassword(activeConfig.passwordDefault);
   };
 
   const getRoleIcon = (key: RoleKey) => {
@@ -362,17 +346,6 @@ export function LoginForm({
                   </div>
                 </div>
               </div>
-
-              {/* Quick Fill Button */}
-              <button
-                type="button"
-                onClick={handleQuickFill}
-                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-[#DCDCE0] bg-[#FFFFFF] text-[11px] font-mono font-semibold text-[#191919] hover:border-[#191919] hover:bg-[#E7E7E9] btn-interactive shadow-2xs cursor-pointer"
-                title="Quick Fill Staging Credentials"
-              >
-                <Sparkles className="w-3.5 h-3.5 text-[#191919]" />
-                <span>Quick Fill</span>
-              </button>
             </div>
 
             {/* Error Message & Portal Mismatch Navigation */}
