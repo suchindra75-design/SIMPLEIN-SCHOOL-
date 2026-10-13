@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect } from "react";
+import { useActionState, useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { ActionState } from "@/app/admin/actions";
 
@@ -44,10 +44,12 @@ export function SmartForm({
 }) {
   const router = useRouter();
   const [state, formAction, pending] = useActionState(action, {});
+  const [isRedirecting, setIsRedirecting] = useState(false);
+
   useEffect(() => {
     if (state.success === true && redirectTo !== undefined) {
+      setIsRedirecting(true);
       router.push(redirectTo);
-      router.refresh();
     }
   }, [state.success, redirectTo, router]);
 
@@ -60,7 +62,7 @@ export function SmartForm({
       )}
       {fields.map((f) => (
         <div key={f.name}>
-          <label htmlFor={f.name} className="mb-1 block text-sm font-medium">
+          <label htmlFor={f.name} className="mb-1 block text-sm font-medium text-[#191919]">
             {f.label}
             {f.required === true ? " *" : ""}
           </label>
@@ -70,7 +72,7 @@ export function SmartForm({
               name={f.name}
               required={f.required}
               defaultValue={f.defaultValue ?? ""}
-              className="w-full rounded border px-3 py-2"
+              className="w-full rounded-md border border-[#DCDCE0] bg-[#F1F1F2] px-3 py-2 text-xs text-[#191919] focus:outline-hidden focus:border-[#191919] focus:bg-[#F8F8F9]"
             >
               <option value="">Select…</option>
               {(f.options ?? []).map((o) => (
@@ -87,7 +89,7 @@ export function SmartForm({
               defaultValue={f.defaultValue ?? ""}
               placeholder={f.placeholder}
               rows={3}
-              className="w-full rounded border px-3 py-2"
+              className="w-full rounded-md border border-[#DCDCE0] bg-[#F1F1F2] px-3 py-2 text-xs text-[#191919] focus:outline-hidden focus:border-[#191919] focus:bg-[#F8F8F9]"
             />
           ) : f.type === "checkbox" ? (
             <input
@@ -95,7 +97,7 @@ export function SmartForm({
               name={f.name}
               type="checkbox"
               defaultChecked={f.checked}
-              className="h-4 w-4"
+              className="h-4 w-4 rounded border-[#DCDCE0] accent-[#191919]"
             />
           ) : (
             <input
@@ -105,17 +107,17 @@ export function SmartForm({
               required={f.required}
               defaultValue={f.defaultValue ?? ""}
               placeholder={f.placeholder}
-              className="w-full rounded border px-3 py-2"
+              className="w-full rounded-md border border-[#DCDCE0] bg-[#F1F1F2] px-3 py-2 text-xs text-[#191919] focus:outline-hidden focus:border-[#191919] focus:bg-[#F8F8F9]"
             />
           )}
         </div>
       ))}
       <button
         type="submit"
-        disabled={pending}
-        className="rounded bg-blue-600 px-4 py-2 text-white disabled:opacity-50"
+        disabled={pending || isRedirecting}
+        className="rounded-md bg-[#191919] hover:bg-[#2D2D30] px-4 py-2 text-xs font-semibold text-white shadow-xs btn-interactive disabled:opacity-50 cursor-pointer"
       >
-        {pending ? "Saving…" : submitLabel}
+        {pending ? "Saving…" : isRedirecting ? "Redirecting…" : submitLabel}
       </button>
     </form>
   );
@@ -131,23 +133,29 @@ export function ConfirmButton({
   confirmMessage: string;
   run: () => Promise<ActionState>;
 }) {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+
   return (
     <button
       type="button"
-      className="rounded border px-2 py-1 text-sm text-red-700 hover:bg-red-50"
+      disabled={isPending}
+      className="rounded-md border border-[#DCDCE0] bg-[#F8F8F9] hover:bg-red-50 hover:border-red-300 hover:text-red-700 px-2.5 py-1 text-xs font-medium text-zinc-700 btn-interactive cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
       onClick={() => {
         if (window.confirm(confirmMessage)) {
-          void run().then((state) => {
+          startTransition(async () => {
+            const state = await run();
             if (state.error !== undefined) {
               window.alert(state.error);
             } else {
-              window.location.reload();
+              router.refresh();
             }
           });
         }
       }}
     >
-      {label}
+      {isPending ? "Processing…" : label}
     </button>
   );
 }
+

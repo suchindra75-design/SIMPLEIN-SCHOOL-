@@ -303,22 +303,23 @@ export async function createHomework(
     );
   }
 
-  // Subject must exist in this school (404 on cross-tenant).
-  const { data: subject, error: subjectError } = await db
-    .from("subjects")
-    .select("id")
-    .eq("id", input.subjectId)
-    .eq("school_id", ctx.profile.schoolId)
-    .single();
+  // Subject and current academic year verification in parallel
+  const [{ data: subject, error: subjectError }, { data: year, error: yearError }] =
+    await Promise.all([
+      db
+        .from("subjects")
+        .select("id")
+        .eq("id", input.subjectId)
+        .eq("school_id", ctx.profile.schoolId)
+        .single(),
+      db
+        .from("academic_years")
+        .select("id")
+        .eq("school_id", ctx.profile.schoolId)
+        .eq("is_current", true)
+        .maybeSingle(),
+    ]);
   throwForPostgrest(subjectError, "Subject not found in this school");
-
-  // Academic year: the school's current year (consistent with other modules).
-  const { data: year, error: yearError } = await db
-    .from("academic_years")
-    .select("id")
-    .eq("school_id", ctx.profile.schoolId)
-    .eq("is_current", true)
-    .maybeSingle();
   throwForPostgrest(yearError);
   if (year === null) {
     throw new ConflictError("No academic year is configured for this school");

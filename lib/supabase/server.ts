@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 
@@ -17,8 +18,9 @@ export function isSupabaseConfigured(): boolean {
 /**
  * Server-side Supabase client bound to request cookies.
  * All data access goes through this so RLS sees the caller's JWT.
+ * Memoized per server request via React cache().
  */
-export async function createServerSupabaseClient() {
+export const createServerSupabaseClient = cache(async () => {
   const url = process.env["NEXT_PUBLIC_SUPABASE_URL"];
   const anonKey = process.env["NEXT_PUBLIC_SUPABASE_ANON_KEY"];
   if (url === undefined || anonKey === undefined) {
@@ -48,4 +50,5 @@ export async function createServerSupabaseClient() {
       },
     },
   });
-}
+});
+

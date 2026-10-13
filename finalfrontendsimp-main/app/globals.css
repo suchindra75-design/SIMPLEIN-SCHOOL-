@@ -1,0 +1,64 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --background: #fafafa;
+    --foreground: #09090b;
+    --surface: #ffffff;
+    --surface-muted: #f4f4f5;
+    --border: #e4e4e7;
+    --border-strong: #09090b;
+    --primary: #09090b;
+    --primary-hover: #27272a;
+    --primary-foreground: #ffffff;
+    --muted: #71717a;
+    --muted-foreground: #27272a;
+    
+    /* Classic Monochrome Status Tokens */
+    --status-success-bg: #f4f4f5;
+    --status-success-text: #09090b;
+    --status-success-border: #71717a;
+    
+    --status-warning-bg: #f4f4f5;
+    --status-warning-text: #09090b;
+    --status-warning-border: #a1a1aa;
+    
+    --status-danger-bg: #09090b;
+    --status-danger-text: #ffffff;
+    --status-danger-border: #09090b;
+    
+    --status-neutral-bg: #f4f4f5;
+    --status-neutral-text: #52525b;
+    --status-neutral-border: #e4e4e7;
+  }
+
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11", "tnum";
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    letter-spacing: -0.011em;
+  }
+}
+
+/* Classic Monospaced & Tabular styling for figures */
+.font-mono {
+  font-feature-settings: "tnum";
+}
+
+/* Clean Minimal Scrollbars */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: #f4f4f5;
+}
+::-webkit-scrollbar-thumb {
+  background: #d4d4d8;
+  border-radius: 2px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #a1a1aa;
+}

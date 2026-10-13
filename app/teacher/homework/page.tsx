@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requireRole } from "@/lib/auth/session";
+import { requireRole, TenantBoundaryError } from "@/lib/auth/session";
 import {
   createHomeworkAction,
   deleteHomeworkAction,
@@ -30,20 +30,51 @@ export default async function TeacherHomeworkPage({
   const sp = await searchParams;
   const ctx = await requireRole("TEACHER");
   const db = await createServerSupabaseClient();
+  const rawSectionId = sp["sectionId"];
+  const requestedSectionId =
+    rawSectionId !== undefined && rawSectionId !== ""
+      ? rawSectionId
+      : undefined;
+
   const [scope, { subjects }] = await Promise.all([
     getTeacherScope(db, ctx),
     listSubjects(db, ctx),
   ]);
-  const { sections } =
-    scope === null
-      ? { sections: [] }
-      : await listTeacherSections(db, ctx, scope.teacherId);
-  const sectionId =
-    sp["sectionId"] !== undefined && UUID_RE.test(sp["sectionId"])
-      ? sp["sectionId"]
-      : (sections[0]?.id ?? "");
-  const { homework } =
-    sectionId === "" ? { homework: [] } : await listHomework(db, ctx, { sectionId, page: 1, limit: 50 });
+
+  if (scope === null) {
+    if (requestedSectionId !== undefined) {
+      throw new TenantBoundaryError();
+    }
+  } else if (
+    requestedSectionId !== undefined &&
+    (!UUID_RE.test(requestedSectionId) || !scope.sectionIds.has(requestedSectionId))
+  ) {
+    throw new TenantBoundaryError();
+  }
+
+  let sections: Awaited<ReturnType<typeof listTeacherSections>>["sections"] = [];
+  let homework: Awaited<ReturnType<typeof listHomework>>["homework"] = [];
+  let sectionId = "";
+
+  if (scope !== null) {
+    if (requestedSectionId !== undefined) {
+      sectionId = requestedSectionId;
+      const [sectionsRes, homeworkRes] = await Promise.all([
+        listTeacherSections(db, ctx, scope.teacherId),
+        listHomework(db, ctx, { sectionId: requestedSectionId, page: 1, limit: 50 }),
+      ]);
+      sections = sectionsRes.sections;
+      homework = homeworkRes.homework;
+    } else {
+      const sectionsRes = await listTeacherSections(db, ctx, scope.teacherId);
+      sections = sectionsRes.sections;
+      sectionId = sections[0]?.id ?? "";
+      homework =
+        sectionId === ""
+          ? []
+          : (await listHomework(db, ctx, { sectionId, page: 1, limit: 50 })).homework;
+    }
+  }
 
   return (
     <main>
