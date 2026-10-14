@@ -24,12 +24,12 @@ export default async function StudentAcademicHistoryPage() {
   const scope = await getStudentScope(db, ctx);
   if (scope === null) {
     return (
-      <main>
-        <h2 className="text-xl font-semibold">Academic history</h2>
+      <div>
+        <h1 className="page-title">Academic history</h1>
         <div className="mt-4">
           <EmptyState message="No student profile is linked to your login yet." />
         </div>
-      </main>
+      </div>
     );
   }
   const { data, error } = await db
@@ -43,8 +43,8 @@ export default async function StudentAcademicHistoryPage() {
   const rows = (error === null ? ((data ?? []) as unknown as EnrollmentRow[]) : []) as EnrollmentRow[];
 
   return (
-    <main>
-      <h2 className="text-xl font-semibold">Academic history</h2>
+    <div>
+      <h1 className="page-title">Academic history</h1>
       <p className="mt-1 text-sm text-gray-600">
         {ctx.profile.fullName} · {ctx.school.name} · Your enrollment history
       </p>
@@ -53,34 +53,36 @@ export default async function StudentAcademicHistoryPage() {
           <EmptyState message="No enrollment history yet." />
         </div>
       ) : (
-        <table className="mt-4 w-full max-w-xl text-sm">
-          <thead>
-            <tr className="border-b text-left text-gray-600">
-              <th className="py-2">Year</th>
-              <th>Class</th>
-              <th>Section</th>
-              <th>Roll</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r) => (
-              <tr key={r.academic_year_id} className="border-b">
-                <td className="py-2">{r.academic_years?.name ?? "—"}</td>
-                <td>{r.classes?.name ?? "—"}</td>
-                <td>{r.sections?.name ?? "—"}</td>
-                <td>{r.roll_number ?? "—"}</td>
-                <td>{r.status}</td>
+        <div className="ui-table-wrap mt-4 max-w-xl">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b text-left text-gray-600">
+                <th className="py-2">Year</th>
+                <th>Class</th>
+                <th>Section</th>
+                <th>Roll</th>
+                <th>Status</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr key={r.academic_year_id} className="border-b">
+                  <td className="py-2">{r.academic_years?.name ?? "—"}</td>
+                  <td>{r.classes?.name ?? "—"}</td>
+                  <td>{r.sections?.name ?? "—"}</td>
+                  <td>{r.roll_number ?? "—"}</td>
+                  <td>{r.status}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
       <p className="mt-4 text-sm">
         <Link href="/student" className="underline">
           Back to dashboard
         </Link>
       </p>
-    </main>
+    </div>
   );
 }

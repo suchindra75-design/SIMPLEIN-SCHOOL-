@@ -41,8 +41,8 @@ export default async function TeacherDetailPage({
   );
 
   return (
-    <main>
-      <h2 className="mb-4 text-xl font-semibold">Edit teacher</h2>
+    <div>
+      <h1 className="page-title mb-4">Edit teacher</h1>
       <SmartForm
         action={updateTeacherAction.bind(null, id)}
         redirectTo="/admin/teachers"
@@ -101,6 +101,6 @@ export default async function TeacherDetailPage({
           },
         ]}
       />
-    </main>
+    </div>
   );
 }

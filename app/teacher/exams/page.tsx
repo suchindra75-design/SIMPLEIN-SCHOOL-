@@ -13,8 +13,8 @@ export default async function TeacherExamsPage() {
   const { exams } = await listExams(db, ctx, { page: 1, limit: 50 });
 
   return (
-    <main>
-      <h2 className="text-xl font-semibold">Exams</h2>
+    <div>
+      <h1 className="page-title">Exams</h1>
       <p className="mt-1 text-sm text-gray-600">
         {ctx.profile.fullName} · {ctx.school.name} · Exams for your assigned
         classes only
@@ -36,32 +36,34 @@ export default async function TeacherExamsPage() {
               {(e.subjects ?? []).length === 0 ? (
                 <p className="mt-2 text-gray-500">No subjects scheduled.</p>
               ) : (
-                <table className="mt-2 w-full">
-                  <thead>
-                    <tr className="border-b text-left text-gray-600">
-                      <th className="py-1">Subject</th>
-                      <th>Date</th>
-                      <th>Time</th>
-                      <th>Max</th>
-                      <th>Passing</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(e.subjects ?? []).map((s) => (
-                      <tr key={s.id} className="border-b">
-                        <td className="py-1">{s.subjects?.name ?? "—"}</td>
-                        <td>{s.examDate ?? "—"}</td>
-                        <td>
-                          {s.startTime === null
-                            ? "—"
-                            : `${s.startTime}${s.endTime ? `–${s.endTime}` : ""}`}
-                        </td>
-                        <td>{s.maxMarks}</td>
-                        <td>{s.passingMarks}</td>
+                <div className="ui-table-wrap mt-2">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b text-left text-gray-600">
+                        <th className="py-1">Subject</th>
+                        <th>Date</th>
+                        <th>Time</th>
+                        <th>Max</th>
+                        <th>Passing</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {(e.subjects ?? []).map((s) => (
+                        <tr key={s.id} className="border-b">
+                          <td className="py-1">{s.subjects?.name ?? "—"}</td>
+                          <td>{s.examDate ?? "—"}</td>
+                          <td>
+                            {s.startTime === null
+                              ? "—"
+                              : `${s.startTime}${s.endTime ? `–${s.endTime}` : ""}`}
+                          </td>
+                          <td>{s.maxMarks}</td>
+                          <td>{s.passingMarks}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               )}
             </li>
           ))}
@@ -72,6 +74,6 @@ export default async function TeacherExamsPage() {
           Back to dashboard
         </Link>
       </p>
-    </main>
+    </div>
   );
 }

@@ -30,14 +30,14 @@ export default async function StudentPyqsPage({
   });
 
   return (
-    <main>
-      <h2 className="text-xl font-semibold">Previous year questions</h2>
+    <div>
+      <h1 className="page-title">Previous year questions</h1>
       <p className="mt-1 text-sm text-gray-600">{ctx.school.name} · School PYQ bank</p>
 
       <form method="get" className="mt-4 flex flex-wrap items-end gap-3">
         <label className="text-sm">
-          <span className="mb-1 block text-gray-600">Class</span>
-          <select name="classId" defaultValue={sp["classId"] ?? ""} className="rounded border px-2 py-1.5">
+          <span className="ui-label">Class</span>
+          <select name="classId" defaultValue={sp["classId"] ?? ""} className="ui-input">
             <option value="">All</option>
             {classes.map((c) => (
               <option key={c.id} value={c.id}>
@@ -47,8 +47,8 @@ export default async function StudentPyqsPage({
           </select>
         </label>
         <label className="text-sm">
-          <span className="mb-1 block text-gray-600">Subject</span>
-          <select name="subjectId" defaultValue={sp["subjectId"] ?? ""} className="rounded border px-2 py-1.5">
+          <span className="ui-label">Subject</span>
+          <select name="subjectId" defaultValue={sp["subjectId"] ?? ""} className="ui-input">
             <option value="">All</option>
             {subjects.map((s) => (
               <option key={s.id} value={s.id}>
@@ -58,10 +58,10 @@ export default async function StudentPyqsPage({
           </select>
         </label>
         <label className="text-sm">
-          <span className="mb-1 block text-gray-600">Year</span>
-          <input name="yearLabel" defaultValue={sp["yearLabel"] ?? ""} className="rounded border px-2 py-1.5" placeholder="2025" />
+          <span className="ui-label">Year</span>
+          <input name="yearLabel" defaultValue={sp["yearLabel"] ?? ""} className="ui-input" placeholder="2025" />
         </label>
-        <button type="submit" className="rounded border px-3 py-1.5 text-sm">
+        <button type="submit" className="ui-btn ui-btn-secondary">
           Filter
         </button>
         <a href="/student/pyqs" className="rounded border px-3 py-1.5 text-sm text-gray-600">
@@ -76,7 +76,7 @@ export default async function StudentPyqsPage({
       ) : (
         <ul className="mt-4 space-y-2 text-sm">
           {pyqs.map((p) => (
-            <li key={p.id} className="rounded border p-3">
+            <li key={p.id} className="ui-panel">
               <div className="flex flex-wrap items-center gap-3">
                 <span className="font-medium">
                   {p.title ?? `${p.classes?.name ?? ""} ${p.subjects?.name ?? ""}`}
@@ -105,6 +105,6 @@ export default async function StudentPyqsPage({
           ))}
         </ul>
       )}
-    </main>
+    </div>
   );
 }

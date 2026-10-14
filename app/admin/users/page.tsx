@@ -26,51 +26,53 @@ export default async function UsersPage() {
   }
 
   return (
-    <main>
+    <div>
       <PageHeader title="Users & logins" actionHref="/admin/users/new" actionLabel="New login" />
       <ErrorAlert error={loadError} />
       {users.length === 0 ? (
         <EmptyState message="No users yet." />
       ) : (
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b text-left text-gray-600">
-              <th className="py-2">Name</th>
-              <th>Email</th>
-              <th>Roles</th>
-              <th>Status</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {users.map((u) => (
-              <tr key={u.id} className="border-b">
-                <td className="py-2">{u.fullName}</td>
-                <td>{u.email}</td>
-                <td>{u.userRoles.map((r) => r.role).join(", ") || "—"}</td>
-                <td>
-                  <StatusBadge active={u.isActive} />
-                </td>
-                <td>
-                  {u.id !== ctx.profile.id &&
-                    (u.isActive ? (
-                      <ConfirmButton
-                        label="Disable"
-                        confirmMessage={`Disable login for ${u.fullName}?`}
-                        run={setUserActiveAction.bind(null, u.id, false)}
-                      />
-                    ) : (
-                      <ConfirmButton
-                        label="Enable"
-                        confirmMessage={`Enable login for ${u.fullName}?`}
-                        run={setUserActiveAction.bind(null, u.id, true)}
-                      />
-                    ))}
-                </td>
+        <div className="ui-table-wrap">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b text-left text-gray-600">
+                <th className="py-2">Name</th>
+                <th>Email</th>
+                <th>Roles</th>
+                <th>Status</th>
+                <th>Actions</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {users.map((u) => (
+                <tr key={u.id} className="border-b">
+                  <td className="py-2">{u.fullName}</td>
+                  <td>{u.email}</td>
+                  <td>{u.userRoles.map((r) => r.role).join(", ") || "—"}</td>
+                  <td>
+                    <StatusBadge active={u.isActive} />
+                  </td>
+                  <td>
+                    {u.id !== ctx.profile.id &&
+                      (u.isActive ? (
+                        <ConfirmButton
+                          label="Disable"
+                          confirmMessage={`Disable login for ${u.fullName}?`}
+                          run={setUserActiveAction.bind(null, u.id, false)}
+                        />
+                      ) : (
+                        <ConfirmButton
+                          label="Enable"
+                          confirmMessage={`Enable login for ${u.fullName}?`}
+                          run={setUserActiveAction.bind(null, u.id, true)}
+                        />
+                      ))}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
       <p className="mt-4 text-sm text-gray-600">
         New logins link to an existing teacher/parent profile in this school.{" "}
@@ -78,6 +80,6 @@ export default async function UsersPage() {
           Create login
         </Link>
       </p>
-    </main>
+    </div>
   );
 }

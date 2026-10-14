@@ -49,41 +49,43 @@ export function ReportCardView({ data }: { data: ReportCardPayload }) {
       </dl>
 
       <h4 className="mt-5 mb-2 text-sm font-semibold">Subject-wise marks</h4>
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="border-b text-left text-gray-600">
-            <th className="py-1">Subject</th>
-            <th>Marks</th>
-            <th>Max</th>
-            <th>Grade</th>
-          </tr>
-        </thead>
-        <tbody>
-          {data.subjects.map((s) => (
-            <tr key={s.subjectId} className="border-b">
-              <td className="py-1">{s.subjectName}</td>
-              <td>{s.isAbsent ? "AB" : (s.marksObtained ?? "—")}</td>
-              <td>{s.maxMarks}</td>
-              <td>{s.grade ?? "—"}</td>
+      <div className="ui-table-wrap">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b text-left text-gray-600">
+              <th className="py-1">Subject</th>
+              <th>Marks</th>
+              <th>Max</th>
+              <th>Grade</th>
             </tr>
-          ))}
-          <tr className="font-semibold">
-            <td className="py-1">Total</td>
-            <td>{rc.totalObtained}</td>
-            <td>{rc.maxTotal}</td>
-            <td>{rc.overallGrade ?? "—"}</td>
-          </tr>
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {data.subjects.map((s) => (
+              <tr key={s.subjectId} className="border-b">
+                <td className="py-1">{s.subjectName}</td>
+                <td>{s.isAbsent ? "AB" : (s.marksObtained ?? "—")}</td>
+                <td>{s.maxMarks}</td>
+                <td>{s.grade ?? "—"}</td>
+              </tr>
+            ))}
+            <tr className="font-semibold">
+              <td className="py-1">Total</td>
+              <td>{rc.totalObtained}</td>
+              <td>{rc.maxTotal}</td>
+              <td>{rc.overallGrade ?? "—"}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
 
       <div className="mt-4 flex flex-wrap gap-4 text-sm">
-        <div className="rounded border p-3">
+        <div className="ui-panel">
           <p className="text-xs text-gray-600">Percentage</p>
           <p className="text-xl font-bold">
             {rc.percentage === null ? "—" : `${rc.percentage}%`}
           </p>
         </div>
-        <div className="rounded border p-3">
+        <div className="ui-panel">
           <p className="text-xs text-gray-600">Attendance</p>
           <p className="text-xl font-bold">
             {rc.attendancePercentage === null ? "—" : `${rc.attendancePercentage}%`}

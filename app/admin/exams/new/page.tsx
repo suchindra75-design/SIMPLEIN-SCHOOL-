@@ -16,8 +16,8 @@ export default async function NewExamPage() {
   ]);
 
   return (
-    <main>
-      <h2 className="mb-4 text-xl font-semibold">New exam</h2>
+    <div>
+      <h1 className="page-title mb-4">New exam</h1>
       <SmartForm
         action={createExamAction}
         redirectTo="/admin/exams"
@@ -45,6 +45,6 @@ export default async function NewExamPage() {
       <p className="mt-4 text-sm text-gray-600">
         Subjects (marks + schedule) are added on the exam detail page after creation.
       </p>
-    </main>
+    </div>
   );
 }

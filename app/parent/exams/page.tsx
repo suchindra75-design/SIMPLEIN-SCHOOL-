@@ -39,8 +39,8 @@ export default async function ParentExamsPage({
   }
 
   return (
-    <main>
-      <h2 className="text-xl font-semibold">Exam schedule</h2>
+    <div>
+      <h1 className="page-title">Exam schedule</h1>
       <p className="mt-1 text-sm text-gray-600">
         {ctx.profile.fullName} · {ctx.school.name}
       </p>
@@ -57,8 +57,8 @@ export default async function ParentExamsPage({
         <>
           <form method="get" className="mt-4">
             <label className="text-sm">
-              <span className="mb-1 block text-gray-600">Child</span>
-              <select name="studentId" defaultValue={selectedId} className="rounded border px-2 py-1.5">
+              <span className="ui-label">Child</span>
+              <select name="studentId" defaultValue={selectedId} className="ui-input">
                 {children.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.displayName}
@@ -68,13 +68,13 @@ export default async function ParentExamsPage({
                 ))}
               </select>
             </label>
-            <button type="submit" className="ml-3 rounded border px-3 py-1.5 text-sm">
+            <button type="submit" className="ui-btn ui-btn-primary ml-3">
               View
             </button>
           </form>
 
           {loadError !== undefined && (
-            <p role="alert" className="mt-4 rounded bg-red-50 p-3 text-sm text-red-700">
+            <p role="alert" className="ui-alert ui-alert-error mt-4">
               {loadError}
             </p>
           )}
@@ -103,32 +103,34 @@ export default async function ParentExamsPage({
                   {(e.subjects ?? []).length === 0 ? (
                     <p className="mt-2 text-gray-500">No subjects scheduled.</p>
                   ) : (
-                    <table className="mt-2 w-full">
-                      <thead>
-                        <tr className="border-b text-left text-gray-600">
-                          <th className="py-1">Subject</th>
-                          <th>Date</th>
-                          <th>Time</th>
-                          <th>Max</th>
-                          <th>Passing</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {(e.subjects ?? []).map((s) => (
-                          <tr key={s.id} className="border-b">
-                            <td className="py-1">{s.subjects?.name ?? "—"}</td>
-                            <td>{s.examDate ?? "—"}</td>
-                            <td>
-                              {s.startTime === null
-                                ? "—"
-                                : `${s.startTime}${s.endTime ? `–${s.endTime}` : ""}`}
-                            </td>
-                            <td>{s.maxMarks}</td>
-                            <td>{s.passingMarks}</td>
+                    <div className="ui-table-wrap mt-2">
+                      <table className="w-full">
+                        <thead>
+                          <tr className="border-b text-left text-gray-600">
+                            <th className="py-1">Subject</th>
+                            <th>Date</th>
+                            <th>Time</th>
+                            <th>Max</th>
+                            <th>Passing</th>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                        </thead>
+                        <tbody>
+                          {(e.subjects ?? []).map((s) => (
+                            <tr key={s.id} className="border-b">
+                              <td className="py-1">{s.subjects?.name ?? "—"}</td>
+                              <td>{s.examDate ?? "—"}</td>
+                              <td>
+                                {s.startTime === null
+                                  ? "—"
+                                  : `${s.startTime}${s.endTime ? `–${s.endTime}` : ""}`}
+                              </td>
+                              <td>{s.maxMarks}</td>
+                              <td>{s.passingMarks}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   )}
                 </li>
               ))}
@@ -141,6 +143,6 @@ export default async function ParentExamsPage({
           Back to dashboard
         </Link>
       </p>
-    </main>
+    </div>
   );
 }

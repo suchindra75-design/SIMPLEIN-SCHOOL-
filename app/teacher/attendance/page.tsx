@@ -12,8 +12,8 @@ export default async function TeacherAttendancePage() {
   const today = todayFor(ctx);
 
   return (
-    <main>
-      <h2 className="text-xl font-semibold">Attendance</h2>
+    <div>
+      <h1 className="page-title">Attendance</h1>
       <p className="mt-1 text-sm text-gray-600">
         {ctx.profile.fullName} · {ctx.school.name} · Today: {today}
       </p>
@@ -27,6 +27,6 @@ export default async function TeacherAttendancePage() {
           <AttendanceMarker sections={sections} today={today} />
         </div>
       )}
-    </main>
+    </div>
   );
 }

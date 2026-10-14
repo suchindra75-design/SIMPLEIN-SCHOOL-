@@ -32,8 +32,8 @@ export default async function StudentDetailPage({
   const typed = classes;
 
   return (
-    <main>
-      <h2 className="mb-4 text-xl font-semibold">Edit student</h2>
+    <div>
+      <h1 className="page-title mb-4">Edit student</h1>
       <SmartForm
         action={updateStudentAction.bind(null, id)}
         redirectTo="/admin/students"
@@ -111,6 +111,6 @@ export default async function StudentDetailPage({
           ))}
         </ul>
       )}
-    </main>
+    </div>
   );
 }

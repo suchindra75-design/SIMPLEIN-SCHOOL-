@@ -12,14 +12,14 @@ export default async function TeacherTimetablePage() {
   const { slots } = await listMyTimetable(db, ctx);
 
   return (
-    <main>
-      <h2 className="text-xl font-semibold">My timetable</h2>
+    <div>
+      <h1 className="page-title">My timetable</h1>
       <p className="mt-1 text-sm text-gray-600">
         {ctx.profile.fullName} · {ctx.school.name}
       </p>
       <div className="mt-4">
         <WeeklyTimetable slots={slots} />
       </div>
-    </main>
+    </div>
   );
 }

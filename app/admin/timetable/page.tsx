@@ -50,16 +50,16 @@ export default async function AdminTimetablePage({
   ]);
 
   return (
-    <main>
-      <h2 className="text-xl font-semibold">Timetable</h2>
+    <div>
+      <h1 className="page-title">Timetable</h1>
       <p className="mt-1 text-sm text-gray-600">
         {ctx.school.name} · Weekly view · conflicts prevented server-side
       </p>
 
       <form method="get" className="mt-4 flex flex-wrap items-end gap-3">
         <label className="text-sm">
-          <span className="mb-1 block text-gray-600">Class</span>
-          <select name="classId" defaultValue={sp["classId"] ?? ""} className="rounded border px-2 py-1.5">
+          <span className="ui-label">Class</span>
+          <select name="classId" defaultValue={sp["classId"] ?? ""} className="ui-input">
             <option value="">Select…</option>
             {classes.map((c) => (
               <option key={c.id} value={c.id}>
@@ -69,8 +69,8 @@ export default async function AdminTimetablePage({
           </select>
         </label>
         <label className="text-sm">
-          <span className="mb-1 block text-gray-600">Section</span>
-          <select name="sectionId" defaultValue={sectionId} className="rounded border px-2 py-1.5">
+          <span className="ui-label">Section</span>
+          <select name="sectionId" defaultValue={sectionId} className="ui-input">
             <option value="">Select…</option>
             {(selectedClass?.sections ?? []).map((s) => (
               <option key={s.id} value={s.id}>
@@ -79,13 +79,13 @@ export default async function AdminTimetablePage({
             ))}
           </select>
         </label>
-        <button type="submit" className="rounded border px-3 py-1.5 text-sm">
+        <button type="submit" className="ui-btn ui-btn-secondary">
           View
         </button>
       </form>
 
       {loadError !== undefined && (
-        <p role="alert" className="mt-4 rounded bg-red-50 p-3 text-sm text-red-700">
+        <p role="alert" className="ui-alert ui-alert-error mt-4">
           {loadError}
         </p>
       )}
@@ -106,7 +106,7 @@ export default async function AdminTimetablePage({
           ) : (
             <ul className="space-y-2 text-sm">
               {slots.map((s) => (
-                <li key={s.id} className="rounded border p-3">
+                <li key={s.id} className="ui-panel">
                   <div className="flex flex-wrap items-center gap-3">
                     <span className="font-medium">
                       {DAYS[s.dayOfWeek - 1] ?? "Day"} · Period {s.periodIndex + 1}
@@ -183,6 +183,6 @@ export default async function AdminTimetablePage({
           />
         </>
       )}
-    </main>
+    </div>
   );
 }

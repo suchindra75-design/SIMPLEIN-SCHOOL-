@@ -7,8 +7,8 @@ export const dynamic = "force-dynamic";
 export default async function NewTeacherPage() {
   await requireRole("SCHOOL_ADMIN");
   return (
-    <main>
-      <h2 className="mb-4 text-xl font-semibold">Add teacher</h2>
+    <div>
+      <h1 className="page-title mb-4">Add teacher</h1>
       <SmartForm
         action={createTeacherAction}
         redirectTo="/admin/teachers"
@@ -26,6 +26,6 @@ export default async function NewTeacherPage() {
       <p className="mt-4 text-sm text-gray-600">
         To give this teacher a login, create a user under Users and link this profile.
       </p>
-    </main>
+    </div>
   );
 }

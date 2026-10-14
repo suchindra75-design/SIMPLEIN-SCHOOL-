@@ -1,51 +1,114 @@
 import Link from "next/link";
 import React from "react";
-import { Plus, Search, RotateCcw } from "lucide-react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  CircleAlert,
+  Inbox,
+  Plus,
+  RotateCcw,
+  Search,
+} from "lucide-react";
 
-/** Shared functional UI primitives for admin management pages with institutional design. */
+/** Shared UI primitives used across every portal (admin, teacher, parent, student). */
 
 export function PageHeader({
   title,
+  description,
   actionHref,
   actionLabel,
+  children,
 }: {
   title: string;
+  description?: React.ReactNode;
   actionHref?: string;
   actionLabel?: string;
+  /** Extra contextual actions rendered beside the primary action. */
+  children?: React.ReactNode;
 }) {
   return (
-    <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-[#DCDCE0] pb-4">
-      <div>
-        <h2 className="text-xl font-bold tracking-tight text-[#191919] font-serif">
+    <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+      <div className="min-w-0">
+        <h1 className="page-title">{title}</h1>
+        {description !== undefined ? <p className="page-description">{description}</p> : null}
+      </div>
+      {actionHref !== undefined || children !== undefined ? (
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
+          {children}
+          {actionHref !== undefined ? (
+            <Link href={actionHref} className="ui-btn ui-btn-primary">
+              <Plus aria-hidden="true" className="size-4" />
+              <span>{actionLabel ?? "New record"}</span>
+            </Link>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/** Titled card used for dashboard sections, with an optional "view all" link. */
+export function SectionCard({
+  title,
+  icon: Icon,
+  href,
+  linkLabel = "View all",
+  children,
+  className = "",
+}: {
+  title: string;
+  icon?: React.ComponentType<{ className?: string }>;
+  href?: string;
+  linkLabel?: string;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <section className={`ui-card flex flex-col ${className}`}>
+      <div className="flex items-center justify-between gap-3 border-b border-border px-5 py-3.5">
+        <h2 className="flex items-center gap-2 section-title">
+          {Icon !== undefined ? (
+            <Icon aria-hidden="true" className="size-4 text-muted-foreground" />
+          ) : null}
           {title}
         </h2>
+        {href !== undefined ? (
+          <Link
+            href={href}
+            className="inline-flex items-center gap-1 rounded text-sm font-medium text-muted-foreground transition-colors duration-150 hover:text-foreground"
+          >
+            {linkLabel}
+            <ChevronRight aria-hidden="true" className="size-4" />
+          </Link>
+        ) : null}
       </div>
-      {actionHref !== undefined && (
-        <Link
-          href={actionHref}
-          className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-md bg-[#191919] hover:bg-[#2D2D30] text-white text-xs font-semibold btn-interactive shadow-xs"
-        >
-          <Plus className="w-3.5 h-3.5" />
-          <span>{actionLabel ?? "New Record"}</span>
-        </Link>
-      )}
-    </div>
+      <div className="flex-1 px-5 py-4">{children}</div>
+    </section>
   );
 }
 
 export function ErrorAlert({ error }: { error?: string }) {
   if (error === undefined) return null;
   return (
-    <p role="alert" className="mb-4 rounded-md border border-red-300 bg-red-50/80 p-3 text-xs text-red-800 font-mono">
-      {error}
-    </p>
+    <div role="alert" className="ui-alert ui-alert-error mb-4 animate-fade-in">
+      <CircleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+      <p>{error}</p>
+    </div>
   );
 }
 
-export function EmptyState({ message }: { message: string }) {
+export function EmptyState({ message, title }: { message: string; title?: string }) {
   return (
-    <div className="rounded-lg border border-dashed border-[#DCDCE0] bg-[#F8F8F9] p-8 text-center text-xs text-[#6E6E73] font-mono">
-      {message}
+    <div className="flex flex-col items-center justify-center rounded-[var(--radius-card)] border border-dashed border-border-strong bg-surface px-6 py-10 text-center">
+      <span className="flex size-10 items-center justify-center rounded-xl bg-muted text-muted-foreground">
+        <Inbox aria-hidden="true" className="size-5" />
+      </span>
+      {title !== undefined ? (
+        <p className="mt-3 text-sm font-semibold text-foreground">{title}</p>
+      ) : null}
+      <p className={`max-w-md text-sm text-muted-foreground ${title !== undefined ? "mt-1" : "mt-3"}`}>
+        {message}
+      </p>
     </div>
   );
 }
@@ -58,16 +121,16 @@ export function SearchBar({
   values: Record<string, string | undefined>;
 }) {
   return (
-    <form method="get" className="mb-5 flex flex-wrap items-end gap-3 p-4 bg-[#F8F8F9] rounded-lg border border-[#DCDCE0] shadow-2xs card-interactive">
+    <form
+      method="get"
+      role="search"
+      className="ui-card mb-5 flex flex-wrap items-end gap-3 p-4"
+    >
       {fields.map((f) =>
         f.options !== undefined ? (
-          <label key={f.name} className="text-xs">
-            <span className="mb-1 block font-semibold text-[#191919]">{f.label}</span>
-            <select
-              name={f.name}
-              defaultValue={values[f.name] ?? ""}
-              className="rounded-md border border-[#DCDCE0] bg-[#F1F1F2] px-3 py-1.5 text-xs text-[#191919] focus:outline-hidden focus:border-[#191919] focus:bg-[#F8F8F9] transition-colors duration-150"
-            >
+          <label key={f.name} className="min-w-[10rem]">
+            <span className="ui-label">{f.label}</span>
+            <select name={f.name} defaultValue={values[f.name] ?? ""} className="ui-input">
               <option value="">All</option>
               {f.options.map((o) => (
                 <option key={o.value} value={o.value}>
@@ -77,31 +140,31 @@ export function SearchBar({
             </select>
           </label>
         ) : (
-          <label key={f.name} className="text-xs flex-1 min-w-[200px]">
-            <span className="mb-1 block font-semibold text-[#191919]">{f.label}</span>
-            <input
-              name={f.name}
-              type={f.type ?? "text"}
-              defaultValue={values[f.name] ?? ""}
-              placeholder={`Filter by ${f.label.toLowerCase()}...`}
-              className="w-full rounded-md border border-[#DCDCE0] bg-[#F1F1F2] px-3 py-1.5 text-xs text-[#191919] focus:outline-hidden focus:border-[#191919] focus:bg-[#F8F8F9] transition-colors duration-150"
-            />
+          <label key={f.name} className="min-w-[200px] flex-1">
+            <span className="ui-label">{f.label}</span>
+            <span className="relative block">
+              <Search
+                aria-hidden="true"
+                className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+              />
+              <input
+                name={f.name}
+                type={f.type ?? "text"}
+                defaultValue={values[f.name] ?? ""}
+                placeholder={`Search by ${f.label.toLowerCase()}…`}
+                className="ui-input pl-8"
+              />
+            </span>
           </label>
         ),
       )}
       <div className="flex items-center gap-2">
-        <button
-          type="submit"
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-[#191919] hover:bg-[#2D2D30] text-white text-xs font-semibold btn-interactive shadow-2xs cursor-pointer"
-        >
-          <Search className="w-3.5 h-3.5" />
-          <span>Filter</span>
+        <button type="submit" className="ui-btn ui-btn-primary">
+          <Search aria-hidden="true" className="size-4" />
+          <span>Apply</span>
         </button>
-        <Link
-          href="?"
-          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-md border border-[#DCDCE0] bg-[#F8F8F9] hover:bg-[#E7E7E9] text-[#191919] text-xs font-medium btn-interactive"
-        >
-          <RotateCcw className="w-3 h-3" />
+        <Link href="?" className="ui-btn ui-btn-ghost">
+          <RotateCcw aria-hidden="true" className="size-4" />
           <span>Reset</span>
         </Link>
       </div>
@@ -131,45 +194,48 @@ export function Pagination({
     return `?${sp.toString()}`;
   };
   return (
-    <div className="mt-4 flex items-center justify-between text-xs text-[#6E6E73] font-mono">
+    <nav
+      aria-label="Pagination"
+      className="mt-4 flex flex-wrap items-center justify-between gap-3 text-sm text-muted-foreground"
+    >
       <span>
-        Page <span className="font-bold text-[#191919]">{page}</span> of {pages} ({total} total records)
+        Page <span className="font-medium text-foreground">{page}</span> of {pages}
+        <span className="text-gray-400"> · </span>
+        {total} records
       </span>
       <div className="flex items-center gap-2">
-        {page > 1 && (
-          <Link
-            href={href(page - 1)}
-            className="px-2.5 py-1 rounded-md border border-[#DCDCE0] bg-[#F8F8F9] hover:bg-[#E7E7E9] text-[#191919] font-medium btn-interactive"
-          >
+        {page > 1 ? (
+          <Link href={href(page - 1)} className="ui-btn ui-btn-secondary ui-btn-sm">
+            <ChevronLeft aria-hidden="true" className="size-4" />
             Previous
           </Link>
+        ) : (
+          <span aria-disabled="true" className="ui-btn ui-btn-secondary ui-btn-sm">
+            <ChevronLeft aria-hidden="true" className="size-4" />
+            Previous
+          </span>
         )}
-        {page < pages && (
-          <Link
-            href={href(page + 1)}
-            className="px-2.5 py-1 rounded-md border border-[#DCDCE0] bg-[#F8F8F9] hover:bg-[#E7E7E9] text-[#191919] font-medium btn-interactive"
-          >
+        {page < pages ? (
+          <Link href={href(page + 1)} className="ui-btn ui-btn-secondary ui-btn-sm">
             Next
+            <ChevronRight aria-hidden="true" className="size-4" />
           </Link>
+        ) : (
+          <span aria-disabled="true" className="ui-btn ui-btn-secondary ui-btn-sm">
+            Next
+            <ChevronRight aria-hidden="true" className="size-4" />
+          </span>
         )}
       </div>
-    </div>
+    </nav>
   );
 }
 
 export function StatusBadge({ active }: { active: boolean }) {
   return (
-    <span
-      className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-mono font-bold tracking-wider uppercase border ${
-        active
-          ? "bg-zinc-950 text-white border-zinc-950"
-          : "bg-zinc-100 text-zinc-500 border-zinc-300"
-      }`}
-    >
-      <span
-        className={`w-1.5 h-1.5 rounded-full ${active ? "bg-emerald-400" : "bg-zinc-400"}`}
-      />
-      <span>{active ? "Active" : "Inactive"}</span>
+    <span className={`ui-badge ${active ? "ui-badge-success" : "ui-badge-neutral"}`}>
+      <span aria-hidden="true" className="ui-badge-dot" />
+      {active ? "Active" : "Inactive"}
     </span>
   );
 }

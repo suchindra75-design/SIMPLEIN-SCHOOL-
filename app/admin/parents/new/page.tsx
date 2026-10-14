@@ -7,8 +7,8 @@ export const dynamic = "force-dynamic";
 export default async function NewParentPage() {
   await requireRole("SCHOOL_ADMIN");
   return (
-    <main>
-      <h2 className="mb-4 text-xl font-semibold">Add parent</h2>
+    <div>
+      <h1 className="page-title mb-4">Add parent</h1>
       <SmartForm
         action={createParentAction}
         redirectTo="/admin/parents"
@@ -24,6 +24,6 @@ export default async function NewParentPage() {
         Link children on the parent detail page. To give this parent a login,
         create a user under Users and link this profile.
       </p>
-    </main>
+    </div>
   );
 }

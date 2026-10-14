@@ -31,8 +31,8 @@ export default async function AdminMarksPage({
       : await listMarkableSubjects(db, ctx, examId);
 
   return (
-    <main>
-      <h2 className="text-xl font-semibold">Marks & results</h2>
+    <div>
+      <h1 className="page-title">Marks & results</h1>
       <p className="mt-1 text-sm text-gray-600">
         {ctx.school.name} · Review, lock/unlock, publish/unpublish
       </p>
@@ -45,8 +45,8 @@ export default async function AdminMarksPage({
         <>
           <form method="get" className="mt-4">
             <label className="text-sm">
-              <span className="mb-1 block text-gray-600">Exam</span>
-              <select name="examId" defaultValue={examId} className="rounded border px-2 py-1.5">
+              <span className="ui-label">Exam</span>
+              <select name="examId" defaultValue={examId} className="ui-input">
                 {exams.map((e) => (
                   <option key={e.id} value={e.id}>
                     {e.name}
@@ -55,7 +55,7 @@ export default async function AdminMarksPage({
                 ))}
               </select>
             </label>
-            <button type="submit" className="ml-3 rounded border px-3 py-1.5 text-sm">
+            <button type="submit" className="ui-btn ui-btn-primary ml-3">
               View
             </button>
           </form>
@@ -123,6 +123,6 @@ export default async function AdminMarksPage({
           </p>
         </>
       )}
-    </main>
+    </div>
   );
 }

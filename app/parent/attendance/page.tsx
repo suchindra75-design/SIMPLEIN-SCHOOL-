@@ -56,8 +56,8 @@ export default async function ParentAttendancePage({
   }
 
   return (
-    <main>
-      <h2 className="text-xl font-semibold">Attendance</h2>
+    <div>
+      <h1 className="page-title">Attendance</h1>
       <p className="mt-1 text-sm text-gray-600">
         {ctx.profile.fullName} · {ctx.school.name}
       </p>
@@ -74,8 +74,8 @@ export default async function ParentAttendancePage({
         <>
           <form method="get" className="mt-4 flex flex-wrap items-end gap-3">
             <label className="text-sm">
-              <span className="mb-1 block text-gray-600">Child</span>
-              <select name="studentId" defaultValue={selectedId} className="rounded border px-2 py-1.5">
+              <span className="ui-label">Child</span>
+              <select name="studentId" defaultValue={selectedId} className="ui-input">
                 {children.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.displayName}
@@ -86,20 +86,20 @@ export default async function ParentAttendancePage({
               </select>
             </label>
             <label className="text-sm">
-              <span className="mb-1 block text-gray-600">From</span>
-              <input type="date" name="from" defaultValue={from ?? ""} className="rounded border px-2 py-1.5" />
+              <span className="ui-label">From</span>
+              <input type="date" name="from" defaultValue={from ?? ""} className="ui-input" />
             </label>
             <label className="text-sm">
-              <span className="mb-1 block text-gray-600">To</span>
-              <input type="date" name="to" defaultValue={to ?? ""} className="rounded border px-2 py-1.5" />
+              <span className="ui-label">To</span>
+              <input type="date" name="to" defaultValue={to ?? ""} className="ui-input" />
             </label>
-            <button type="submit" className="rounded border px-3 py-1.5 text-sm">
+            <button type="submit" className="ui-btn ui-btn-secondary">
               Apply
             </button>
           </form>
 
           {loadError !== undefined && (
-            <p role="alert" className="mt-4 rounded bg-red-50 p-3 text-sm text-red-700">
+            <p role="alert" className="ui-alert ui-alert-error mt-4">
               {loadError}
             </p>
           )}
@@ -111,19 +111,19 @@ export default async function ParentAttendancePage({
                 {selected.sections?.name ? ` ${selected.sections.name}` : ""}
               </p>
               <div className="mt-2 flex flex-wrap gap-4 text-sm">
-                <div className="rounded border p-3">
+                <div className="ui-panel">
                   <p className="text-xs text-gray-600">Present</p>
                   <p className="text-xl font-bold">{summary.present}</p>
                 </div>
-                <div className="rounded border p-3">
+                <div className="ui-panel">
                   <p className="text-xs text-gray-600">Absent</p>
                   <p className="text-xl font-bold">{summary.absent}</p>
                 </div>
-                <div className="rounded border p-3">
+                <div className="ui-panel">
                   <p className="text-xs text-gray-600">Leave</p>
                   <p className="text-xl font-bold">{summary.leave}</p>
                 </div>
-                <div className="rounded border p-3">
+                <div className="ui-panel">
                   <p className="text-xs text-gray-600">Attendance</p>
                   <p className="text-xl font-bold">
                     {summary.percentage === null ? "—" : `${summary.percentage}%`}
@@ -139,26 +139,28 @@ export default async function ParentAttendancePage({
               {history.length === 0 ? (
                 <EmptyState message="No attendance recorded yet for this range." />
               ) : (
-                <table className="w-full max-w-md text-sm">
-                  <thead>
-                    <tr className="border-b text-left text-gray-600">
-                      <th className="py-2">Date</th>
-                      <th>Status</th>
-                      {history.some((r) => r.remark !== null) && <th>Remark</th>}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {history.map((r) => (
-                      <tr key={r.sessionId + r.date} className="border-b">
-                        <td className="py-2">{r.date}</td>
-                        <td>{r.status}</td>
-                        {history.some((x) => x.remark !== null) && (
-                          <td>{r.remark ?? "—"}</td>
-                        )}
+                <div className="ui-table-wrap max-w-md">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b text-left text-gray-600">
+                        <th className="py-2">Date</th>
+                        <th>Status</th>
+                        {history.some((r) => r.remark !== null) && <th>Remark</th>}
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {history.map((r) => (
+                        <tr key={r.sessionId + r.date} className="border-b">
+                          <td className="py-2">{r.date}</td>
+                          <td>{r.status}</td>
+                          {history.some((x) => x.remark !== null) && (
+                            <td>{r.remark ?? "—"}</td>
+                          )}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               )}
               <p className="mt-2 text-xs text-gray-500">
                 Showing {history.length} of {history.length} days.{" "}
@@ -170,6 +172,6 @@ export default async function ParentAttendancePage({
           )}
         </>
       )}
-    </main>
+    </div>
   );
 }

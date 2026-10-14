@@ -87,20 +87,20 @@ export function ImportClient() {
             type="file"
             accept=".csv,.xlsx,.xls"
             onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-            className="rounded border px-2 py-1.5"
+            className="ui-input"
           />
         </label>
         <button
           type="button"
           disabled={file === null || busy}
           onClick={() => void upload()}
-          className="rounded bg-blue-600 px-4 py-2 text-white disabled:opacity-50"
+          className="ui-btn ui-btn-primary"
         >
           {busy ? "Working…" : "Validate & preview"}
         </button>
       </div>
       {error !== null && (
-        <p role="alert" className="mt-4 rounded bg-red-50 p-3 text-sm text-red-700">
+        <p role="alert" className="ui-alert ui-alert-error mt-4">
           {error}
         </p>
       )}
@@ -115,31 +115,33 @@ export function ImportClient() {
             <strong>{preview.errorCount} errors</strong>.
           </p>
           {preview.errors.length > 0 && (
-            <table className="mt-3 w-full text-sm">
-              <thead>
-                <tr className="border-b text-left text-gray-600">
-                  <th className="py-1">Row</th>
-                  <th>Field</th>
-                  <th>Problem</th>
-                </tr>
-              </thead>
-              <tbody>
-                {preview.errors.slice(0, 50).map((e, i) => (
-                  <tr key={i} className="border-b">
-                    <td className="py-1">{e.row}</td>
-                    <td>{e.field}</td>
-                    <td>{e.message}</td>
+            <div className="ui-table-wrap mt-3">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b text-left text-gray-600">
+                    <th className="py-1">Row</th>
+                    <th>Field</th>
+                    <th>Problem</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {preview.errors.slice(0, 50).map((e, i) => (
+                    <tr key={i} className="border-b">
+                      <td className="py-1">{e.row}</td>
+                      <td>{e.field}</td>
+                      <td>{e.message}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
           {preview.validCount > 0 && (
             <button
               type="button"
               disabled={busy}
               onClick={() => void confirm()}
-              className="mt-4 rounded bg-green-600 px-4 py-2 text-white disabled:opacity-50"
+              className="ui-btn ui-btn-primary mt-4"
             >
               Confirm import of {preview.validCount} students
             </button>

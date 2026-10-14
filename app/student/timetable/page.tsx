@@ -13,8 +13,8 @@ export default async function StudentTimetablePage() {
   const { slots } = await listMyTimetable(db, ctx);
 
   return (
-    <main>
-      <h2 className="text-xl font-semibold">My timetable</h2>
+    <div>
+      <h1 className="page-title">My timetable</h1>
       <p className="mt-1 text-sm text-gray-600">{ctx.school.name}</p>
       <div className="mt-4">
         {slots.length === 0 ? (
@@ -23,6 +23,6 @@ export default async function StudentTimetablePage() {
           <WeeklyTimetable slots={slots} />
         )}
       </div>
-    </main>
+    </div>
   );
 }

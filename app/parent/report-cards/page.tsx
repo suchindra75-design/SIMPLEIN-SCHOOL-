@@ -65,8 +65,8 @@ export default async function ParentReportCardsPage({
   }
 
   return (
-    <main>
-      <h2 className="text-xl font-semibold">Report cards</h2>
+    <div>
+      <h1 className="page-title">Report cards</h1>
       <p className="mt-1 text-sm text-gray-600">
         {ctx.profile.fullName} · {ctx.school.name}
       </p>
@@ -83,8 +83,8 @@ export default async function ParentReportCardsPage({
         <>
           <form method="get" className="mt-4 flex flex-wrap items-end gap-3">
             <label className="text-sm">
-              <span className="mb-1 block text-gray-600">Child</span>
-              <select name="studentId" defaultValue={selectedId} className="rounded border px-2 py-1.5">
+              <span className="ui-label">Child</span>
+              <select name="studentId" defaultValue={selectedId} className="ui-input">
                 {children.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.displayName}
@@ -95,8 +95,8 @@ export default async function ParentReportCardsPage({
               </select>
             </label>
             <label className="text-sm">
-              <span className="mb-1 block text-gray-600">Exam</span>
-              <select name="examId" defaultValue={examId} className="rounded border px-2 py-1.5">
+              <span className="ui-label">Exam</span>
+              <select name="examId" defaultValue={examId} className="ui-input">
                 <option value="">Select…</option>
                 {exams.map((e) => (
                   <option key={e.id} value={e.id}>
@@ -105,7 +105,7 @@ export default async function ParentReportCardsPage({
                 ))}
               </select>
             </label>
-            <button type="submit" className="rounded border px-3 py-1.5 text-sm">
+            <button type="submit" className="ui-btn ui-btn-secondary">
               View
             </button>
           </form>
@@ -128,7 +128,7 @@ export default async function ParentReportCardsPage({
                     href={pdfUrl}
                     target="_blank"
                     rel="noreferrer"
-                    className="rounded bg-blue-600 px-3 py-1.5 text-sm text-white"
+                    className="ui-btn ui-btn-primary ui-btn-sm"
                   >
                     Download PDF
                   </a>
@@ -144,6 +144,6 @@ export default async function ParentReportCardsPage({
           Back to dashboard
         </Link>
       </p>
-    </main>
+    </div>
   );
 }

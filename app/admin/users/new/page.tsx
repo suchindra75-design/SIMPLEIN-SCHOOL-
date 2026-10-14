@@ -18,8 +18,8 @@ export default async function NewUserPage() {
   ]);
 
   return (
-    <main>
-      <h2 className="mb-4 text-xl font-semibold">New login</h2>
+    <div>
+      <h1 className="page-title mb-4">New login</h1>
       <p className="mb-4 text-sm text-gray-600">
         Creates a Supabase Auth identity plus school profile and role. Only
         TEACHER, PARENT, or STUDENT can be granted here — SCHOOL_ADMIN is
@@ -74,6 +74,6 @@ export default async function NewUserPage() {
           },
         ]}
       />
-    </main>
+    </div>
   );
 }

@@ -141,71 +141,73 @@ export function MarksEntry({ examSubjectId }: { examSubjectId: string }) {
       {success !== null && (
         <p className="mb-2 rounded bg-green-50 p-3 text-sm text-green-800">{success}</p>
       )}
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="border-b text-left text-gray-600">
-            <th className="py-2">Student</th>
-            <th>Marks (0–{max})</th>
-            <th>Absent</th>
-            <th>Grade</th>
-          </tr>
-        </thead>
-        <tbody>
-          {grid.roster.map((s) => {
-            const existing = grid.marks.find((m) => m.studentId === s.id);
-            const v = values[s.id] ?? { mark: "", absent: false };
-            return (
-              <tr key={s.id} className="border-b">
-                <td className="py-2">
-                  {s.displayName}
-                  <span className="text-gray-500">
-                    {s.rollNumber ? ` · Roll ${s.rollNumber}` : ""}
-                  </span>
-                </td>
-                <td>
-                  <input
-                    type="number"
-                    min={0}
-                    max={max}
-                    step="0.5"
-                    value={v.absent ? "" : v.mark}
-                    disabled={v.absent || locked}
-                    onChange={(e) =>
-                      setValues((prev) => ({
-                        ...prev,
-                        [s.id]: { mark: e.target.value, absent: false },
-                      }))
-                    }
-                    className="w-24 rounded border px-2 py-1 disabled:opacity-50"
-                    aria-label={`Marks for ${s.displayName}`}
-                  />
-                </td>
-                <td>
-                  <input
-                    type="checkbox"
-                    checked={v.absent}
-                    disabled={locked}
-                    onChange={(e) =>
-                      setValues((prev) => ({
-                        ...prev,
-                        [s.id]: { mark: "", absent: e.target.checked },
-                      }))
-                    }
-                    className="h-4 w-4 disabled:opacity-50"
-                    aria-label={`Absent for ${s.displayName}`}
-                  />
-                </td>
-                <td>{existing?.grade ?? "—"}</td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+      <div className="ui-table-wrap">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b text-left text-gray-600">
+              <th className="py-2">Student</th>
+              <th>Marks (0–{max})</th>
+              <th>Absent</th>
+              <th>Grade</th>
+            </tr>
+          </thead>
+          <tbody>
+            {grid.roster.map((s) => {
+              const existing = grid.marks.find((m) => m.studentId === s.id);
+              const v = values[s.id] ?? { mark: "", absent: false };
+              return (
+                <tr key={s.id} className="border-b">
+                  <td className="py-2">
+                    {s.displayName}
+                    <span className="text-gray-500">
+                      {s.rollNumber ? ` · Roll ${s.rollNumber}` : ""}
+                    </span>
+                  </td>
+                  <td>
+                    <input
+                      type="number"
+                      min={0}
+                      max={max}
+                      step="0.5"
+                      value={v.absent ? "" : v.mark}
+                      disabled={v.absent || locked}
+                      onChange={(e) =>
+                        setValues((prev) => ({
+                          ...prev,
+                          [s.id]: { mark: e.target.value, absent: false },
+                        }))
+                      }
+                      className="w-24 rounded border px-2 py-1 disabled:opacity-50"
+                      aria-label={`Marks for ${s.displayName}`}
+                    />
+                  </td>
+                  <td>
+                    <input
+                      type="checkbox"
+                      checked={v.absent}
+                      disabled={locked}
+                      onChange={(e) =>
+                        setValues((prev) => ({
+                          ...prev,
+                          [s.id]: { mark: "", absent: e.target.checked },
+                        }))
+                      }
+                      className="h-4 w-4 disabled:opacity-50"
+                      aria-label={`Absent for ${s.displayName}`}
+                    />
+                  </td>
+                  <td>{existing?.grade ?? "—"}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
       <button
         type="button"
         disabled={busy || locked}
         onClick={() => void save()}
-        className="mt-4 rounded bg-blue-600 px-4 py-2 text-white disabled:opacity-50"
+        className="ui-btn ui-btn-primary mt-4"
       >
         {busy ? "Saving…" : "Save marks"}
       </button>

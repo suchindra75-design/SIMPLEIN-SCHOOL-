@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 export default async function ImportPage() {
   await requireRole("SCHOOL_ADMIN");
   return (
-    <main>
+    <div>
       <h2 className="mb-2 text-xl font-semibold">Import students</h2>
       <p className="mb-4 text-sm text-gray-600">
         Columns: Name | Admission Number | DOB (YYYY-MM-DD) | Gender | Class |
@@ -15,6 +15,6 @@ export default async function ImportPage() {
         is created until you confirm the preview.
       </p>
       <ImportClient />
-    </main>
+    </div>
   );
 }

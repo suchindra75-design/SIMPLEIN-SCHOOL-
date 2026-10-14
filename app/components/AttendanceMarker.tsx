@@ -127,7 +127,7 @@ export function AttendanceMarker({
     <div className="max-w-3xl">
       <div className="flex flex-wrap items-end gap-3">
         <label className="text-sm">
-          <span className="mb-1 block text-gray-600">Section</span>
+          <span className="ui-label">Section</span>
           <select
             value={sectionId}
             onChange={(e) => {
@@ -135,7 +135,7 @@ export function AttendanceMarker({
               setPayload(null);
               setMarks({});
             }}
-            className="rounded border px-2 py-1.5"
+            className="ui-input"
           >
             <option value="">Select…</option>
             {sections.map((s) => (
@@ -147,7 +147,7 @@ export function AttendanceMarker({
           </select>
         </label>
         <label className="text-sm">
-          <span className="mb-1 block text-gray-600">Date</span>
+          <span className="ui-label">Date</span>
           <input
             type="date"
             value={date}
@@ -157,7 +157,7 @@ export function AttendanceMarker({
               setPayload(null);
               setMarks({});
             }}
-            className="rounded border px-2 py-1.5"
+            className="ui-input"
           />
         </label>
         <button
@@ -176,7 +176,7 @@ export function AttendanceMarker({
               for (const s of payload.students) all[s.id] = "PRESENT";
               setMarks(all);
             }}
-            className="rounded bg-green-600 px-3 py-1.5 text-sm text-white"
+            className="ui-btn ui-btn-secondary ui-btn-sm"
           >
             Mark all present
           </button>
@@ -184,7 +184,7 @@ export function AttendanceMarker({
       </div>
 
       {error !== null && (
-        <p role="alert" className="mt-4 rounded bg-red-50 p-3 text-sm text-red-700">
+        <p role="alert" className="ui-alert ui-alert-error mt-4">
           {error}
         </p>
       )}
@@ -210,50 +210,52 @@ export function AttendanceMarker({
 
       {payload !== null && payload.students.length > 0 && (
         <div className="mt-4">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b text-left text-gray-600">
-                <th className="py-2">Student</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {payload.students.map((s) => (
-                <tr key={s.id} className="border-b">
-                  <td className="py-2">
-                    {s.displayName}
-                    <span className="text-gray-500">
-                      {s.rollNumber ? ` · Roll ${s.rollNumber}` : ""}
-                    </span>
-                  </td>
-                  <td>
-                    <select
-                      value={marks[s.id] ?? "PRESENT"}
-                      onChange={(e) =>
-                        setMarks((prev) => ({
-                          ...prev,
-                          [s.id]: e.target.value as AttendanceStatus,
-                        }))
-                      }
-                      className="rounded border px-2 py-1"
-                      aria-label={`Status for ${s.displayName}`}
-                    >
-                      {STATUSES.map((st) => (
-                        <option key={st} value={st}>
-                          {st}
-                        </option>
-                      ))}
-                    </select>
-                  </td>
+          <div className="ui-table-wrap">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b text-left text-gray-600">
+                  <th className="py-2">Student</th>
+                  <th>Status</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {payload.students.map((s) => (
+                  <tr key={s.id} className="border-b">
+                    <td className="py-2">
+                      {s.displayName}
+                      <span className="text-gray-500">
+                        {s.rollNumber ? ` · Roll ${s.rollNumber}` : ""}
+                      </span>
+                    </td>
+                    <td>
+                      <select
+                        value={marks[s.id] ?? "PRESENT"}
+                        onChange={(e) =>
+                          setMarks((prev) => ({
+                            ...prev,
+                            [s.id]: e.target.value as AttendanceStatus,
+                          }))
+                        }
+                        className="rounded border px-2 py-1"
+                        aria-label={`Status for ${s.displayName}`}
+                      >
+                        {STATUSES.map((st) => (
+                          <option key={st} value={st}>
+                            {st}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
           <button
             type="button"
             disabled={busy || missing}
             onClick={() => void save()}
-            className="mt-4 rounded bg-blue-600 px-4 py-2 text-white disabled:opacity-50"
+            className="ui-btn ui-btn-primary mt-4"
           >
             {busy ? "Saving…" : "Save attendance"}
           </button>

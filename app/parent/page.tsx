@@ -6,16 +6,23 @@ import { getParentScope, listChildren } from "@/lib/services/parents";
 import { listNotices } from "@/lib/services/notices";
 import { StatCard } from "@/components/shared/StatCard";
 import { StatusBadge } from "@/components/shared/StatusBadge";
+import { SectionCard } from "@/app/admin/_components/ui";
 import { formatFriendlyDate } from "@/lib/domain";
 import {
-  Users,
-  CalendarCheck,
   Award,
+  BookOpen,
+  CalendarCheck,
+  CalendarDays,
+  ClipboardList,
   CreditCard,
+  FileSpreadsheet,
   Megaphone,
+  Users,
 } from "lucide-react";
 
 export const dynamic = "force-dynamic";
+
+export const metadata = { title: "Dashboard" };
 
 export default async function ParentDashboardPage({
   searchParams,
@@ -43,249 +50,173 @@ export default async function ParentDashboardPage({
     children.find((c) => c.id === sp.child) ?? children[0] ?? null;
 
   const quickActions = [
-    { label: "Child Attendance", href: "/parent/attendance", desc: "Daily attendance logs & monthly summary" },
-    { label: "Homework & Tasks", href: "/parent/homework", desc: "Pending & submitted assignments" },
-    { label: "Exam Results", href: "/parent/results", desc: "Subject scores & grade assessments" },
-    { label: "Report Cards", href: "/parent/report-cards", desc: "Official term report cards" },
-    { label: "Fee Records", href: "/parent/fees", desc: "Fee dues, payments & receipts" },
-    { label: "Class Timetable", href: "/parent/timetable", desc: "Weekly period schedule" },
-    { label: "School Circulars", href: "/parent/notices", desc: "Official school notices & updates" },
+    { label: "Attendance", href: "/parent/attendance", desc: "Daily attendance and summary", icon: CalendarCheck },
+    { label: "Homework", href: "/parent/homework", desc: "Assignments and due dates", icon: BookOpen },
+    { label: "Exams", href: "/parent/exams", desc: "Upcoming exam schedule", icon: FileSpreadsheet },
+    { label: "Results", href: "/parent/results", desc: "Published subject results", icon: ClipboardList },
+    { label: "Report cards", href: "/parent/report-cards", desc: "Term report cards", icon: Award },
+    { label: "Timetable", href: "/parent/timetable", desc: "Weekly class schedule", icon: CalendarDays },
+    { label: "Fees", href: "/parent/fees", desc: "Dues, payments and receipts", icon: CreditCard },
+    { label: "Notices", href: "/parent/notices", desc: "School announcements", icon: Megaphone },
   ];
+
+  const childQuery = activeChild ? `?studentId=${activeChild.id}` : "";
+  const firstName = ctx.profile.fullName.split(" ")[0] ?? ctx.profile.fullName;
 
   return (
     <div className="space-y-6">
-      {/* Welcome Banner */}
-      <div className="bg-white rounded-lg border border-zinc-200 p-6 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-5">
-        <div className="flex items-center gap-4">
-          <div className="w-14 h-14 rounded-xl bg-zinc-950 text-white flex items-center justify-center font-bold text-xl font-mono shrink-0">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div className="min-w-0">
+          <h1 className="page-title">Welcome back, {firstName}</h1>
+          <p className="page-description">
             {activeChild
-              ? activeChild.displayName.slice(0, 2).toUpperCase()
-              : "GP"}
-          </div>
-
-          <div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="text-xl font-bold text-zinc-950">
-                {activeChild ? activeChild.displayName : ctx.profile.fullName}
-              </h1>
-              <StatusBadge status="ACTIVE" size="sm" />
-            </div>
-            <p className="text-xs text-zinc-500 mt-0.5 font-mono">
-              {activeChild
-                ? `${activeChild.classes?.name ?? "Class"} • ${activeChild.sections?.name ?? "Section"} • Roll: ${activeChild.rollNumber ?? "Enrolled"}`
-                : "Guardian Portal Account"}
-            </p>
-          </div>
+              ? `Viewing ${activeChild.displayName} · ${activeChild.classes?.name ?? "Class"} ${activeChild.sections?.name ?? ""}`.trim()
+              : `Parent portal for ${ctx.school.name}`}
+          </p>
         </div>
-
-        <div className="flex items-center gap-2">
-          <Link
-            href="/parent/attendance"
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-[#191919] bg-[#F8F8F9] hover:bg-[#E7E7E9] border border-[#DCDCE0] rounded-md shadow-xs btn-interactive"
-          >
-            <CalendarCheck className="w-3.5 h-3.5 text-[#191919]" />
+        <div className="flex flex-wrap items-center gap-2">
+          <Link href={`/parent/attendance${childQuery}`} className="ui-btn ui-btn-secondary">
+            <CalendarCheck aria-hidden="true" className="size-4" />
             Attendance
           </Link>
-          <Link
-            href="/parent/results"
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-[#191919] hover:bg-[#2D2D30] rounded-md shadow-xs btn-interactive"
-          >
-            <Award className="w-3.5 h-3.5" />
-            Exam Results
+          <Link href={`/parent/results${childQuery}`} className="ui-btn ui-btn-primary">
+            <ClipboardList aria-hidden="true" className="size-4" />
+            Results
           </Link>
         </div>
       </div>
 
-      {/* Top KPIs */}
-      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
-          label="Linked Children"
+          label="Linked children"
           value={children.length}
-          subtext="Enrolled students"
+          subtext="Students on your account"
           icon={Users}
         />
-        <Link href="/parent/attendance" className="block">
-          <StatCard
-            label="Attendance Tracking"
-            value="Active"
-            subtext="Daily roll call logs"
-            icon={CalendarCheck}
-          />
-        </Link>
-        <Link href="/parent/results" className="block">
-          <StatCard
-            label="Academic Reports"
-            value="Published"
-            subtext="Term report cards"
-            icon={Award}
-          />
-        </Link>
-        <Link href="/parent/fees" className="block">
-          <StatCard
-            label="Fee Records"
-            value="Structures"
-            subtext="Due & paid receipts"
-            icon={CreditCard}
-          />
-        </Link>
+        {[
+          { href: `/parent/attendance${childQuery}`, label: "Attendance", desc: "Daily records", icon: CalendarCheck },
+          { href: `/parent/report-cards${childQuery}`, label: "Report cards", desc: "Term reports", icon: Award },
+          { href: `/parent/fees${childQuery}`, label: "Fees", desc: "Dues and receipts", icon: CreditCard },
+        ].map((card) => {
+          const Icon = card.icon;
+          return (
+            <Link
+              key={card.label}
+              href={card.href}
+              className="ui-card ui-card-interactive group flex items-center gap-3 p-5"
+            >
+              <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-muted text-foreground transition-colors duration-150 group-hover:bg-primary group-hover:text-primary-foreground">
+                <Icon aria-hidden="true" className="size-5" />
+              </span>
+              <span className="min-w-0">
+                <span className="block text-sm font-medium text-foreground">{card.label}</span>
+                <span className="block text-xs text-muted-foreground">{card.desc}</span>
+              </span>
+            </Link>
+          );
+        })}
       </div>
 
-      {/* Operational Modules */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Linked Children Roster */}
-        <div className="bg-[#F8F8F9] rounded-lg border border-[#DCDCE0] p-5 shadow-xs">
-          <div className="flex items-center justify-between pb-3 border-b border-[#DCDCE0]/70">
-            <div className="flex items-center gap-2">
-              <Users className="w-4 h-4 text-[#191919]" />
-              <h2 className="text-xs font-bold text-[#191919] uppercase tracking-wider font-mono">
-                My Children
-              </h2>
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <SectionCard title="My children" icon={Users}>
+          {scope === null ? (
+            <div className="ui-alert ui-alert-warning">
+              No parent profile is linked to your login yet. Contact your school administrator.
             </div>
-            <span className="text-xs text-[#6E6E73] font-mono">
-              {children.length} student{children.length === 1 ? "" : "s"}
-            </span>
-          </div>
-
-          <div className="mt-4 space-y-3">
-            {scope === null ? (
-              <div className="rounded-lg border border-dashed border-amber-300 p-6 text-center text-xs text-amber-800 bg-amber-50/50">
-                No parent profile is linked to your login yet. Contact your school administrator.
-              </div>
-            ) : children.length === 0 ? (
-              <p className="text-xs text-[#6E6E73] py-6 text-center">
-                No students linked to this parent login. Contact administration.
-              </p>
-            ) : (
-              children.map((c) => (
-                <div
-                  key={c.id}
-                  className="p-3.5 rounded bg-[#E7E7E9]/50 border border-[#DCDCE0] space-y-2"
-                >
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="text-xs font-bold text-[#191919]">
-                        {c.displayName}
-                      </h3>
-                      <p className="text-[11px] text-[#6E6E73] font-mono">
-                        Admission No: {c.admissionNo} • {c.classes?.name ?? "Class"} {c.sections?.name ?? ""} • Roll: {c.rollNumber ?? "—"}
-                      </p>
+          ) : children.length === 0 ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">
+              No students are linked to your account yet. Contact the school office.
+            </p>
+          ) : (
+            <ul className="divide-y divide-border">
+              {children.map((c) => (
+                <li key={c.id} className="py-3.5 first:pt-0 last:pb-0">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex min-w-0 items-center gap-3">
+                      <span
+                        aria-hidden="true"
+                        className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary text-xs font-semibold text-primary-foreground"
+                      >
+                        {c.displayName.slice(0, 2).toUpperCase()}
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block truncate text-sm font-medium text-foreground">{c.displayName}</span>
+                        <span className="block truncate text-xs text-muted-foreground">
+                          {c.classes?.name ?? "Class"} {c.sections?.name ?? ""} · Adm. {c.admissionNo}
+                          {c.rollNumber ? ` · Roll ${c.rollNumber}` : ""}
+                        </span>
+                      </span>
                     </div>
-                    <span className="rounded-full bg-emerald-100 border border-emerald-200 px-2 py-0.5 text-[10px] font-semibold text-emerald-800">
-                      Active
-                    </span>
+                    <StatusBadge status={c.status} size="sm" className="shrink-0" />
                   </div>
-                  <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-[#DCDCE0]/50 text-xs font-mono">
-                    <Link
-                      href={`/parent/attendance?studentId=${c.id}`}
-                      className="text-[#191919] hover:underline font-medium"
-                    >
-                      Attendance
-                    </Link>
-                    <span className="text-[#DCDCE0]">•</span>
-                    <Link
-                      href={`/parent/results?studentId=${c.id}`}
-                      className="text-[#191919] hover:underline font-medium"
-                    >
-                      Results
-                    </Link>
-                    <span className="text-[#DCDCE0]">•</span>
-                    <Link
-                      href={`/parent/report-cards?studentId=${c.id}`}
-                      className="text-[#191919] hover:underline font-medium"
-                    >
-                      Report Cards
-                    </Link>
-                    <span className="text-[#DCDCE0]">•</span>
-                    <Link
-                      href={`/parent/timetable?studentId=${c.id}`}
-                      className="text-[#191919] hover:underline font-medium"
-                    >
-                      Timetable
-                    </Link>
-                    <span className="text-[#DCDCE0]">•</span>
-                    <Link
-                      href={`/parent/homework?studentId=${c.id}`}
-                      className="text-[#191919] hover:underline font-medium"
-                    >
-                      Homework
-                    </Link>
-                    <span className="text-[#DCDCE0]">•</span>
-                    <Link
-                      href={`/parent/fees?studentId=${c.id}`}
-                      className="text-[#191919] hover:underline font-medium"
-                    >
-                      Fees
-                    </Link>
+                  <div className="mt-2.5 flex flex-wrap gap-1 pl-12">
+                    {[
+                      ["Attendance", "attendance"],
+                      ["Results", "results"],
+                      ["Report cards", "report-cards"],
+                      ["Timetable", "timetable"],
+                      ["Homework", "homework"],
+                      ["Fees", "fees"],
+                    ].map(([label, path]) => (
+                      <Link
+                        key={path}
+                        href={`/parent/${path}?studentId=${c.id}`}
+                        className="ui-btn ui-btn-ghost ui-btn-sm"
+                      >
+                        {label}
+                      </Link>
+                    ))}
                   </div>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </SectionCard>
 
-        {/* Circulars for Parents */}
-        <div className="bg-[#F8F8F9] rounded-lg border border-[#DCDCE0] p-5 shadow-xs">
-          <div className="flex items-center justify-between pb-3 border-b border-[#DCDCE0]/70">
-            <div className="flex items-center gap-2">
-              <Megaphone className="w-4 h-4 text-[#191919]" />
-              <h2 className="text-xs font-bold text-[#191919] uppercase tracking-wider font-mono">
-                School Circulars & Notices
-              </h2>
-            </div>
-            <Link
-              href="/parent/notices"
-              className="text-xs text-[#191919] hover:underline font-semibold font-mono"
-            >
-              All Notices →
-            </Link>
-          </div>
-
-          <div className="mt-4 divide-y divide-[#DCDCE0]/70">
-            {noticesResult.notices.length === 0 ? (
-              <p className="text-xs text-[#6E6E73] py-6 text-center">
-                No active circulars.
-              </p>
-            ) : (
-              noticesResult.notices.slice(0, 3).map((n) => (
-                <div key={n.id} className="py-2.5 first:pt-0 last:pb-0">
+        <SectionCard title="School notices" icon={Megaphone} href="/parent/notices">
+          {noticesResult.notices.length === 0 ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">No notices right now.</p>
+          ) : (
+            <ul className="divide-y divide-border">
+              {noticesResult.notices.slice(0, 3).map((n) => (
+                <li key={n.id} className="py-3 first:pt-0 last:pb-0">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs font-semibold text-[#191919] truncate">
-                      {n.title}
-                    </span>
-                    <span className="text-[10px] text-[#6E6E73] font-mono">
-                      {formatFriendlyDate(n.createdAt)}
-                    </span>
+                    <span className="truncate text-sm font-medium text-foreground">{n.title}</span>
+                    <span className="shrink-0 text-xs text-muted-foreground">{formatFriendlyDate(n.createdAt)}</span>
                   </div>
-                  <p className="text-[11px] text-[#48484A] mt-1 line-clamp-2">
-                    {n.content}
-                  </p>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
+                  <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">{n.content}</p>
+                </li>
+              ))}
+            </ul>
+          )}
+        </SectionCard>
       </div>
 
-      {/* Quick Navigation Cards */}
-      <div className="bg-[#F8F8F9] rounded-lg border border-[#DCDCE0] p-5 shadow-xs">
-        <h2 className="text-xs font-bold text-[#191919] uppercase tracking-wider font-mono mb-3">
-          Quick Portal Navigation
+      <section aria-labelledby="parent-quick-actions">
+        <h2 id="parent-quick-actions" className="section-title mb-3">
+          Quick actions
         </h2>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          {quickActions.map((action) => (
-            <Link
-              key={action.label}
-              href={action.href}
-              className="group rounded-md border border-[#DCDCE0] bg-white p-3.5 shadow-2xs transition-all hover:border-[#191919] hover:shadow-xs"
-            >
-              <p className="font-semibold text-xs text-[#191919] group-hover:text-black">
-                {action.label} →
-              </p>
-              <p className="mt-1 text-[11px] text-[#6E6E73]">{action.desc}</p>
-            </Link>
-          ))}
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {quickActions.map((action) => {
+            const Icon = action.icon;
+            return (
+              <Link
+                key={action.href}
+                href={action.href}
+                className="ui-card ui-card-interactive group flex items-center gap-3 p-3.5"
+              >
+                <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-foreground transition-colors duration-150 group-hover:bg-primary group-hover:text-primary-foreground">
+                  <Icon aria-hidden="true" className="size-4" />
+                </span>
+                <span className="min-w-0">
+                  <span className="block truncate text-sm font-medium text-foreground">{action.label}</span>
+                  <span className="block truncate text-xs text-muted-foreground">{action.desc}</span>
+                </span>
+              </Link>
+            );
+          })}
         </div>
-      </div>
+      </section>
     </div>
   );
 }

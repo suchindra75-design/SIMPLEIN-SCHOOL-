@@ -77,8 +77,8 @@ export default async function TeacherHomeworkPage({
   }
 
   return (
-    <main>
-      <h2 className="text-xl font-semibold">Homework</h2>
+    <div>
+      <h1 className="page-title">Homework</h1>
       <p className="mt-1 text-sm text-gray-600">
         {ctx.profile.fullName} · {ctx.school.name} · Your sections only
       </p>
@@ -95,8 +95,8 @@ export default async function TeacherHomeworkPage({
         <>
           <form method="get" className="mt-4">
             <label className="text-sm">
-              <span className="mb-1 block text-gray-600">Section</span>
-              <select name="sectionId" defaultValue={sectionId} className="rounded border px-2 py-1.5">
+              <span className="ui-label">Section</span>
+              <select name="sectionId" defaultValue={sectionId} className="ui-input">
                 {sections.map((s) => (
                   <option key={s.id} value={s.id}>
                     {s.classes?.name ? `${s.classes.name} ` : ""}
@@ -105,7 +105,7 @@ export default async function TeacherHomeworkPage({
                 ))}
               </select>
             </label>
-            <button type="submit" className="ml-3 rounded border px-3 py-1.5 text-sm">
+            <button type="submit" className="ui-btn ui-btn-primary ml-3">
               View
             </button>
           </form>
@@ -116,7 +116,7 @@ export default async function TeacherHomeworkPage({
           ) : (
             <ul className="space-y-3 text-sm">
               {homework.map((h) => (
-                <li key={h.id} className="rounded border p-3">
+                <li key={h.id} className="ui-panel">
                   <div className="flex flex-wrap items-center gap-3">
                     <span className="font-medium">{h.title}</span>
                     <span className="text-gray-600">
@@ -193,6 +193,6 @@ export default async function TeacherHomeworkPage({
           Back to dashboard
         </Link>
       </p>
-    </main>
+    </div>
   );
 }

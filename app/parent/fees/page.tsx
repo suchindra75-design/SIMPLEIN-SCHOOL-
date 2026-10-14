@@ -38,8 +38,8 @@ export default async function ParentFeesPage({
   const grandPaid = fees.reduce((sum, f) => sum + f.paid, 0);
 
   return (
-    <main>
-      <h2 className="text-xl font-semibold">Fees</h2>
+    <div>
+      <h1 className="page-title">Fees</h1>
       <p className="mt-1 text-sm text-gray-600">
         {ctx.profile.fullName} · {ctx.school.name} · Read-only (pay at the
         school office)
@@ -57,8 +57,8 @@ export default async function ParentFeesPage({
         <>
           <form method="get" className="mt-4">
             <label className="text-sm">
-              <span className="mb-1 block text-gray-600">Child</span>
-              <select name="studentId" defaultValue={selectedId} className="rounded border px-2 py-1.5">
+              <span className="ui-label">Child</span>
+              <select name="studentId" defaultValue={selectedId} className="ui-input">
                 {children.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.displayName}
@@ -68,7 +68,7 @@ export default async function ParentFeesPage({
                 ))}
               </select>
             </label>
-            <button type="submit" className="ml-3 rounded border px-3 py-1.5 text-sm">
+            <button type="submit" className="ui-btn ui-btn-primary ml-3">
               View
             </button>
           </form>
@@ -80,15 +80,15 @@ export default async function ParentFeesPage({
           ) : (
             <>
               <div className="mt-4 flex flex-wrap gap-4 text-sm">
-                <div className="rounded border p-3">
+                <div className="ui-panel">
                   <p className="text-xs text-gray-600">Total fee</p>
                   <p className="text-xl font-bold">{grandTotal}</p>
                 </div>
-                <div className="rounded border p-3">
+                <div className="ui-panel">
                   <p className="text-xs text-gray-600">Paid</p>
                   <p className="text-xl font-bold">{grandPaid}</p>
                 </div>
-                <div className="rounded border p-3">
+                <div className="ui-panel">
                   <p className="text-xs text-gray-600">Amount due</p>
                   <p className="text-xl font-bold">{grandTotal - grandPaid}</p>
                 </div>
@@ -96,7 +96,7 @@ export default async function ParentFeesPage({
 
               <ul className="mt-4 space-y-3 text-sm">
                 {fees.map((f) => (
-                  <li key={f.id} className="rounded border p-3">
+                  <li key={f.id} className="ui-panel">
                     <div className="flex flex-wrap items-center gap-3">
                       <span className="font-medium">{f.structureName}</span>
                       <span
@@ -159,6 +159,6 @@ export default async function ParentFeesPage({
           Back to dashboard
         </Link>
       </p>
-    </main>
+    </div>
   );
 }

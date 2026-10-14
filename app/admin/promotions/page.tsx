@@ -57,8 +57,8 @@ export default async function AdminPromotionsPage({
   }
 
   return (
-    <main>
-      <h2 className="text-xl font-semibold">Academic promotions</h2>
+    <div>
+      <h1 className="page-title">Academic promotions</h1>
       <p className="mt-1 text-sm text-gray-600">
         {ctx.school.name} · History is preserved; promotion is an explicit admin
         action (never automatic). Final classes graduate safely.
@@ -66,8 +66,8 @@ export default async function AdminPromotionsPage({
 
       <form method="get" className="mt-4 flex flex-wrap items-end gap-3">
         <label className="text-sm">
-          <span className="mb-1 block text-gray-600">From year</span>
-          <select name="fromYearId" defaultValue={fromYearId} className="rounded border px-2 py-1.5">
+          <span className="ui-label">From year</span>
+          <select name="fromYearId" defaultValue={fromYearId} className="ui-input">
             <option value="">Select…</option>
             {academicYears.map((y) => (
               <option key={y.id} value={y.id}>
@@ -78,8 +78,8 @@ export default async function AdminPromotionsPage({
           </select>
         </label>
         <label className="text-sm">
-          <span className="mb-1 block text-gray-600">To year</span>
-          <select name="toYearId" defaultValue={toYearId} className="rounded border px-2 py-1.5">
+          <span className="ui-label">To year</span>
+          <select name="toYearId" defaultValue={toYearId} className="ui-input">
             <option value="">Select…</option>
             {academicYears.map((y) => (
               <option key={y.id} value={y.id}>
@@ -89,8 +89,8 @@ export default async function AdminPromotionsPage({
           </select>
         </label>
         <label className="text-sm">
-          <span className="mb-1 block text-gray-600">Class (optional)</span>
-          <select name="classId" defaultValue={classId} className="rounded border px-2 py-1.5">
+          <span className="ui-label">Class (optional)</span>
+          <select name="classId" defaultValue={classId} className="ui-input">
             <option value="">All</option>
             {classes.map((c) => (
               <option key={c.id} value={c.id}>
@@ -99,13 +99,13 @@ export default async function AdminPromotionsPage({
             ))}
           </select>
         </label>
-        <button type="submit" className="rounded border px-3 py-1.5 text-sm">
+        <button type="submit" className="ui-btn ui-btn-secondary">
           Preview
         </button>
       </form>
 
       {previewError !== undefined && (
-        <p role="alert" className="mt-4 rounded bg-red-50 p-3 text-sm text-red-700">
+        <p role="alert" className="ui-alert ui-alert-error mt-4">
           {previewError}
         </p>
       )}
@@ -130,7 +130,7 @@ export default async function AdminPromotionsPage({
                     ? []
                     : (sectionOptionsByClass.get(p.nextClassId) ?? []);
                 return (
-                  <div key={p.studentId} className="rounded border p-3">
+                  <div key={p.studentId} className="ui-panel">
                     <input type="hidden" name={`studentId_${i}`} value={p.studentId} />
                     <div className="flex flex-wrap items-center gap-3">
                       <span className="font-medium">{p.displayName}</span>
@@ -151,7 +151,7 @@ export default async function AdminPromotionsPage({
                     {p.action !== "GRADUATE" && (
                       <div className="mt-2 flex flex-wrap items-end gap-3">
                         <label className="text-xs">
-                          <span className="mb-1 block text-gray-600">Next section</span>
+                          <span className="ui-label">Next section</span>
                           <select
                             name={`nextSectionId_${i}`}
                             defaultValue={p.nextSectionId ?? ""}
@@ -176,7 +176,7 @@ export default async function AdminPromotionsPage({
               })}
               <button
                 type="submit"
-                className="rounded bg-blue-600 px-4 py-2 text-white"
+                className="ui-btn ui-btn-primary"
               >
                 Approve promotion
               </button>
@@ -184,6 +184,6 @@ export default async function AdminPromotionsPage({
           )}
         </>
       )}
-    </main>
+    </div>
   );
 }

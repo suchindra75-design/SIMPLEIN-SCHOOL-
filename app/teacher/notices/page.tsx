@@ -14,8 +14,8 @@ export default async function TeacherNoticesPage() {
   const { notices } = await listNotices(db, ctx, { page: 1, limit: 50 });
 
   return (
-    <main>
-      <h2 className="text-xl font-semibold">Notices</h2>
+    <div>
+      <h1 className="page-title">Notices</h1>
       <p className="mt-1 text-sm text-gray-600">
         {ctx.profile.fullName} · {ctx.school.name} · Notices relevant to you
       </p>
@@ -26,7 +26,7 @@ export default async function TeacherNoticesPage() {
       ) : (
         <ul className="mt-4 space-y-3 text-sm">
           {notices.map((n) => (
-            <li key={n.id} className="rounded border p-3">
+            <li key={n.id} className="ui-panel">
               <p className="font-medium">
                 {n.title}{" "}
                 <span className="rounded bg-gray-100 px-2 py-0.5 text-xs font-normal text-gray-600">
@@ -54,6 +54,6 @@ export default async function TeacherNoticesPage() {
           Back to dashboard
         </Link>
       </p>
-    </main>
+    </div>
   );
 }

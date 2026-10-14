@@ -39,16 +39,16 @@ export default async function AdminAttendancePage({
   }
 
   return (
-    <main>
-      <h2 className="text-xl font-semibold">Attendance</h2>
+    <div>
+      <h1 className="page-title">Attendance</h1>
       <p className="mt-1 text-sm text-gray-600">
         {ctx.school.name} · Today: {today} (dates are school-local)
       </p>
 
       <form method="get" className="mt-4 flex flex-wrap items-end gap-3">
         <label className="text-sm">
-          <span className="mb-1 block text-gray-600">Class</span>
-          <select name="classId" defaultValue={sp["classId"] ?? ""} className="rounded border px-2 py-1.5">
+          <span className="ui-label">Class</span>
+          <select name="classId" defaultValue={sp["classId"] ?? ""} className="ui-input">
             <option value="">Select…</option>
             {classes.map((c) => (
               <option key={c.id} value={c.id}>
@@ -58,8 +58,8 @@ export default async function AdminAttendancePage({
           </select>
         </label>
         <label className="text-sm">
-          <span className="mb-1 block text-gray-600">Section</span>
-          <select name="sectionId" defaultValue={sectionId} className="rounded border px-2 py-1.5">
+          <span className="ui-label">Section</span>
+          <select name="sectionId" defaultValue={sectionId} className="ui-input">
             <option value="">Select…</option>
             {(selectedClass?.sections ?? []).map((s) => (
               <option key={s.id} value={s.id}>
@@ -69,10 +69,10 @@ export default async function AdminAttendancePage({
           </select>
         </label>
         <label className="text-sm">
-          <span className="mb-1 block text-gray-600">Date</span>
-          <input type="date" name="date" defaultValue={date} max={today} className="rounded border px-2 py-1.5" />
+          <span className="ui-label">Date</span>
+          <input type="date" name="date" defaultValue={date} max={today} className="ui-input" />
         </label>
-        <button type="submit" className="rounded border px-3 py-1.5 text-sm">
+        <button type="submit" className="ui-btn ui-btn-secondary">
           View
         </button>
       </form>
@@ -81,23 +81,23 @@ export default async function AdminAttendancePage({
 
       {summary !== null && (
         <div className="mt-4 flex flex-wrap gap-4 text-sm">
-          <div className="rounded border p-3">
+          <div className="ui-panel">
             <p className="text-xs text-gray-600">Session</p>
             <p className="font-semibold">{summary.sessionExists ? "Recorded" : "Not recorded"}</p>
           </div>
-          <div className="rounded border p-3">
+          <div className="ui-panel">
             <p className="text-xs text-gray-600">Present</p>
             <p className="font-semibold">{summary.present}</p>
           </div>
-          <div className="rounded border p-3">
+          <div className="ui-panel">
             <p className="text-xs text-gray-600">Absent</p>
             <p className="font-semibold">{summary.absent}</p>
           </div>
-          <div className="rounded border p-3">
+          <div className="ui-panel">
             <p className="text-xs text-gray-600">Leave</p>
             <p className="font-semibold">{summary.leave}</p>
           </div>
-          <div className="rounded border p-3">
+          <div className="ui-panel">
             <p className="text-xs text-gray-600">Attendance %</p>
             <p className="font-semibold">
               {summary.percentage === null ? "—" : `${summary.percentage}%`}
@@ -127,6 +127,6 @@ export default async function AdminAttendancePage({
           />
         </div>
       )}
-    </main>
+    </div>
   );
 }

@@ -13,8 +13,8 @@ export default async function StudentHomeworkPage() {
   const { homework } = await listHomework(db, ctx, { page: 1, limit: 50 });
 
   return (
-    <main>
-      <h2 className="text-xl font-semibold">Homework</h2>
+    <div>
+      <h1 className="page-title">Homework</h1>
       <p className="mt-1 text-sm text-gray-600">{ctx.school.name} · Your section only</p>
       {homework.length === 0 ? (
         <div className="mt-4">
@@ -23,7 +23,7 @@ export default async function StudentHomeworkPage() {
       ) : (
         <ul className="mt-4 space-y-3 text-sm">
           {homework.map((h) => (
-            <li key={h.id} className="rounded border p-3">
+            <li key={h.id} className="ui-panel">
               <p className="font-medium">
                 {h.title}{" "}
                 <span className="font-normal text-gray-600">
@@ -47,6 +47,6 @@ export default async function StudentHomeworkPage() {
           ))}
         </ul>
       )}
-    </main>
+    </div>
   );
 }

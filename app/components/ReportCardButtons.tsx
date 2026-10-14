@@ -5,7 +5,7 @@ export function PrintButton() {
   return (
     <button
       type="button"
-      className="rounded border px-3 py-1.5 text-sm"
+      className="ui-btn ui-btn-secondary"
       onClick={() => window.print()}
     >
       Print
@@ -27,7 +27,7 @@ export function DownloadPdfButton({ reportCardId }: { reportCardId: string | nul
       href={`/api/v1/report-cards/${reportCardId}/pdf`}
       target="_blank"
       rel="noreferrer"
-      className="rounded bg-blue-600 px-3 py-1.5 text-sm text-white"
+      className="ui-btn ui-btn-primary ui-btn-sm"
     >
       Download PDF
     </a>

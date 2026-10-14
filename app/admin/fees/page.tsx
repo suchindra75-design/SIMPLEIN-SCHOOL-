@@ -51,7 +51,7 @@ export default async function AdminFeesPage({
       : await listStudentFees(db, ctx, studentId);
 
   return (
-    <main>
+    <div>
       <PageHeader title="Fees" />
 
       <p className="mb-4 text-xs text-gray-500">
@@ -65,7 +65,7 @@ export default async function AdminFeesPage({
       ) : (
         <ul className="space-y-2 text-sm">
           {structures.map((s) => (
-            <li key={s.id} className="rounded border p-3">
+            <li key={s.id} className="ui-panel">
               <div className="flex flex-wrap items-center gap-3">
                 <span className="font-medium">{s.name}</span>
                 <StatusBadge active={s.isActive} />
@@ -140,8 +140,8 @@ export default async function AdminFeesPage({
       <h3 className="mb-2 mt-8 font-semibold">Student fees</h3>
       <form method="get" className="mb-4">
         <label className="text-sm">
-          <span className="mb-1 block text-gray-600">Student</span>
-          <select name="studentId" defaultValue={studentId} className="rounded border px-2 py-1.5">
+          <span className="ui-label">Student</span>
+          <select name="studentId" defaultValue={studentId} className="ui-input">
             <option value="">Select…</option>
             {students.map((s) => (
               <option key={s.id} value={s.id}>
@@ -150,7 +150,7 @@ export default async function AdminFeesPage({
             ))}
           </select>
         </label>
-        <button type="submit" className="ml-3 rounded border px-3 py-1.5 text-sm">
+        <button type="submit" className="ui-btn ui-btn-primary ml-3">
           View
         </button>
       </form>
@@ -162,7 +162,7 @@ export default async function AdminFeesPage({
       ) : (
         <ul className="space-y-3 text-sm">
           {fees.map((f) => (
-            <li key={f.id} className="rounded border p-3">
+            <li key={f.id} className="ui-panel">
               <div className="flex flex-wrap items-center gap-3">
                 <span className="font-medium">{f.structureName}</span>
                 <span
@@ -267,6 +267,6 @@ export default async function AdminFeesPage({
           ))}
         </ul>
       )}
-    </main>
+    </div>
   );
 }

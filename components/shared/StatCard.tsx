@@ -30,41 +30,40 @@ export function StatCard({
     }
     if (typeof icon === "function" || typeof icon === "object") {
       const IconComponent = icon as React.ComponentType<{ className?: string }>;
-      return <IconComponent className="w-3.5 h-3.5" />;
+      return <IconComponent className="size-4" />;
     }
     return null;
   };
 
+  const trendTone =
+    trend?.positive === true
+      ? "ui-badge-success"
+      : trend?.positive === false
+        ? "ui-badge-warning"
+        : "ui-badge-neutral";
+
   return (
     <div
       onClick={onClick}
-      className={`bg-[#F8F8F9] rounded-lg border border-[#DCDCE0] p-5 shadow-xs card-interactive ${
-        onClick ? "cursor-pointer hover:border-[#191919] active:scale-[0.99]" : ""
-      } ${className}`}
+      className={`ui-card p-5 ${onClick ? "ui-card-interactive cursor-pointer" : ""} ${className}`}
     >
-      <div className="flex items-start justify-between">
-        <span className="text-[11px] font-semibold text-[#6E6E73] uppercase tracking-wider">
-          {label}
-        </span>
+      <div className="flex items-start justify-between gap-3">
+        <span className="text-sm font-medium text-muted-foreground">{label}</span>
         {icon && (
-          <div className="p-1.5 rounded-md bg-[#E7E7E9] text-[#191919]">
+          <span aria-hidden="true" className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted text-foreground">
             {renderIcon()}
-          </div>
-        )}
-      </div>
-
-      <div className="mt-3 flex items-baseline gap-2.5">
-        <span className="text-2xl sm:text-3xl font-bold tracking-tight text-[#191919] font-mono">
-          {value}
-        </span>
-        {trend && (
-          <span className="text-[11px] font-mono font-semibold px-1.5 py-0.5 rounded bg-[#E7E7E9] text-[#191919] border border-[#DCDCE0]">
-            {trend.text}
           </span>
         )}
       </div>
 
-      {subtext && <p className="mt-1.5 text-xs text-[#6E6E73]">{subtext}</p>}
+      <div className="mt-2 flex flex-wrap items-baseline gap-2">
+        <span className="text-2xl font-semibold tracking-tight text-foreground tabular-nums sm:text-[1.75rem]">
+          {value}
+        </span>
+        {trend && <span className={`ui-badge ${trendTone}`}>{trend.text}</span>}
+      </div>
+
+      {subtext && <p className="mt-1 text-xs text-muted-foreground">{subtext}</p>}
     </div>
   );
 }

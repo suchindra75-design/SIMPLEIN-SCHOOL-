@@ -1,17 +1,19 @@
+import { UserX } from "lucide-react";
 import { LogoutButton } from "@/app/components/LogoutButton";
+import { StatusScreen } from "@/components/shell/StatusScreen";
+
+export const metadata = { title: "Account not set up" };
 
 /** Shown when a signed-in identity has no usable profile or school. */
 export default function NoAccessPage() {
   return (
-    <main className="mx-auto max-w-md p-8 text-center">
-      <h1 className="text-xl font-bold">Account not provisioned</h1>
-      <p className="mt-2 text-sm text-gray-600">
-        Your login works, but no active school profile is linked to it yet.
-        Please contact your school administrator.
-      </p>
-      <div className="mt-6 flex justify-center">
-        <LogoutButton />
-      </div>
-    </main>
+    <StatusScreen
+      icon={UserX}
+      eyebrow="Account not set up"
+      title="Your account isn't linked to a school yet"
+      description="Your login works, but no active school profile is linked to it. Please contact your school administrator."
+    >
+      <LogoutButton />
+    </StatusScreen>
   );
 }

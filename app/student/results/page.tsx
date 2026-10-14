@@ -22,12 +22,12 @@ export default async function StudentResultsPage({
   const scope = await getStudentScope(db, ctx);
   if (scope === null) {
     return (
-      <main>
-        <h2 className="text-xl font-semibold">Results</h2>
+      <div>
+        <h1 className="page-title">Results</h1>
         <div className="mt-4">
           <EmptyState message="No student profile is linked to your login yet." />
         </div>
-      </main>
+      </div>
     );
   }
   const { exams } = await listExams(db, ctx, { page: 1, limit: 50 });
@@ -51,16 +51,16 @@ export default async function StudentResultsPage({
   }
 
   return (
-    <main>
-      <h2 className="text-xl font-semibold">Results</h2>
+    <div>
+      <h1 className="page-title">Results</h1>
       <p className="mt-1 text-sm text-gray-600">
         {ctx.school.name} · Published results only
       </p>
 
       <form method="get" className="mt-4">
         <label className="text-sm">
-          <span className="mb-1 block text-gray-600">Exam</span>
-          <select name="examId" defaultValue={examId} className="rounded border px-2 py-1.5">
+          <span className="ui-label">Exam</span>
+          <select name="examId" defaultValue={examId} className="ui-input">
             <option value="">Select…</option>
             {exams.map((e) => (
               <option key={e.id} value={e.id}>
@@ -69,7 +69,7 @@ export default async function StudentResultsPage({
             ))}
           </select>
         </label>
-        <button type="submit" className="ml-3 rounded border px-3 py-1.5 text-sm">
+        <button type="submit" className="ui-btn ui-btn-primary ml-3">
           View
         </button>
       </form>
@@ -90,40 +90,42 @@ export default async function StudentResultsPage({
               · {result.admissionNo} · {exams.find((e) => e.id === examId)?.name}
             </span>
           </p>
-          <table className="mt-2 w-full text-sm">
-            <thead>
-              <tr className="border-b text-left text-gray-600">
-                <th className="py-2">Subject</th>
-                <th>Marks</th>
-                <th>Max</th>
-                <th>Grade</th>
-              </tr>
-            </thead>
-            <tbody>
-              {result.subjects.map((s) => (
-                <tr key={s.subjectId} className="border-b">
-                  <td className="py-2">{s.subjectName}</td>
-                  <td>{s.isAbsent ? "AB" : (s.marksObtained ?? "—")}</td>
-                  <td>{s.maxMarks}</td>
-                  <td>{s.grade ?? "—"}</td>
+          <div className="ui-table-wrap mt-2">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b text-left text-gray-600">
+                  <th className="py-2">Subject</th>
+                  <th>Marks</th>
+                  <th>Max</th>
+                  <th>Grade</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {result.subjects.map((s) => (
+                  <tr key={s.subjectId} className="border-b">
+                    <td className="py-2">{s.subjectName}</td>
+                    <td>{s.isAbsent ? "AB" : (s.marksObtained ?? "—")}</td>
+                    <td>{s.maxMarks}</td>
+                    <td>{s.grade ?? "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
           <div className="mt-3 flex gap-4 text-sm">
-            <div className="rounded border p-3">
+            <div className="ui-panel">
               <p className="text-xs text-gray-600">Total</p>
               <p className="text-xl font-bold">
                 {result.totalObtained} / {result.maxTotal}
               </p>
             </div>
-            <div className="rounded border p-3">
+            <div className="ui-panel">
               <p className="text-xs text-gray-600">Percentage</p>
               <p className="text-xl font-bold">
                 {result.percentage === null ? "—" : `${result.percentage}%`}
               </p>
             </div>
-            <div className="rounded border p-3">
+            <div className="ui-panel">
               <p className="text-xs text-gray-600">Grade</p>
               <p className="text-xl font-bold">{result.overallGrade ?? "—"}</p>
             </div>
@@ -135,6 +137,6 @@ export default async function StudentResultsPage({
           Back to dashboard
         </Link>
       </p>
-    </main>
+    </div>
   );
 }

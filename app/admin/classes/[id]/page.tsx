@@ -46,8 +46,8 @@ export default async function ClassDetailPage({
   }));
 
   return (
-    <main>
-      <h2 className="mb-4 text-xl font-semibold">Class: {cls.name}</h2>
+    <div>
+      <h1 className="page-title mb-4">Class: {cls.name}</h1>
       <SmartForm
         action={updateClassAction.bind(null, id)}
         submitLabel="Rename / reorder"
@@ -60,7 +60,7 @@ export default async function ClassDetailPage({
       <h3 className="mb-2 mt-8 font-semibold">Sections</h3>
       <ul className="space-y-3 text-sm">
         {sections.map((s) => (
-          <li key={s.id} className="rounded border p-3">
+          <li key={s.id} className="ui-panel">
             <p className="font-medium">
               {s.name}
               {s.room ? ` · Room ${s.room}` : ""} ·{" "}
@@ -133,6 +133,6 @@ export default async function ClassDetailPage({
           },
         ]}
       />
-    </main>
+    </div>
   );
 }

@@ -12,8 +12,8 @@ export default async function NewStudentPage() {
   const { classes } = await listClasses(db, ctx);
   const typed = classes;
   return (
-    <main>
-      <h2 className="mb-4 text-xl font-semibold">Add student & parent</h2>
+    <div>
+      <h1 className="page-title mb-4">Add student & parent</h1>
       <p className="mb-6 text-sm text-gray-600">
         Consolidated enrollment: enter student details and linked parent/guardian information in one workflow.
       </p>
@@ -73,6 +73,6 @@ export default async function NewStudentPage() {
           },
         ]}
       />
-    </main>
+    </div>
   );
 }

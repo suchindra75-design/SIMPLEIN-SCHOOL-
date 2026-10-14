@@ -13,18 +13,25 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { StatCard } from "@/components/shared/StatCard";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { formatFriendlyDate } from "@/lib/domain";
+import { SectionCard } from "@/app/admin/_components/ui";
 import {
+  Archive,
+  Award,
+  BookOpen,
   CalendarCheck,
+  CalendarDays,
+  ClipboardList,
   CreditCard,
   FileSpreadsheet,
-  BookOpen,
-  Calendar,
+  History,
   Megaphone,
-  FileText,
-  Award,
 } from "lucide-react";
 
 export const dynamic = "force-dynamic";
+
+export const metadata = { title: "Dashboard" };
+
+const inr = new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 });
 
 /** Student dashboard: self-only data (attendance, exams, homework, fees, notices). */
 export default async function StudentDashboardPage() {
@@ -34,12 +41,10 @@ export default async function StudentDashboardPage() {
 
   if (scope === null) {
     return (
-      <div className="p-8 bg-white rounded-lg border border-zinc-200 text-center">
-        <h2 className="text-sm font-bold text-zinc-950 font-mono">
-          Scholar Account Pending Provisioning
-        </h2>
-        <p className="mt-2 text-xs text-zinc-500 font-mono">
-          No student profile is linked to your login yet. Contact your school administrator.
+      <div className="ui-card mx-auto mt-4 max-w-lg p-8 text-center">
+        <h1 className="text-lg font-semibold text-foreground">Your student profile isn&apos;t linked yet</h1>
+        <p className="mt-2 text-sm text-muted-foreground">
+          No student profile is linked to your login. Please contact your school office.
         </p>
       </div>
     );
@@ -74,196 +79,145 @@ export default async function StudentDashboardPage() {
   ]);
   const feeDue = fees.reduce((sum, f) => sum + f.due, 0);
 
+  const hasAttendance = attendance.percentage !== null;
+  const firstName = ctx.profile.fullName.split(" ")[0] ?? ctx.profile.fullName;
+  const moreLinks = [
+    { label: "Results", href: "/student/results", desc: "Published exam results", icon: ClipboardList },
+    { label: "Report cards", href: "/student/report-cards", desc: "Term report cards", icon: Award },
+    { label: "Question papers", href: "/student/pyqs", desc: "Previous year papers", icon: Archive },
+    { label: "Academic history", href: "/student/academic-history", desc: "Past classes and years", icon: History },
+  ];
+
   return (
     <div className="space-y-6">
-      {/* Welcome Banner */}
-      <div className="bg-[#F8F8F9] rounded-lg border border-[#DCDCE0] p-6 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4 card-interactive">
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] font-mono font-bold text-[#191919] uppercase tracking-wider bg-[#E7E7E9] px-2 py-0.5 rounded border border-[#DCDCE0]">
-              Scholar Station
-            </span>
-            <span className="text-xs text-zinc-500 font-mono">
-              {ctx.school.name}
-            </span>
-          </div>
-          <h1 className="text-xl font-bold text-[#191919] mt-1">
-            {ctx.profile.fullName}
-          </h1>
-          <p className="text-xs text-zinc-500 mt-0.5 font-mono">
-            Enrolled Scholar Dashboard
-          </p>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div className="min-w-0">
+          <h1 className="page-title">Welcome back, {firstName}</h1>
+          <p className="page-description">Here is what&apos;s happening at {ctx.school.name}.</p>
         </div>
-
-        <div className="flex items-center gap-2">
-          <Link
-            href="/student/attendance"
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-[#191919] bg-[#F8F8F9] hover:bg-[#E7E7E9] border border-[#DCDCE0] rounded-md shadow-xs btn-interactive"
-          >
-            <CalendarCheck className="w-3.5 h-3.5" />
-            Attendance Log
+        <div className="flex flex-wrap items-center gap-2">
+          <Link href="/student/attendance" className="ui-btn ui-btn-secondary">
+            <CalendarCheck aria-hidden="true" className="size-4" />
+            Attendance
           </Link>
-          <Link
-            href="/student/results"
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-[#191919] hover:bg-[#2D2D30] rounded-md shadow-xs btn-interactive"
-          >
-            <Award className="w-3.5 h-3.5" />
-            My Results
+          <Link href="/student/results" className="ui-btn ui-btn-primary">
+            <ClipboardList aria-hidden="true" className="size-4" />
+            My results
           </Link>
         </div>
       </div>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Link href="/student/attendance" className="block">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <Link href="/student/attendance" className="block rounded-[var(--radius-card)]">
           <StatCard
-            label="Attendance Rate"
-            value={attendance.percentage === null ? "100%" : `${attendance.percentage}%`}
-            subtext="Current term attendance"
+            label="Attendance"
+            value={hasAttendance ? `${attendance.percentage}%` : "—"}
+            subtext={hasAttendance ? "Overall attendance" : "No attendance recorded yet"}
             icon={CalendarCheck}
-            trend={{
-              positive: (attendance.percentage ?? 100) >= 90,
-              text: (attendance.percentage ?? 100) >= 90 ? "Regular" : "Action",
-            }}
+            trend={
+              hasAttendance
+                ? {
+                    positive: (attendance.percentage ?? 0) >= 90,
+                    text: (attendance.percentage ?? 0) >= 90 ? "On track" : "Needs attention",
+                  }
+                : undefined
+            }
+            className="ui-card-interactive h-full"
           />
         </Link>
-        <Link href="/student/fees" className="block">
+        <Link href="/student/fees" className="block rounded-[var(--radius-card)]">
           <StatCard
-            label="Outstanding Fee"
-            value={`₹${feeDue}`}
-            subtext="Total balance payable"
+            label="Fees due"
+            value={inr.format(feeDue)}
+            subtext="Outstanding balance"
             icon={CreditCard}
+            className="ui-card-interactive h-full"
           />
         </Link>
-        <Link href="/student/exams" className="block">
+        <Link href="/student/exams" className="block rounded-[var(--radius-card)]">
           <StatCard
-            label="Exam Assessments"
+            label="Upcoming exams"
             value={exams.length}
-            subtext="Scheduled term exams"
+            subtext="Latest exams for your class"
             icon={FileSpreadsheet}
+            className="ui-card-interactive h-full"
           />
         </Link>
-        <Link href="/student/homework" className="block">
+        <Link href="/student/homework" className="block rounded-[var(--radius-card)]">
           <StatCard
-            label="Assigned Homework"
+            label="Homework"
             value={homework.length}
-            subtext="Pending subject tasks"
+            subtext="Latest assignments"
             icon={BookOpen}
+            className="ui-card-interactive h-full"
           />
         </Link>
       </div>
 
-      {/* Grid: Recent Attendance & Notices */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Recent Attendance */}
-        <div className="bg-[#F8F8F9] rounded-lg border border-[#DCDCE0] p-5 shadow-xs">
-          <div className="flex items-center justify-between pb-3 border-b border-[#DCDCE0]/70">
-            <div className="flex items-center gap-2">
-              <CalendarCheck className="w-4 h-4 text-[#191919]" />
-              <h2 className="text-xs font-bold text-[#191919] uppercase tracking-wider font-mono">
-                Recent Attendance Checks
-              </h2>
-            </div>
-            <Link
-              href="/student/attendance"
-              className="text-xs text-[#191919] hover:underline font-semibold font-mono"
-            >
-              Full Log →
-            </Link>
-          </div>
-
-          <div className="mt-4 space-y-2">
-            {recentAttendance.length === 0 ? (
-              <p className="text-xs text-[#6E6E73] py-6 text-center">
-                No attendance entries recorded yet.
-              </p>
-            ) : (
-              recentAttendance.map((r) => (
-                <div
-                  key={r.sessionId + r.date}
-                  className="p-2.5 rounded bg-[#E7E7E9]/50 border border-[#DCDCE0] flex items-center justify-between text-xs"
-                >
-                  <span className="font-mono text-[#191919]">{formatFriendlyDate(r.date)}</span>
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <SectionCard title="Recent attendance" icon={CalendarCheck} href="/student/attendance" linkLabel="Full record">
+          {recentAttendance.length === 0 ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">No attendance recorded yet.</p>
+          ) : (
+            <ul className="divide-y divide-border">
+              {recentAttendance.map((r) => (
+                <li key={r.sessionId + r.date} className="flex items-center justify-between gap-3 py-2.5 first:pt-0 last:pb-0">
+                  <span className="text-sm text-foreground">{formatFriendlyDate(r.date)}</span>
                   <StatusBadge status={r.status} size="sm" />
-                </div>
-              ))
-            )}
-          </div>
-        </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </SectionCard>
 
-        {/* Notices */}
-        <div className="bg-[#F8F8F9] rounded-lg border border-[#DCDCE0] p-5 shadow-xs">
-          <div className="flex items-center justify-between pb-3 border-b border-[#DCDCE0]/70">
-            <div className="flex items-center gap-2">
-              <Megaphone className="w-4 h-4 text-[#191919]" />
-              <h2 className="text-xs font-bold text-[#191919] uppercase tracking-wider font-mono">
-                School Circulars
-              </h2>
-            </div>
-            <Link
-              href="/student/notices"
-              className="text-xs text-[#191919] hover:underline font-semibold font-mono"
-            >
-              Board →
-            </Link>
-          </div>
-
-          <div className="mt-4 divide-y divide-[#DCDCE0]/70">
-            {notices.length === 0 ? (
-              <p className="text-xs text-[#6E6E73] py-6 text-center">
-                No circulars published.
-              </p>
-            ) : (
-              notices.map((n) => (
-                <div key={n.id} className="py-2.5 first:pt-0 last:pb-0">
+        <SectionCard title="School notices" icon={Megaphone} href="/student/notices">
+          {notices.length === 0 ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">No notices right now.</p>
+          ) : (
+            <ul className="divide-y divide-border">
+              {notices.map((n) => (
+                <li key={n.id} className="py-3 first:pt-0 last:pb-0">
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-xs font-semibold text-[#191919] truncate">
-                      {n.title}
-                    </span>
-                    <span className="text-[10px] text-[#6E6E73] font-mono">
-                      {formatFriendlyDate(n.createdAt)}
-                    </span>
+                    <span className="truncate text-sm font-medium text-foreground">{n.title}</span>
+                    <span className="shrink-0 text-xs text-muted-foreground">{formatFriendlyDate(n.createdAt)}</span>
                   </div>
-                  <p className="text-[11px] text-[#48484A] mt-1 line-clamp-1">
-                    {n.content}
-                  </p>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
+                  <p className="mt-1 line-clamp-1 text-sm text-muted-foreground">{n.content}</p>
+                </li>
+              ))}
+            </ul>
+          )}
+        </SectionCard>
       </div>
 
-      {/* Timetable Section */}
-      <div className="bg-[#F8F8F9] rounded-lg border border-[#DCDCE0] p-5 shadow-xs">
-        <div className="flex items-center gap-2 pb-3 border-b border-[#DCDCE0]/70">
-          <Calendar className="w-4 h-4 text-[#191919]" />
-          <h2 className="text-xs font-bold text-[#191919] uppercase tracking-wider font-mono">
-            Weekly Class Schedule
-          </h2>
-        </div>
-        <div className="mt-4">
-          <WeeklyTimetable slots={slots} />
-        </div>
-      </div>
+      <SectionCard title="This week" icon={CalendarDays} href="/student/timetable" linkLabel="Timetable">
+        <WeeklyTimetable slots={slots} />
+      </SectionCard>
 
-      {/* Quick Scholar Links */}
-      <div className="p-4 bg-[#F8F8F9] rounded-lg border border-[#DCDCE0] flex flex-wrap items-center justify-between gap-3 text-xs font-mono">
-        <span className="text-[#6E6E73]">SCHOLAR TERMINAL:</span>
-        <div className="flex flex-wrap items-center gap-4">
-          <Link href="/student/pyqs" className="text-[#191919] hover:underline font-medium">
-            Past Question Papers (PYQs)
-          </Link>
-          <span className="text-[#DCDCE0]">•</span>
-          <Link href="/student/results" className="text-[#191919] hover:underline font-medium">
-            Published Results
-          </Link>
-          <span className="text-[#DCDCE0]">•</span>
-          <Link href="/student/academic-history" className="text-[#191919] hover:underline font-medium">
-            Academic History
-          </Link>
+      <section aria-labelledby="student-more-links">
+        <h2 id="student-more-links" className="section-title mb-3">
+          More
+        </h2>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {moreLinks.map((link) => {
+            const Icon = link.icon;
+            return (
+              <Link
+                key={link.href}
+                href={link.href}
+                className="ui-card ui-card-interactive group flex items-center gap-3 p-3.5"
+              >
+                <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-foreground transition-colors duration-150 group-hover:bg-primary group-hover:text-primary-foreground">
+                  <Icon aria-hidden="true" className="size-4" />
+                </span>
+                <span className="min-w-0">
+                  <span className="block truncate text-sm font-medium text-foreground">{link.label}</span>
+                  <span className="block truncate text-xs text-muted-foreground">{link.desc}</span>
+                </span>
+              </Link>
+            );
+          })}
         </div>
-      </div>
+      </section>
     </div>
   );
 }

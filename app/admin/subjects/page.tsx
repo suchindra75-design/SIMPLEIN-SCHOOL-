@@ -14,7 +14,7 @@ export default async function SubjectsPage() {
   const typed = subjects;
 
   return (
-    <main>
+    <div>
       <PageHeader title="Subjects" />
       {typed.length === 0 ? (
         <EmptyState message="No subjects yet. Add Mathematics, English, … — names and codes are fully configurable." />
@@ -51,6 +51,6 @@ export default async function SubjectsPage() {
       <p className="mt-4 text-sm text-gray-600">
         Link subjects to classes from the class page.
       </p>
-    </main>
+    </div>
   );
 }

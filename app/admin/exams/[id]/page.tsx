@@ -40,9 +40,9 @@ export default async function ExamDetailPage({
   const availableSubjects = subjects.filter((s) => !linkedSubjectIds.has(s.id));
 
   return (
-    <main>
+    <div>
       <div className="mb-4 flex items-center gap-3">
-        <h2 className="text-xl font-semibold">{exam.name}</h2>
+        <h1 className="page-title">{exam.name}</h1>
         <StatusBadge active={exam.isActive} />
         <Link href="/admin/exams" className="text-sm underline">
           Back
@@ -75,7 +75,7 @@ export default async function ExamDetailPage({
       ) : (
         <ul className="space-y-3 text-sm">
           {(exam.subjects ?? []).map((s) => (
-            <li key={s.id} className="rounded border p-3">
+            <li key={s.id} className="ui-panel">
               <div className="flex items-center gap-3">
                 <span className="font-medium">{s.subjects?.name ?? "Subject"}</span>
                 <span className="text-gray-600">
@@ -157,6 +157,6 @@ export default async function ExamDetailPage({
           ]}
         />
       )}
-    </main>
+    </div>
   );
 }

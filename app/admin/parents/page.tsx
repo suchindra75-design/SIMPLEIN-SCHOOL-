@@ -37,7 +37,7 @@ export default async function ParentsPage({
   }
 
   return (
-    <main>
+    <div>
       <PageHeader title="Parents" actionHref="/admin/parents/new" actionLabel="Add parent" />
       <SearchBar
         fields={[
@@ -57,30 +57,32 @@ export default async function ParentsPage({
       {parents.length === 0 ? (
         <EmptyState message="No parents found." />
       ) : (
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b text-left text-gray-600">
-              <th className="py-2">Name</th>
-              <th>Phone</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {parents.map((p) => (
-              <tr key={p.id} className="border-b">
-                <td className="py-2">
-                  <Link href={`/admin/parents/${p.id}`} className="underline">
-                    {p.fullName}
-                  </Link>
-                </td>
-                <td>{p.phone ?? "—"}</td>
-                <td>
-                  <StatusBadge active={p.isActive} />
-                </td>
+        <div className="ui-table-wrap">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b text-left text-gray-600">
+                <th className="py-2">Name</th>
+                <th>Phone</th>
+                <th>Status</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {parents.map((p) => (
+                <tr key={p.id} className="border-b">
+                  <td className="py-2">
+                    <Link href={`/admin/parents/${p.id}`} className="underline">
+                      {p.fullName}
+                    </Link>
+                  </td>
+                  <td>{p.phone ?? "—"}</td>
+                  <td>
+                    <StatusBadge active={p.isActive} />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
       <Pagination
         page={Number(sp["page"] ?? 1)}
@@ -88,6 +90,6 @@ export default async function ParentsPage({
         total={total}
         baseParams={{ search: sp["search"], isActive: sp["isActive"] }}
       />
-    </main>
+    </div>
   );
 }

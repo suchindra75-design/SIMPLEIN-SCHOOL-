@@ -45,8 +45,8 @@ export default async function ParentHomeworkPage({
       : await listHomework(db, ctx, { sectionId, page: 1, limit: 50 });
 
   return (
-    <main>
-      <h2 className="text-xl font-semibold">Homework</h2>
+    <div>
+      <h1 className="page-title">Homework</h1>
       <p className="mt-1 text-sm text-gray-600">
         {ctx.profile.fullName} · {ctx.school.name}
       </p>
@@ -63,8 +63,8 @@ export default async function ParentHomeworkPage({
         <>
           <form method="get" className="mt-4">
             <label className="text-sm">
-              <span className="mb-1 block text-gray-600">Child</span>
-              <select name="studentId" defaultValue={selectedId} className="rounded border px-2 py-1.5">
+              <span className="ui-label">Child</span>
+              <select name="studentId" defaultValue={selectedId} className="ui-input">
                 {children.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.displayName}
@@ -74,7 +74,7 @@ export default async function ParentHomeworkPage({
                 ))}
               </select>
             </label>
-            <button type="submit" className="ml-3 rounded border px-3 py-1.5 text-sm">
+            <button type="submit" className="ui-btn ui-btn-primary ml-3">
               View
             </button>
           </form>
@@ -93,7 +93,7 @@ export default async function ParentHomeworkPage({
           ) : (
             <ul className="mt-4 space-y-3 text-sm">
               {homework.map((h) => (
-                <li key={h.id} className="rounded border p-3">
+                <li key={h.id} className="ui-panel">
                   <p className="font-medium">
                     {h.title}{" "}
                     <span className="font-normal text-gray-600">
@@ -128,6 +128,6 @@ export default async function ParentHomeworkPage({
           Back to dashboard
         </Link>
       </p>
-    </main>
+    </div>
   );
 }

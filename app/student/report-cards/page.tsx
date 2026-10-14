@@ -23,12 +23,12 @@ export default async function StudentReportCardsPage({
   const scope = await getStudentScope(db, ctx);
   if (scope === null) {
     return (
-      <main>
-        <h2 className="text-xl font-semibold">Report cards</h2>
+      <div>
+        <h1 className="page-title">Report cards</h1>
         <div className="mt-4">
           <EmptyState message="No student profile is linked to your login yet." />
         </div>
-      </main>
+      </div>
     );
   }
   const { exams } = await listExams(db, ctx, { page: 1, limit: 50 });
@@ -52,14 +52,14 @@ export default async function StudentReportCardsPage({
   }
 
   return (
-    <main>
-      <h2 className="text-xl font-semibold">Report cards</h2>
+    <div>
+      <h1 className="page-title">Report cards</h1>
       <p className="mt-1 text-sm text-gray-600">{ctx.school.name} · Published only</p>
 
       <form method="get" className="mt-4">
         <label className="text-sm">
-          <span className="mb-1 block text-gray-600">Exam</span>
-          <select name="examId" defaultValue={examId} className="rounded border px-2 py-1.5">
+          <span className="ui-label">Exam</span>
+          <select name="examId" defaultValue={examId} className="ui-input">
             <option value="">Select…</option>
             {exams.map((e) => (
               <option key={e.id} value={e.id}>
@@ -68,7 +68,7 @@ export default async function StudentReportCardsPage({
             ))}
           </select>
         </label>
-        <button type="submit" className="ml-3 rounded border px-3 py-1.5 text-sm">
+        <button type="submit" className="ui-btn ui-btn-primary ml-3">
           View
         </button>
       </form>
@@ -87,6 +87,6 @@ export default async function StudentReportCardsPage({
           <ReportCardView data={preview} />
         </div>
       )}
-    </main>
+    </div>
   );
 }

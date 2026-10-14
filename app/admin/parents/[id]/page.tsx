@@ -37,8 +37,8 @@ export default async function ParentDetailPage({
   ]);
 
   return (
-    <main>
-      <h2 className="mb-4 text-xl font-semibold">Edit parent</h2>
+    <div>
+      <h1 className="page-title mb-4">Edit parent</h1>
       <SmartForm
         action={updateParentAction.bind(null, id)}
         redirectTo="/admin/parents"
@@ -98,6 +98,6 @@ export default async function ParentDetailPage({
           { name: "isPrimary", label: "Primary guardian", type: "checkbox" },
         ]}
       />
-    </main>
+    </div>
   );
 }

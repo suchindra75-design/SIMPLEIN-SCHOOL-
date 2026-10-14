@@ -45,8 +45,8 @@ export default async function TeacherReportCardsPage({
   }
 
   return (
-    <main>
-      <h2 className="text-xl font-semibold">Report cards</h2>
+    <div>
+      <h1 className="page-title">Report cards</h1>
       <p className="mt-1 text-sm text-gray-600">
         {ctx.profile.fullName} · {ctx.school.name} · Your assigned classes only
       </p>
@@ -59,8 +59,8 @@ export default async function TeacherReportCardsPage({
         <>
           <form method="get" className="mt-4">
             <label className="text-sm">
-              <span className="mb-1 block text-gray-600">Exam</span>
-              <select name="examId" defaultValue={examId} className="rounded border px-2 py-1.5">
+              <span className="ui-label">Exam</span>
+              <select name="examId" defaultValue={examId} className="ui-input">
                 {exams.map((e) => (
                   <option key={e.id} value={e.id}>
                     {e.name}
@@ -69,7 +69,7 @@ export default async function TeacherReportCardsPage({
                 ))}
               </select>
             </label>
-            <button type="submit" className="ml-3 rounded border px-3 py-1.5 text-sm">
+            <button type="submit" className="ui-btn ui-btn-primary ml-3">
               View
             </button>
           </form>
@@ -108,7 +108,7 @@ export default async function TeacherReportCardsPage({
           )}
 
           {previewError !== undefined && (
-            <p role="alert" className="mt-4 rounded bg-red-50 p-3 text-sm text-red-700">
+            <p role="alert" className="ui-alert ui-alert-error mt-4">
               {previewError}
             </p>
           )}
@@ -128,6 +128,6 @@ export default async function TeacherReportCardsPage({
           Back to dashboard
         </Link>
       </p>
-    </main>
+    </div>
   );
 }

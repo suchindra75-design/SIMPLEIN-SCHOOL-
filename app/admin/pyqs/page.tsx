@@ -35,7 +35,7 @@ export default async function AdminPyqsPage({
   });
 
   return (
-    <main>
+    <div>
       <PageHeader title="Previous year questions" />
 
       <form method="get" className="mb-4 flex items-center gap-3 text-sm">
@@ -43,7 +43,7 @@ export default async function AdminPyqsPage({
           <input type="checkbox" name="includeInactive" defaultChecked={sp["includeInactive"] === "true"} className="h-4 w-4" />
           <span className="text-gray-600">Include archived</span>
         </label>
-        <button type="submit" className="rounded border px-3 py-1.5 text-sm">
+        <button type="submit" className="ui-btn ui-btn-secondary">
           Filter
         </button>
       </form>
@@ -53,7 +53,7 @@ export default async function AdminPyqsPage({
       ) : (
         <ul className="space-y-3 text-sm">
           {pyqs.map((p) => (
-            <li key={p.id} className="rounded border p-3">
+            <li key={p.id} className="ui-panel">
               <div className="flex flex-wrap items-center gap-3">
                 <span className="font-medium">
                   {p.title ?? `${p.classes?.name ?? ""} ${p.subjects?.name ?? ""}`}
@@ -151,13 +151,13 @@ export default async function AdminPyqsPage({
           </label>
           <input id="pyq-answerKey" name="answerKey" type="file" className="w-full" />
         </div>
-        <button type="submit" className="rounded bg-blue-600 px-4 py-2 text-white">
+        <button type="submit" className="ui-btn ui-btn-primary">
           Upload PYQ
         </button>
       </form>
       <p className="mt-2 text-xs text-gray-500">
         Files are stored privately; students download via expiring signed links.
       </p>
-    </main>
+    </div>
   );
 }

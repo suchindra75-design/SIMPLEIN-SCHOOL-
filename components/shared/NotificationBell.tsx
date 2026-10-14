@@ -41,16 +41,21 @@ export function NotificationBell({
     };
   }, []);
 
+  const label = count > 0 ? `Notifications, ${count} unread` : "Notifications";
+
   return (
     <Link
       href={notificationHref}
-      aria-label="Notification Centre"
-      className="relative p-2 rounded-md text-[#48484A] hover:text-[#191919] hover:bg-[#E7E7E9] btn-interactive focus:outline-hidden focus:ring-1 focus:ring-[#191919] inline-flex items-center justify-center"
-      title="View Notifications"
+      aria-label={label}
+      title={label}
+      className="relative inline-flex size-9 items-center justify-center rounded-lg text-muted-foreground transition-colors duration-150 hover:bg-muted hover:text-foreground"
     >
-      <Bell className="w-4 h-4" />
+      <Bell aria-hidden="true" className="size-[18px]" />
       {count > 0 && (
-        <span className="absolute top-1 right-1 w-4 h-4 rounded-full bg-zinc-950 text-white font-mono text-[9px] font-bold flex items-center justify-center ring-2 ring-white">
+        <span
+          aria-hidden="true"
+          className="absolute right-1 top-1 flex h-4 min-w-4 animate-pop-in items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold leading-none text-primary-foreground ring-2 ring-background"
+        >
           {count > 9 ? "9+" : count}
         </span>
       )}
