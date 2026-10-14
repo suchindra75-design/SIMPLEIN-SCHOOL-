@@ -1,9 +1,11 @@
 "use client";
 
-import React, { useEffect } from "react";
+import React, { useEffect, useTransition } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { RotateCcw, TriangleAlert } from "lucide-react";
 import { StatusScreen } from "@/components/shell/StatusScreen";
+import { retryAfterRefresh } from "@/components/shell/retry";
 
 export default function ErrorBoundary({
   error,
@@ -12,6 +14,9 @@ export default function ErrorBoundary({
   error: Error & { digest?: string };
   reset: () => void;
 }) {
+  const router = useRouter();
+  const [retrying, startTransition] = useTransition();
+
   useEffect(() => {
     console.error(error);
   }, [error]);
@@ -30,9 +35,14 @@ export default function ErrorBoundary({
         </>
       }
     >
-      <button type="button" onClick={() => reset()} className="ui-btn ui-btn-primary">
+      <button
+        type="button"
+        onClick={() => retryAfterRefresh(startTransition, () => router.refresh(), reset)}
+        disabled={retrying}
+        className="ui-btn ui-btn-primary"
+      >
         <RotateCcw aria-hidden="true" className="size-4" />
-        Try again
+        {retrying ? "Retrying…" : "Try again"}
       </button>
       <Link href="/login" className="ui-btn ui-btn-secondary">
         Go to my dashboard

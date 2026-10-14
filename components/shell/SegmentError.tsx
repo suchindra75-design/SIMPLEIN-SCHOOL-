@@ -1,8 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, useTransition } from "react";
 import { RefreshCw, TriangleAlert } from "lucide-react";
+import { retryAfterRefresh } from "./retry";
 
 interface SegmentErrorProps {
   error: Error & { digest?: string };
@@ -15,9 +17,14 @@ interface SegmentErrorProps {
  * available. Never shows raw error messages; the digest helps correlate logs.
  */
 export function SegmentError({ error, reset, home }: SegmentErrorProps) {
+  const router = useRouter();
+  const [retrying, startTransition] = useTransition();
+
   useEffect(() => {
     console.error(error);
   }, [error]);
+
+  const retry = () => retryAfterRefresh(startTransition, () => router.refresh(), reset);
 
   return (
     <div role="alert" className="ui-card mx-auto mt-4 max-w-lg animate-fade-in p-8 text-center">
@@ -32,9 +39,9 @@ export function SegmentError({ error, reset, home }: SegmentErrorProps) {
         <p className="mt-3 font-mono text-xs text-muted-foreground">Reference: {error.digest}</p>
       ) : null}
       <div className="mt-6 flex flex-wrap justify-center gap-2">
-        <button type="button" onClick={reset} className="ui-btn ui-btn-primary">
-          <RefreshCw aria-hidden="true" className="size-4" />
-          Try again
+        <button type="button" onClick={retry} disabled={retrying} className="ui-btn ui-btn-primary">
+          <RefreshCw aria-hidden="true" className={retrying ? "size-4 animate-spin" : "size-4"} />
+          {retrying ? "Retrying…" : "Try again"}
         </button>
         <Link href={home} className="ui-btn ui-btn-secondary">
           Go to dashboard
