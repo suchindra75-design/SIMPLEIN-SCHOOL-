@@ -1,9 +1,23 @@
 "use client";
 
-import { useActionState, useEffect, useId, useRef, useState, useTransition } from "react";
+import {
+  Fragment,
+  useActionState,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  useTransition,
+} from "react";
 import { useRouter } from "next/navigation";
 import { CircleAlert, CircleCheck, Loader2 } from "lucide-react";
 import type { ActionState } from "@/app/admin/actions";
+import {
+  captureSubmittedValues,
+  initialChecked,
+  initialValue,
+  type SubmittedValues,
+} from "@/app/admin/_components/form-values";
 
 export interface FieldDef {
   name: string;
@@ -31,6 +45,16 @@ type FormAction = (
   form: FormData,
 ) => Promise<ActionState>;
 
+interface SmartFormState {
+  result: ActionState;
+  /** The user's input from the last submit, kept only when it failed. */
+  submitted: SubmittedValues | null;
+  /** Bumped per completed submit so fields remount with fresh defaults. */
+  submission: number;
+}
+
+const INITIAL_STATE: SmartFormState = { result: {}, submitted: null, submission: 0 };
+
 /** Reusable create/edit form: error state, pending state, redirect on success. */
 export function SmartForm({
   action,
@@ -45,113 +69,161 @@ export function SmartForm({
 }) {
   const router = useRouter();
   const formId = useId();
-  const [state, formAction, pending] = useActionState(action, {});
+  // React resets uncontrolled forms after a function action completes, which
+  // would wipe the user's input when the action fails. On error, keep what
+  // was submitted and remount the fields with it as their defaults.
+  const [state, formAction, pending] = useActionState<SmartFormState, FormData>(
+    async (prev, form) => {
+      const result = await action(prev.result, form);
+      return {
+        result,
+        submitted: result.error !== undefined ? captureSubmittedValues(fields, form) : null,
+        submission: prev.submission + 1,
+      };
+    },
+    INITIAL_STATE,
+  );
+  const { result, submitted } = state;
   const [isRedirecting, setIsRedirecting] = useState(false);
 
   useEffect(() => {
-    if (state.success === true && redirectTo !== undefined) {
+    if (result.success === true && redirectTo !== undefined) {
       setIsRedirecting(true);
       router.push(redirectTo);
     }
-  }, [state.success, redirectTo, router]);
+  }, [result.success, redirectTo, router]);
+
+  // The fields remount after each submit and the submit button is disabled
+  // while pending, so keyboard focus would fall back to <body>. Return it to
+  // where the user submitted from: the field (Enter key) or the submit button.
+  const formRef = useRef<HTMLFormElement>(null);
+  const submitRef = useRef<HTMLButtonElement>(null);
+  const submittedFrom = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (state.submission === 0) return;
+    if (state.result.success === true && redirectTo !== undefined) return;
+    const active = document.activeElement;
+    if (active !== null && active !== document.body) return;
+    const name = submittedFrom.current;
+    const field = name !== null ? formRef.current?.elements.namedItem(name) : null;
+    if (field instanceof HTMLElement) field.focus();
+    else submitRef.current?.focus();
+  }, [state, redirectTo]);
 
   const busy = pending || isRedirecting;
 
   return (
-    <form action={formAction} className="max-w-lg space-y-4">
-      {state.error !== undefined && !pending && (
+    <form
+      ref={formRef}
+      action={formAction}
+      onSubmit={(e) => {
+        const active = document.activeElement;
+        submittedFrom.current =
+          (active instanceof HTMLInputElement ||
+            active instanceof HTMLSelectElement ||
+            active instanceof HTMLTextAreaElement) &&
+          e.currentTarget.contains(active)
+            ? active.name
+            : null;
+      }}
+      className="max-w-lg space-y-4"
+    >
+      {result.error !== undefined && !pending && (
         <div role="alert" className="ui-alert ui-alert-error animate-fade-in">
           <CircleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
-          <p>{state.error}</p>
+          <p>{result.error}</p>
         </div>
       )}
-      {fields.map((f) => {
-        const id = `${formId}-${f.name}`;
-        const marker = f.required === true && !f.label.trim().endsWith("*");
-        const label = (
-          <>
-            {f.label}
-            {marker ? (
-              <span aria-hidden="true" className="text-muted-foreground">
-                {" "}
-                *
-              </span>
-            ) : null}
-          </>
-        );
+      <Fragment key={state.submission}>
+        {fields.map((f) => {
+          const id = `${formId}-${f.name}`;
+          const marker = f.required === true && !f.label.trim().endsWith("*");
+          const label = (
+            <>
+              {f.label}
+              {marker ? (
+                <span aria-hidden="true" className="text-muted-foreground">
+                  {" "}
+                  *
+                </span>
+              ) : null}
+            </>
+          );
 
-        if (f.type === "checkbox") {
+          if (f.type === "checkbox") {
+            return (
+              <div key={f.name} className="flex items-center gap-2.5">
+                <input
+                  id={id}
+                  name={f.name}
+                  type="checkbox"
+                  defaultChecked={initialChecked(f, submitted)}
+                  className="size-4 rounded border-input accent-[#191919]"
+                />
+                <label htmlFor={id} className="text-sm font-medium text-foreground">
+                  {label}
+                </label>
+              </div>
+            );
+          }
+
           return (
-            <div key={f.name} className="flex items-center gap-2.5">
-              <input
-                id={id}
-                name={f.name}
-                type="checkbox"
-                defaultChecked={f.checked}
-                className="size-4 rounded border-input accent-[#191919]"
-              />
-              <label htmlFor={id} className="text-sm font-medium text-foreground">
+            <div key={f.name}>
+              <label htmlFor={id} className="ui-label">
                 {label}
               </label>
+              {f.type === "select" ? (
+                <select
+                  id={id}
+                  name={f.name}
+                  required={f.required}
+                  defaultValue={initialValue(f, submitted)}
+                  className="ui-input"
+                >
+                  <option value="">Select…</option>
+                  {(f.options ?? []).map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+              ) : f.type === "textarea" ? (
+                <textarea
+                  id={id}
+                  name={f.name}
+                  required={f.required}
+                  defaultValue={initialValue(f, submitted)}
+                  placeholder={f.placeholder}
+                  rows={3}
+                  className="ui-input"
+                />
+              ) : (
+                <input
+                  id={id}
+                  name={f.name}
+                  type={f.type ?? "text"}
+                  required={f.required}
+                  defaultValue={initialValue(f, submitted)}
+                  placeholder={f.placeholder}
+                  className={
+                    f.type === "file"
+                      ? "ui-input file:mr-3 file:rounded-md file:border-0 file:bg-muted file:px-2.5 file:py-1 file:text-xs file:font-medium file:text-foreground"
+                      : "ui-input"
+                  }
+                />
+              )}
             </div>
           );
-        }
-
-        return (
-          <div key={f.name}>
-            <label htmlFor={id} className="ui-label">
-              {label}
-            </label>
-            {f.type === "select" ? (
-              <select
-                id={id}
-                name={f.name}
-                required={f.required}
-                defaultValue={f.defaultValue ?? ""}
-                className="ui-input"
-              >
-                <option value="">Select…</option>
-                {(f.options ?? []).map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
-            ) : f.type === "textarea" ? (
-              <textarea
-                id={id}
-                name={f.name}
-                required={f.required}
-                defaultValue={f.defaultValue ?? ""}
-                placeholder={f.placeholder}
-                rows={3}
-                className="ui-input"
-              />
-            ) : (
-              <input
-                id={id}
-                name={f.name}
-                type={f.type ?? "text"}
-                required={f.required}
-                defaultValue={f.defaultValue ?? ""}
-                placeholder={f.placeholder}
-                className={
-                  f.type === "file"
-                    ? "ui-input file:mr-3 file:rounded-md file:border-0 file:bg-muted file:px-2.5 file:py-1 file:text-xs file:font-medium file:text-foreground"
-                    : "ui-input"
-                }
-              />
-            )}
-          </div>
-        );
-      })}
+        })}
+      </Fragment>
       <div className="flex flex-wrap items-center gap-3 pt-1">
-        <button type="submit" disabled={busy} className="ui-btn ui-btn-primary">
+        <button ref={submitRef} type="submit" disabled={busy} className="ui-btn ui-btn-primary">
           {busy ? <Loader2 aria-hidden="true" className="size-4 animate-spin" /> : null}
           {pending ? "Saving…" : isRedirecting ? "Opening…" : submitLabel}
         </button>
         <p aria-live="polite" className="text-sm text-success">
-          {state.success === true && redirectTo === undefined && !pending ? (
+          {result.success === true && redirectTo === undefined && !pending ? (
             <span className="inline-flex animate-fade-in items-center gap-1.5">
               <CircleCheck aria-hidden="true" className="size-4" />
               Saved
