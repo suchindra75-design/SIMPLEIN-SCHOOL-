@@ -2081,10 +2081,18 @@ paths:
   /api/v1/report-cards/{id}/pdf:
     get:
       tags: [report-cards]
-      summary: Signed PDF URL
+      summary: Download the report-card PDF (redirect to a short-lived signed URL)
+      parameters:
+        - name: format
+          in: query
+          required: false
+          description: "`json` returns `{ url }` in the envelope instead of redirecting."
+          schema: { type: string, enum: [json] }
       responses:
+        "302":
+          description: Redirect to a signed storage URL (expires in 10 minutes).
         "200":
-          description: Success (envelope).
+          description: Success (envelope) — only with `format=json`.
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Envelope' }
@@ -2093,11 +2101,7 @@ paths:
         "403":
           description: Forbidden (role/permission failure; onboarding secret invalid).
         "404":
-          description: Not found OR cross-tenant id (existence not leaked).
-        "409":
-          description: Conflict (duplicates, locked marks, double-booking, overpayment).
-        "422":
-          description: Validation error (Zod).
+          description: Not found, cross-tenant id, unpublished for families, or PDF not generated.
         "429":
           description: Rate limited (Retry-After header).
       security:

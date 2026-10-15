@@ -954,6 +954,59 @@ export async function deleteTimetableSlotAction(
   }
 }
 
+/* ----------------------------- report cards ----------------------------- */
+
+/** Generate (or regenerate) one student's report card for an exam. */
+export async function generateReportCardAction(
+  studentId: string,
+  examId: string,
+): Promise<ActionState> {
+  try {
+    const ctx = await requireRole("SCHOOL_ADMIN");
+    const db = await createServerSupabaseClient();
+    const { generateReportCard } = await import("@/lib/services/report-cards");
+    await generateReportCard(db, ctx, studentId, examId);
+    revalidatePath("/admin/report-cards");
+    return { success: true };
+  } catch (error) {
+    return err(error);
+  }
+}
+
+/** Generate report cards for every enrolled student of the exam's class. */
+export async function generateExamReportCardsAction(examId: string): Promise<ActionState> {
+  try {
+    const ctx = await requireRole("SCHOOL_ADMIN");
+    const db = await createServerSupabaseClient();
+    const { data: exam, error } = await db
+      .from("exams")
+      .select("id, class_id, academic_year_id")
+      .eq("id", examId)
+      .eq("school_id", ctx.profile.schoolId)
+      .single();
+    if (error !== null || exam === null) return { error: "Exam not found" };
+    const { getClassRoster } = await import("@/lib/services/marks");
+    const { generateReportCard } = await import("@/lib/services/report-cards");
+    const row = exam as { id: string; class_id: string; academic_year_id: string };
+    const roster = await getClassRoster(db, ctx, row.class_id, row.academic_year_id);
+    let failed = 0;
+    for (const student of roster) {
+      try {
+        await generateReportCard(db, ctx, student.id, examId);
+      } catch {
+        failed += 1;
+      }
+    }
+    revalidatePath("/admin/report-cards");
+    if (roster.length === 0) return { error: "No enrolled students for this exam's class" };
+    return failed === 0
+      ? { success: true }
+      : { error: `${roster.length - failed} generated, ${failed} could not be generated` };
+  } catch (error) {
+    return err(error);
+  }
+}
+
 /* ---------------------------- academic years ---------------------------- */
 
 export async function createAcademicYearAction(
