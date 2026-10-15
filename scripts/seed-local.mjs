@@ -133,6 +133,13 @@ async function seedGreenfield() {
     roles: ["SCHOOL_ADMIN"],
   });
 
+  // Second admin: fee payments use maker-checker (another admin verifies).
+  await createLogin(S, {
+    email: "accounts@greenfield.test",
+    fullName: "Farah Khan",
+    roles: ["SCHOOL_ADMIN"],
+  });
+
   // Classes, sections, subjects
   const [g9, g10] = await insert("classes", [
     { school_id: S, name: "Grade 9", order_index: 9 },

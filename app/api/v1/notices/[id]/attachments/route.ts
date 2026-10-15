@@ -1,4 +1,4 @@
-import { ok } from "@/lib/api/response";
+import { fail, ok } from "@/lib/api/response";
 import { requireAuth } from "@/lib/auth/session";
 import { routeErrorResponse } from "@/lib/services/errors";
 import { setNoticeAttachment } from "@/lib/services/notices";
@@ -17,10 +17,10 @@ export async function POST(
     const form = await request.formData();
     const file = form.get("file");
     if (!(file instanceof File)) {
-      return routeErrorResponse(new Error("Attach a file in the 'file' field"));
+      return fail("VALIDATION_ERROR", "Attach a file in the 'file' field");
     }
     if (file.size > MAX_HOMEWORK_FILE_BYTES) {
-      return routeErrorResponse(new Error("File must be under 10 MB"));
+      return fail("VALIDATION_ERROR", "File must be under 4 MB");
     }
     const db = await createServerSupabaseClient();
     return ok(

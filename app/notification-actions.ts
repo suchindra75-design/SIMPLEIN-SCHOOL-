@@ -160,7 +160,7 @@ export async function uploadNoticeAttachmentAction(
     const file = form.get("file");
     if (!(file instanceof File)) return { error: "Choose a file" };
     if (file.size > MAX_HOMEWORK_FILE_BYTES) {
-      return { error: "File must be under 10 MB" };
+      return { error: "File must be under 4 MB" };
     }
     await setNoticeAttachment(db, ctx, id, {
       name: file.name,
@@ -345,7 +345,7 @@ export async function uploadReceiptAction(
     const file = form.get("file");
     if (!(file instanceof File)) return { error: "Choose a file" };
     if (file.size > MAX_HOMEWORK_FILE_BYTES) {
-      return { error: "File must be under 10 MB" };
+      return { error: "File must be under 4 MB" };
     }
     await setPaymentReceipt(db, ctx, recordId, {
       name: file.name,

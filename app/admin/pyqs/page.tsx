@@ -87,74 +87,21 @@ export default async function AdminPyqsPage({
         </ul>
       )}
 
-      <h3 className="mb-2 mt-8 font-semibold">Upload PYQ</h3>
-      <form action={createPyqAction.bind(null, {})} className="max-w-lg space-y-4">
-        <div>
-          <label htmlFor="pyq-classId" className="mb-1 block text-sm font-medium">
-            Class *
-          </label>
-          <select id="pyq-classId" name="classId" required className="w-full rounded border px-3 py-2">
-            <option value="">Select…</option>
-            {classes.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label htmlFor="pyq-subjectId" className="mb-1 block text-sm font-medium">
-            Subject *
-          </label>
-          <select id="pyq-subjectId" name="subjectId" required className="w-full rounded border px-3 py-2">
-            <option value="">Select…</option>
-            {subjects.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label htmlFor="pyq-yearLabel" className="mb-1 block text-sm font-medium">
-            Year *
-          </label>
-          <input id="pyq-yearLabel" name="yearLabel" required className="w-full rounded border px-3 py-2" placeholder="2025" />
-        </div>
-        <div>
-          <label htmlFor="pyq-examBoardName" className="mb-1 block text-sm font-medium">
-            Exam/Board name *
-          </label>
-          <input id="pyq-examBoardName" name="examBoardName" required className="w-full rounded border px-3 py-2" placeholder="CBSE Board 2024" />
-        </div>
-        <div>
-          <label htmlFor="pyq-title" className="mb-1 block text-sm font-medium">
-            Title
-          </label>
-          <input id="pyq-title" name="title" className="w-full rounded border px-3 py-2" />
-        </div>
-        <div>
-          <label htmlFor="pyq-file" className="mb-1 block text-sm font-medium">
-            Question paper * (PDF/images/Office, ≤10 MB)
-          </label>
-          <input id="pyq-file" name="file" type="file" required className="w-full" />
-        </div>
-        <div>
-          <label htmlFor="pyq-solution" className="mb-1 block text-sm font-medium">
-            Solution (optional)
-          </label>
-          <input id="pyq-solution" name="solution" type="file" className="w-full" />
-        </div>
-        <div>
-          <label htmlFor="pyq-answerKey" className="mb-1 block text-sm font-medium">
-            Answer key (optional)
-          </label>
-          <input id="pyq-answerKey" name="answerKey" type="file" className="w-full" />
-        </div>
-        <button type="submit" className="ui-btn ui-btn-primary">
-          Upload PYQ
-        </button>
-      </form>
+      <h3 className="section-title mb-3 mt-8">Upload a past paper</h3>
+      <SmartForm
+        action={createPyqAction}
+        submitLabel="Upload past paper"
+        fields={[
+          { name: "classId", label: "Class", type: "select", required: true, options: classes.map((c) => ({ value: c.id, label: c.name })) },
+          { name: "subjectId", label: "Subject", type: "select", required: true, options: subjects.map((s) => ({ value: s.id, label: s.name })) },
+          { name: "yearLabel", label: "Year", required: true, placeholder: "2025" },
+          { name: "examBoardName", label: "Exam / board name", required: true, placeholder: "CBSE Board 2024" },
+          { name: "title", label: "Title" },
+          { name: "file", label: "Question paper (PDF/images/Office, ≤4 MB)", type: "file", required: true },
+          { name: "solution", label: "Solution (optional)", type: "file" },
+          { name: "answerKey", label: "Answer key (optional)", type: "file" },
+        ]}
+      />
       <p className="mt-2 text-xs text-gray-500">
         Files are stored privately; students download via expiring signed links.
       </p>

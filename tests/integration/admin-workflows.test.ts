@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { listStudentFees, recordPayment, verifyPaymentRecord, voidPaymentRecord } from "@/lib/services/fees";
 import { previewPromotion, promoteStudents } from "@/lib/services/promotions";
 import { createAcademicYear, listAcademicYears, setCurrentAcademicYear } from "@/lib/services/years";
 import { as, schoolId, serviceClient, studentByAdmission } from "./helpers";
@@ -46,6 +47,46 @@ describe("academic years", () => {
     await expect(
       createAcademicYear(admin.db, admin.ctx, { name: "Bad", startsOn: "2031-04-01", endsOn: "2031-03-01", isCurrent: false }),
     ).rejects.toThrow(/end date/i);
+  });
+});
+
+describe("offline fee payments", () => {
+  it("record → overpayment blocked → maker-checker verify → void, mirrored read-only for the parent", async () => {
+    const admin = await as("admin");
+    const accounts = await as("admin2");
+    const parent = await as("parent2"); // Sneha's parent
+    const sneha = await studentByAdmission("GPS-2026-006");
+    const db = serviceClient();
+    const { data: fee } = await db.from("student_fees").select("id, total_amount").eq("student_id", sneha.id).single();
+    const feeId = (fee as { id: string }).id;
+    const created: string[] = [];
+    try {
+      const first = await recordPayment(admin.db, admin.ctx, feeId, { amount: 20000, paidOn: "2026-10-01", mode: "CASH" });
+      created.push(first.id);
+      // 20000 pending + 6000 would exceed the 25000 total even before verification.
+      await expect(
+        recordPayment(admin.db, admin.ctx, feeId, { amount: 6000, paidOn: "2026-10-02", mode: "CASH" }),
+      ).rejects.toThrow(/exceeds the outstanding balance/);
+
+      expect((await listStudentFees(parent.db, parent.ctx, sneha.id)).fees[0]!.paid).toBe(0); // pending
+
+      await expect(verifyPaymentRecord(admin.db, admin.ctx, first.id)).rejects.toThrow(/Another admin/);
+      await verifyPaymentRecord(accounts.db, accounts.ctx, first.id);
+      await expect(verifyPaymentRecord(accounts.db, accounts.ctx, first.id)).rejects.toThrow(/already been verified/);
+      const afterVerify = (await listStudentFees(parent.db, parent.ctx, sneha.id)).fees[0]!;
+      expect(afterVerify).toMatchObject({ paid: 20000, due: 5000 });
+
+      await voidPaymentRecord(accounts.db, accounts.ctx, first.id, { reason: "Recorded twice by mistake" });
+      const afterVoid = (await listStudentFees(parent.db, parent.ctx, sneha.id)).fees[0]!;
+      expect(afterVoid).toMatchObject({ paid: 0, due: 25000 });
+      expect(afterVoid.records).toEqual([]); // families never see voided records
+
+      await expect(
+        recordPayment(parent.db, parent.ctx, feeId, { amount: 1, paidOn: "2026-10-03", mode: "CASH" }),
+      ).rejects.toThrow();
+    } finally {
+      for (const id of created) await db.from("fee_payment_records").delete().eq("id", id);
+    }
   });
 });
 

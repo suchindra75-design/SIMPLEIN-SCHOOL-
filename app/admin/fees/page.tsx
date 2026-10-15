@@ -260,7 +260,7 @@ export default async function AdminFeesPage({
                 <SmartForm
                   action={uploadReceiptAction.bind(null, f.records[0]?.id ?? "")}
                   submitLabel="Upload receipt for latest record"
-                  fields={[{ name: "file", label: "Receipt file (PDF/images, ≤10 MB)", type: "file", required: true }]}
+                  fields={[{ name: "file", label: "Receipt file (PDF/images, ≤4 MB)", type: "file", required: true }]}
                 />
               </div>
             </li>

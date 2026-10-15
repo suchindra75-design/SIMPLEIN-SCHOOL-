@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 export default async function StudentExamsPage() {
   const ctx = await requireRole("STUDENT");
   const db = await createServerSupabaseClient();
-  const { exams } = await listExams(db, ctx, { page: 1, limit: 50 });
+  const { exams } = await listExams(db, ctx, { page: 1, limit: 50, withSubjects: true });
 
   return (
     <div>

@@ -17,6 +17,11 @@ const securityHeaders = [
 const nextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
+  experimental: {
+    // Uploads (≤4 MB attachments, ≤2 MB photos) are posted to server actions;
+    // the 1 MB default rejected anything larger.
+    serverActions: { bodySizeLimit: "5mb" },
+  },
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   },

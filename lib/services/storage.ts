@@ -80,7 +80,11 @@ export async function signedPhotoUrl(
 /* ----------------------- homework attachments (Phase 9) ------------------ */
 
 export const HOMEWORK_BUCKET = "homework-attachments";
-export const MAX_HOMEWORK_FILE_BYTES = 10 * 1024 * 1024;
+/**
+ * 4 MB: uploads go through server actions/route handlers, and Vercel caps a
+ * function request body at 4.5 MB (multipart overhead included).
+ */
+export const MAX_HOMEWORK_FILE_BYTES = 4 * 1024 * 1024;
 
 /** PDF / images / Office docs — macro-enabled formats are blocked. */
 export const ALLOWED_HOMEWORK_MIME = new Set([
@@ -118,7 +122,7 @@ export function validateHomeworkUpload(file: {
     return "Attachment type is not allowed";
   }
   if (file.size <= 0 || file.size > MAX_HOMEWORK_FILE_BYTES) {
-    return "Attachment must be non-empty and under 10 MB";
+    return "Attachment must be non-empty and under 4 MB";
   }
   if (file.name.trim() === "") {
     return "Attachment must have a file name";

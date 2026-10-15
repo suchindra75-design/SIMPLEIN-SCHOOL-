@@ -24,6 +24,7 @@ export default async function ExamsPage({
     classId: sp["classId"],
     page: 1,
     limit: 100,
+    includeInactive: true,
   });
   const { classes } = await listClasses(db, ctx);
 

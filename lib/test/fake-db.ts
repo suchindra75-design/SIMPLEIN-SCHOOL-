@@ -69,6 +69,11 @@ export class FakeQuery {
     this.filters.push({ col, op: "neq", val });
     return this;
   }
+  /** PostgREST `is` (null checks): unset columns count as NULL, like Postgres. */
+  is(col: string, val: null): this {
+    this.filters.push({ col, op: "is", val });
+    return this;
+  }
   in(col: string, vals: unknown[]): this {
     this.filters.push({ col, op: "in", val: vals });
     return this;
@@ -137,6 +142,7 @@ export class FakeQuery {
       if (f.op === "eq") return v === f.val;
       if (f.op === "neq") return v !== f.val;
       if (f.op === "in") return (f.val as unknown[]).includes(v);
+      if (f.op === "is") return v === null || v === undefined;
       if (f.op === "gte") return typeof v === "string" && v >= (f.val as string);
       if (f.op === "lte") return typeof v === "string" && v <= (f.val as string);
       return true;

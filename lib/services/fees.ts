@@ -426,7 +426,9 @@ export async function recordPayment(
   if (!(input.amount > 0)) {
     throw new ConflictError("Amount must be greater than 0");
   }
-  // Overpayment rule: cumulative paid cannot exceed the assignment total.
+  // Overpayment rule: everything recorded and not voided (verified or still
+  // awaiting verification) cannot exceed the assignment total — otherwise
+  // several unverified records could add up to more than is owed.
   const { data: records, error: recError } = await db
     .from("fee_payment_records")
     .select("amount, is_voided, verified_by")
@@ -438,8 +440,8 @@ export async function recordPayment(
     is_voided: boolean;
     verified_by: string | null;
   }[])
-    .filter((r) => !r.is_voided && r.verified_by !== null)
-    .reduce((sum, r) => sum + r.amount, 0);
+    .filter((r) => !r.is_voided)
+    .reduce((sum, r) => sum + Number(r.amount), 0);
   const balance = feeBalance(row.total_amount, [
     { amount: existingPaid, isVoided: false, verified: true },
   ]);
@@ -496,6 +498,9 @@ export async function verifyPaymentRecord(
   if (row.is_voided) {
     throw new ConflictError("Voided records cannot be verified");
   }
+  if (row.verified_by != null) {
+    throw new ConflictError("This payment has already been verified");
+  }
   if (row.recorded_by === ctx.profile.id) {
     throw new ConflictError(
       "Another admin must verify your records (maker-checker)",
@@ -506,9 +511,10 @@ export async function verifyPaymentRecord(
     .update({ verified_by: ctx.profile.id })
     .eq("id", recordId)
     .eq("school_id", ctx.profile.schoolId)
+    .is("verified_by", null) // two admins verifying at once: only one wins
     .select("id")
     .single();
-  throwForPostgrest(error, "Payment record not found");
+  throwForPostgrest(error, "This payment has already been verified");
   await logAudit(db, ctx, "fee_payment.verified", "fee_payment_records", recordId, {});
   return { id: (data as { id: string }).id };
 }

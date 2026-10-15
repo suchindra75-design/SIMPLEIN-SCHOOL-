@@ -165,7 +165,7 @@ export default async function AdminNoticesPage({
                       <SmartForm
                         action={uploadNoticeAttachmentAction.bind(null, n.id)}
                         submitLabel="Upload Attachment"
-                        fields={[{ name: "file", label: "Attach Document (PDF/Images, ≤10 MB)", type: "file", required: true }]}
+                        fields={[{ name: "file", label: "Attach Document (PDF/Images, ≤4 MB)", type: "file", required: true }]}
                       />
                     </div>
                   )}

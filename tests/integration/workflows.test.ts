@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { getStudentAttendance, getStudentSummary } from "@/lib/services/attendance";
+import { listExams } from "@/lib/services/exams";
 import { listStudentFees, recordPayment } from "@/lib/services/fees";
 import { listMyTimetable } from "@/lib/services/timetable";
 import { getMarksGrid, getStudentResult, saveMarks } from "@/lib/services/marks";
@@ -204,6 +205,17 @@ describe("timetable views", () => {
     const { slots } = await listMyTimetable(student.db, student.ctx);
     expect(slots.length).toBe(25);
     expect(JSON.stringify(slots)).toContain("Anita Verma");
+  });
+});
+
+describe("exam schedules", () => {
+  it("teacher and student exam lists include each exam's subjects", async () => {
+    for (const role of ["teacher", "student"] as const) {
+      const actor = await as(role);
+      const { exams } = await listExams(actor.db, actor.ctx, { page: 1, limit: 50, withSubjects: true });
+      const ut9 = exams.find((e) => e.name === "Unit Test 1" && e.classes?.name === "Grade 9")!;
+      expect(ut9.subjects?.map((s) => s.subjects?.name).sort()).toEqual(["English", "Mathematics", "Science"]);
+    }
   });
 });
 

@@ -139,6 +139,10 @@ export interface ExamFilters {
   classId?: string;
   page: number;
   limit: number;
+  /** Also load each exam's subjects (date, time, max marks) in one query. */
+  withSubjects?: boolean;
+  /** Admin only: include deactivated exams (so they can be reactivated). */
+  includeInactive?: boolean;
 }
 
 /** Auto-scoped exam list: admin → school; teacher → assigned classes; parent → children's classes. */
@@ -159,9 +163,9 @@ export async function listExams(
     .from("exams")
     .select(EXAM_COLUMNS, { count: "exact" })
     .eq("school_id", ctx.profile.schoolId)
-    .eq("is_active", true)
     .order("starts_on", { ascending: false })
     .range(from, from + f.limit - 1);
+  if (f.includeInactive !== true || !isAdmin(ctx)) query = query.eq("is_active", true);
   query =
     f.classId !== undefined
       ? query.eq("class_id", f.classId)
@@ -171,7 +175,24 @@ export async function listExams(
   }
   const { data, error, count } = await query;
   throwForPostgrest(error);
-  return { exams: toCamel<ExamDto[]>(data ?? []), total: count ?? 0 };
+  const exams = toCamel<ExamDto[]>(data ?? []);
+  if (f.withSubjects === true && exams.length > 0) {
+    const { data: subjectRows, error: subjectError } = await db
+      .from("exam_subjects")
+      .select(EXAM_SUBJECT_COLUMNS)
+      .in("exam_id", exams.map((e) => e.id))
+      .eq("school_id", ctx.profile.schoolId)
+      .order("exam_date", { ascending: true, nullsFirst: false });
+    throwForPostgrest(subjectError);
+    const byExam = new Map<string, ExamSubjectDto[]>();
+    for (const row of toCamel<ExamSubjectDto[]>(subjectRows ?? [])) {
+      const list = byExam.get(row.examId) ?? [];
+      list.push(row);
+      byExam.set(row.examId, list);
+    }
+    for (const exam of exams) exam.subjects = byExam.get(exam.id) ?? [];
+  }
+  return { exams, total: count ?? 0 };
 }
 
 /** Scoped exam detail with subjects + schedules (404 on cross-tenant). */

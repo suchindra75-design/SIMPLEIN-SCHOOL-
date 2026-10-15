@@ -1136,55 +1136,39 @@ export async function promoteStudentsFormAction(
 export async function createPyqAction(
   _prev: ActionState,
   form: FormData,
-): Promise<void> {
-  const ctx = await requireRole("SCHOOL_ADMIN");
-  const db = await createServerSupabaseClient();
-  const { createPyq } = await import("@/lib/services/pyqs");
-  const file = form.get("file");
-  if (!(file instanceof File)) {
-    throw new Error("Attach the question paper");
-  }
-  const solutionRaw = form.get("solution");
-  const answerKeyRaw = form.get("answerKey");
-  await createPyq(
-    db,
-    ctx,
-    {
-      classId: str(form, "classId") ?? "",
-      subjectId: str(form, "subjectId") ?? "",
-      yearLabel: str(form, "yearLabel") ?? "",
-      examBoardName: str(form, "examBoardName") ?? "",
-      title: str(form, "title") ?? null,
-    },
-    {
-      file: {
-        name: file.name,
-        type: file.type,
-        size: file.size,
-        bytes: await file.arrayBuffer(),
+): Promise<ActionState> {
+  try {
+    const ctx = await requireRole("SCHOOL_ADMIN");
+    const db = await createServerSupabaseClient();
+    const { createPyq } = await import("@/lib/services/pyqs");
+    const { MAX_HOMEWORK_FILE_BYTES } = await import("@/lib/services/storage");
+    // Empty optional file inputs arrive as 0-byte Files: treat them as absent.
+    const fileField = async (key: string) => {
+      const raw = form.get(key);
+      if (!(raw instanceof File) || raw.size === 0) return null;
+      if (raw.size > MAX_HOMEWORK_FILE_BYTES) throw new Error(`${raw.name} must be under 4 MB`);
+      return { name: raw.name, type: raw.type, size: raw.size, bytes: await raw.arrayBuffer() };
+    };
+    const file = await fileField("file");
+    if (file === null) return { error: "Attach the question paper" };
+    await createPyq(
+      db,
+      ctx,
+      {
+        classId: str(form, "classId") ?? "",
+        subjectId: str(form, "subjectId") ?? "",
+        yearLabel: str(form, "yearLabel") ?? "",
+        examBoardName: str(form, "examBoardName") ?? "",
+        title: str(form, "title") ?? null,
       },
-      solution:
-        solutionRaw instanceof File
-          ? {
-              name: solutionRaw.name,
-              type: solutionRaw.type,
-              size: solutionRaw.size,
-              bytes: await solutionRaw.arrayBuffer(),
-            }
-          : null,
-      answerKey:
-        answerKeyRaw instanceof File
-          ? {
-              name: answerKeyRaw.name,
-              type: answerKeyRaw.type,
-              size: answerKeyRaw.size,
-              bytes: await answerKeyRaw.arrayBuffer(),
-            }
-          : null,
-    },
-  );
-  revalidatePath("/admin/pyqs");
-  revalidatePath("/student/pyqs");
+      { file, solution: await fileField("solution"), answerKey: await fileField("answerKey") },
+    );
+    revalidatePath("/admin/pyqs");
+    revalidatePath("/student/pyqs");
+    return { success: true };
+  } catch (error) {
+    return err(error);
+  }
 }
 
 export async function updatePyqAction(

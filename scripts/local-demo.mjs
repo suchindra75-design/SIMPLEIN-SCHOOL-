@@ -8,6 +8,7 @@ export const DEMO_PASSWORD = "SimplinDemo!2026";
 /** role → login identifiers (email always works; other identifiers per role). */
 export const DEMO_ACCOUNTS = {
   admin: { email: "admin@greenfield.test", role: "SCHOOL_ADMIN" },
+  admin2: { email: "accounts@greenfield.test", role: "SCHOOL_ADMIN" },
   teacher: { email: "anita.verma@greenfield.test", employeeNo: "T-1001", role: "TEACHER" },
   teacher2: { email: "rahul.sharma@greenfield.test", employeeNo: "T-1002", role: "TEACHER" },
   parent: { email: "ramesh.sharma@greenfield.test", phone: "9876500301", role: "PARENT" },

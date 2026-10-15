@@ -157,7 +157,7 @@ export default async function TeacherHomeworkPage({
                     <SmartForm
                       action={uploadHomeworkAttachmentAction.bind(null, h.id, `/teacher/homework?sectionId=${sectionId}`)}
                       submitLabel="Add attachment"
-                      fields={[{ name: "file", label: "File (PDF/images/Office, ≤10 MB)", type: "file", required: true }]}
+                      fields={[{ name: "file", label: "File (PDF/images/Office, ≤4 MB)", type: "file", required: true }]}
                     />
                   </div>
                 </li>

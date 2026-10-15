@@ -1,4 +1,4 @@
-import { ok } from "@/lib/api/response";
+import { fail, ok } from "@/lib/api/response";
 import { requireAuth } from "@/lib/auth/session";
 import { routeErrorResponse } from "@/lib/services/errors";
 import { createPyq } from "@/lib/services/pyqs";
@@ -18,18 +18,18 @@ export async function POST(request: Request) {
     const form = await request.formData();
     const file = form.get("file");
     if (!(file instanceof File)) {
-      return routeErrorResponse(new Error("Attach the question paper as 'file'"));
+      return fail("VALIDATION_ERROR", "Attach the question paper as 'file'");
     }
     if (file.size > MAX_HOMEWORK_FILE_BYTES) {
-      return routeErrorResponse(new Error("File must be under 10 MB"));
+      return fail("VALIDATION_ERROR", "File must be under 4 MB");
     }
     const solutionRaw = form.get("solution");
     const answerKeyRaw = form.get("answerKey");
     if (solutionRaw instanceof File && solutionRaw.size > MAX_HOMEWORK_FILE_BYTES) {
-      return routeErrorResponse(new Error("Solution must be under 10 MB"));
+      return fail("VALIDATION_ERROR", "Solution must be under 4 MB");
     }
     if (answerKeyRaw instanceof File && answerKeyRaw.size > MAX_HOMEWORK_FILE_BYTES) {
-      return routeErrorResponse(new Error("Answer key must be under 10 MB"));
+      return fail("VALIDATION_ERROR", "Answer key must be under 4 MB");
     }
     const metadata = pyqCreateSchema.parse({
       classId: form.get("classId"),

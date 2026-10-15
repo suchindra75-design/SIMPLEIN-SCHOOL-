@@ -149,7 +149,7 @@ export default async function AdminHomeworkPage({
                   <SmartForm
                     action={uploadHomeworkAttachmentAction.bind(null, h.id, "/admin/homework")}
                     submitLabel="Add attachment"
-                    fields={[{ name: "file", label: "File (PDF/images/Office, ≤10 MB)", type: "file", required: true }]}
+                    fields={[{ name: "file", label: "File (PDF/images/Office, ≤4 MB)", type: "file", required: true }]}
                   />
                 </div>
               )}

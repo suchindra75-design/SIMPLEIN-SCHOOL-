@@ -1,4 +1,4 @@
-import { ok } from "@/lib/api/response";
+import { fail, ok } from "@/lib/api/response";
 import { requireAuth } from "@/lib/auth/session";
 import { routeErrorResponse } from "@/lib/services/errors";
 import { addHomeworkAttachment } from "@/lib/services/homework";
@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 
 /**
  * Multipart upload { file } → validated + stored privately + registered.
- * Author-teacher or admin, audited. ≤10 MB, PDF/images/Office (macros blocked).
+ * Author-teacher or admin, audited. ≤4 MB, PDF/images/Office (macros blocked).
  */
 export async function POST(
   request: Request,
@@ -25,7 +25,7 @@ export async function POST(
       );
     }
     if (file.size > MAX_HOMEWORK_FILE_BYTES) {
-      return routeErrorResponse(new Error("File must be under 10 MB"));
+      return fail("VALIDATION_ERROR", "File must be under 4 MB");
     }
     const db = await createServerSupabaseClient();
     return ok(
