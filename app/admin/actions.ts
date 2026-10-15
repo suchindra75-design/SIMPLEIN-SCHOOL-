@@ -277,7 +277,8 @@ export async function updateTeacherAction(
       email: str(form, "email") ?? null,
       qualification: str(form, "qualification") ?? null,
       dateOfJoining: str(form, "dateOfJoining") ?? null,
-      isActive: form.get("isActive") === "on" ? true : undefined,
+      // The edit form always renders this checkbox; unticked posts nothing.
+      isActive: form.get("isActive") === "on",
     });
     revalidatePath("/admin/teachers");
     return { success: true };
@@ -355,7 +356,8 @@ export async function updateParentAction(
       phone: str(form, "phone") ?? null,
       email: str(form, "email") ?? null,
       address: str(form, "address") ?? null,
-      isActive: form.get("isActive") === "on" ? true : undefined,
+      // The edit form always renders this checkbox; unticked posts nothing.
+      isActive: form.get("isActive") === "on",
     });
     revalidatePath("/admin/parents");
     return { success: true };
