@@ -45,7 +45,7 @@ components:
   schemas:
     Envelope:
       type: object
-      description: Success { data, meta? } or error { error: { code, message } }.
+      description: "Success { data, meta? } or error { error: { code, message } }."
     ApiError:
       type: object
       properties:
@@ -206,7 +206,6 @@ paths:
           description: Rate limited (Retry-After header).
       security:
         - sessionCookie: []
-  /api/v1/users:
     post:
       tags: [users]
       summary: Create login + profile + role (TEACHER/PARENT/STUDENT)
@@ -278,7 +277,6 @@ paths:
           description: Rate limited (Retry-After header).
       security:
         - sessionCookie: []
-  /api/v1/users/{id}:
     patch:
       tags: [users]
       summary: Update contact fields
@@ -398,7 +396,6 @@ paths:
           description: Rate limited (Retry-After header).
       security:
         - sessionCookie: []
-  /api/v1/teachers:
     post:
       tags: [teachers]
       summary: Create teacher profile
@@ -446,7 +443,6 @@ paths:
           description: Rate limited (Retry-After header).
       security:
         - sessionCookie: []
-  /api/v1/teachers/{id}:
     patch:
       tags: [teachers]
       summary: Update teacher
@@ -494,7 +490,6 @@ paths:
           description: Rate limited (Retry-After header).
       security:
         - sessionCookie: []
-  /api/v1/teachers/{id}/assignments:
     post:
       tags: [teachers]
       summary: Assign subject+section
@@ -566,7 +561,6 @@ paths:
           description: Rate limited (Retry-After header).
       security:
         - sessionCookie: []
-  /api/v1/parents:
     post:
       tags: [parents]
       summary: Create parent profile
@@ -614,7 +608,6 @@ paths:
           description: Rate limited (Retry-After header).
       security:
         - sessionCookie: []
-  /api/v1/parents/{id}:
     patch:
       tags: [parents]
       summary: Update parent
@@ -662,7 +655,6 @@ paths:
           description: Rate limited (Retry-After header).
       security:
         - sessionCookie: []
-  /api/v1/parents/{id}/children:
     post:
       tags: [parents]
       summary: Link a child
@@ -734,7 +726,6 @@ paths:
           description: Rate limited (Retry-After header).
       security:
         - sessionCookie: []
-  /api/v1/students:
     post:
       tags: [students]
       summary: Create student
@@ -782,7 +773,6 @@ paths:
           description: Rate limited (Retry-After header).
       security:
         - sessionCookie: []
-  /api/v1/students/{id}:
     patch:
       tags: [students]
       summary: Update student
@@ -854,7 +844,6 @@ paths:
           description: Rate limited (Retry-After header).
       security:
         - sessionCookie: []
-  /api/v1/students/{id}/parents:
     post:
       tags: [students]
       summary: Link a parent
@@ -902,7 +891,6 @@ paths:
           description: Rate limited (Retry-After header).
       security:
         - sessionCookie: []
-  /api/v1/classes:
     post:
       tags: [academic-structure]
       summary: Create class
@@ -950,7 +938,6 @@ paths:
           description: Rate limited (Retry-After header).
       security:
         - sessionCookie: []
-  /api/v1/classes/{id}:
     patch:
       tags: [academic-structure]
       summary: Update class
@@ -998,7 +985,6 @@ paths:
           description: Rate limited (Retry-After header).
       security:
         - sessionCookie: []
-  /api/v1/classes/{id}/sections:
     post:
       tags: [academic-structure]
       summary: Create section
@@ -1046,7 +1032,6 @@ paths:
           description: Rate limited (Retry-After header).
       security:
         - sessionCookie: []
-  /api/v1/sections/{id}:
     patch:
       tags: [academic-structure]
       summary: Update section (incl. class teacher)
@@ -1094,7 +1079,6 @@ paths:
           description: Rate limited (Retry-After header).
       security:
         - sessionCookie: []
-  /api/v1/subjects:
     post:
       tags: [academic-structure]
       summary: Create subject
@@ -1166,7 +1150,6 @@ paths:
           description: Rate limited (Retry-After header).
       security:
         - sessionCookie: []
-  /api/v1/classes/{id}/subjects:
     post:
       tags: [academic-structure]
       summary: Link subject to class
@@ -1190,10 +1173,9 @@ paths:
           description: Rate limited (Retry-After header).
       security:
         - sessionCookie: []
-  /api/v1/classes/{id}/subjects:
     delete:
       tags: [academic-structure]
-      summary: Unlink subject (query: subjectId)
+      summary: "Unlink subject (query: subjectId)"
       responses:
         "200":
           description: Success (envelope).
@@ -1238,7 +1220,6 @@ paths:
           description: Rate limited (Retry-After header).
       security:
         - sessionCookie: []
-  /api/v1/academic-years:
     post:
       tags: [academic-structure]
       summary: Create academic year
@@ -1454,7 +1435,6 @@ paths:
           description: Rate limited (Retry-After header).
       security:
         - sessionCookie: []
-  /api/v1/exams:
     post:
       tags: [exams]
       summary: Create exam + subject configs
@@ -1502,7 +1482,6 @@ paths:
           description: Rate limited (Retry-After header).
       security:
         - sessionCookie: []
-  /api/v1/exams/{id}:
     patch:
       tags: [exams]
       summary: Update exam
@@ -1646,7 +1625,6 @@ paths:
           description: Rate limited (Retry-After header).
       security:
         - sessionCookie: []
-  /api/v1/exam-subjects/{id}:
     delete:
       tags: [exams]
       summary: Remove subject from exam
@@ -1694,7 +1672,6 @@ paths:
           description: Rate limited (Retry-After header).
       security:
         - sessionCookie: []
-  /api/v1/exam-subjects/{id}/schedule:
     delete:
       tags: [exams]
       summary: Remove schedule row
@@ -2054,7 +2031,6 @@ paths:
           description: Rate limited (Retry-After header).
       security:
         - sessionCookie: []
-  /api/v1/report-cards/students/{studentId}:
     post:
       tags: [report-cards]
       summary: Generate snapshot + PDF
@@ -2154,7 +2130,6 @@ paths:
           description: Rate limited (Retry-After header).
       security:
         - sessionCookie: []
-  /api/v1/timetable/sections/{sectionId}:
     post:
       tags: [timetable]
       summary: Create slot (409 on conflicts)
@@ -2202,7 +2177,6 @@ paths:
           description: Rate limited (Retry-After header).
       security:
         - sessionCookie: []
-  /api/v1/timetable/slots/{id}:
     delete:
       tags: [timetable]
       summary: Delete slot
@@ -2346,7 +2320,6 @@ paths:
           description: Rate limited (Retry-After header).
       security:
         - sessionCookie: []
-  /api/v1/homework/{id}:
     patch:
       tags: [homework]
       summary: Edit homework (author/admin)
@@ -2370,7 +2343,6 @@ paths:
           description: Rate limited (Retry-After header).
       security:
         - sessionCookie: []
-  /api/v1/homework/{id}:
     delete:
       tags: [homework]
       summary: Soft-delete homework
@@ -2514,10 +2486,32 @@ paths:
           description: Rate limited (Retry-After header).
       security:
         - sessionCookie: []
-  /api/v1/notices/{id}:
     patch:
       tags: [notices]
       summary: Edit notice/targets
+      responses:
+        "200":
+          description: Success (envelope).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Envelope' }
+        "401":
+          description: Unauthenticated (except no-auth endpoints).
+        "403":
+          description: Forbidden (role/permission failure; onboarding secret invalid).
+        "404":
+          description: Not found OR cross-tenant id (existence not leaked).
+        "409":
+          description: Conflict (duplicates, locked marks, double-booking, overpayment).
+        "422":
+          description: Validation error (Zod).
+        "429":
+          description: Rate limited (Retry-After header).
+      security:
+        - sessionCookie: []
+    delete:
+      tags: [notices]
+      summary: Archive notice
       responses:
         "200":
           description: Success (envelope).
@@ -2566,30 +2560,6 @@ paths:
     post:
       tags: [notices]
       summary: Unpublish
-      responses:
-        "200":
-          description: Success (envelope).
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/Envelope' }
-        "401":
-          description: Unauthenticated (except no-auth endpoints).
-        "403":
-          description: Forbidden (role/permission failure; onboarding secret invalid).
-        "404":
-          description: Not found OR cross-tenant id (existence not leaked).
-        "409":
-          description: Conflict (duplicates, locked marks, double-booking, overpayment).
-        "422":
-          description: Validation error (Zod).
-        "429":
-          description: Rate limited (Retry-After header).
-      security:
-        - sessionCookie: []
-  /api/v1/notices/{id}:
-    delete:
-      tags: [notices]
-      summary: Archive notice
       responses:
         "200":
           description: Success (envelope).
@@ -2757,7 +2727,7 @@ paths:
   /api/v1/fees/structures:
     get:
       tags: [fees]
-      summary: Fee structures (parent: assigned only)
+      summary: "Fee structures (parent: assigned only)"
       responses:
         "200":
           description: Success (envelope).
@@ -2830,9 +2800,14 @@ paths:
     post:
       tags: [fees]
       summary: Assign to students (concession)
+      description: >-
+        Body { studentIds (1-500), totalAmount?, dueDate? }. Returns
+        data { assigned, skipped }: students whose fee for this structure
+        already has non-voided payment records are skipped and keep their
+        total.
       responses:
-        "200":
-          description: Success (envelope).
+        "201":
+          description: Assigned (envelope with { assigned, skipped }).
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Envelope' }
@@ -3114,10 +3089,9 @@ paths:
           description: Rate limited (Retry-After header).
       security:
         - sessionCookie: []
-  /api/v1/pyqs/{id}:
     post:
       tags: [pyqs]
-      summary: Archive/restore (query: active)
+      summary: "Archive/restore (query: active)"
       responses:
         "200":
           description: Success (envelope).

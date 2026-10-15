@@ -2,6 +2,8 @@
  * OpenAPI 3.1 generator for the implemented /api/v1 REST surface.
  * Usage: node scripts/generate-openapi.mjs > docs/openapi.yaml
  * The registry below documents ACTUAL implemented endpoints (Phase 13 audit).
+ * docs/openapi.yaml also carries hand-written detail for a few operations
+ * (report-card PDF redirect, fee assignment result); keep it when regenerating.
  */
 import { writeFileSync } from "node:fs";
 
@@ -214,7 +216,7 @@ yaml.push("      description: Server-only ONBOARDING_SECRET (not a user session)
 yaml.push("  schemas:");
 yaml.push("    Envelope:");
 yaml.push("      type: object");
-yaml.push("      description: Success { data, meta? } or error { error: { code, message } }.");
+yaml.push('      description: "Success { data, meta? } or error { error: { code, message } }."');
 yaml.push("    ApiError:");
 yaml.push("      type: object");
 yaml.push("      properties:");
@@ -233,34 +235,47 @@ yaml.push("security:");
 yaml.push("  - sessionCookie: []");
 yaml.push("paths:");
 
-for (const [method, path, summary, auth, tag] of ENDPOINTS) {
+/** Plain YAML scalar unless it contains something YAML would misread. */
+const scalar = (text) => (/: | #|^[{[&*!%@`'"]/.test(text) ? JSON.stringify(text) : text);
+
+// One key per path; several methods on a path share it.
+const byPath = new Map();
+for (const endpoint of ENDPOINTS) {
+  const list = byPath.get(endpoint[1]) ?? [];
+  list.push(endpoint);
+  byPath.set(endpoint[1], list);
+}
+
+for (const [path, endpoints] of byPath) {
   yaml.push(`  ${path}:`);
-  yaml.push(`    ${method}:`);
-  yaml.push(`      tags: [${tag}]`);
-  yaml.push(`      summary: ${summary}`);
-  yaml.push("      responses:");
-  yaml.push("        \"200\":");
-  yaml.push("          description: Success (envelope).");
-  yaml.push("          content:");
-  yaml.push("            application/json:");
-  yaml.push("              schema: { $ref: '#/components/schemas/Envelope' }");
-  yaml.push("        \"401\":");
-  yaml.push("          description: Unauthenticated (except no-auth endpoints).");
-  yaml.push("        \"403\":");
-  yaml.push("          description: Forbidden (role/permission failure; onboarding secret invalid).");
-  yaml.push("        \"404\":");
-  yaml.push("          description: Not found OR cross-tenant id (existence not leaked).");
-  yaml.push("        \"409\":");
-  yaml.push("          description: Conflict (duplicates, locked marks, double-booking, overpayment).");
-  yaml.push("        \"422\":");
-  yaml.push("          description: Validation error (Zod).");
-  yaml.push("        \"429\":");
-  yaml.push("          description: Rate limited (Retry-After header).");
-  const security = SECURITY_BY_AUTH[auth] ?? [{ sessionCookie: [] }];
-  yaml.push("      security:");
-  for (const s of security) {
-    const key = Object.keys(s)[0];
-    yaml.push(`        - ${key}: []`);
+  for (const [method, , summary, auth, tag] of endpoints) {
+    yaml.push(`    ${method}:`);
+    yaml.push(`      tags: [${tag}]`);
+    yaml.push(`      summary: ${scalar(summary)}`);
+    yaml.push("      responses:");
+    yaml.push("        \"200\":");
+    yaml.push("          description: Success (envelope).");
+    yaml.push("          content:");
+    yaml.push("            application/json:");
+    yaml.push("              schema: { $ref: '#/components/schemas/Envelope' }");
+    yaml.push("        \"401\":");
+    yaml.push("          description: Unauthenticated (except no-auth endpoints).");
+    yaml.push("        \"403\":");
+    yaml.push("          description: Forbidden (role/permission failure; onboarding secret invalid).");
+    yaml.push("        \"404\":");
+    yaml.push("          description: Not found OR cross-tenant id (existence not leaked).");
+    yaml.push("        \"409\":");
+    yaml.push("          description: Conflict (duplicates, locked marks, double-booking, overpayment).");
+    yaml.push("        \"422\":");
+    yaml.push("          description: Validation error (Zod).");
+    yaml.push("        \"429\":");
+    yaml.push("          description: Rate limited (Retry-After header).");
+    const security = SECURITY_BY_AUTH[auth] ?? [{ sessionCookie: [] }];
+    yaml.push("      security:");
+    for (const s of security) {
+      const key = Object.keys(s)[0];
+      yaml.push(`        - ${key}: []`);
+    }
   }
 }
 
