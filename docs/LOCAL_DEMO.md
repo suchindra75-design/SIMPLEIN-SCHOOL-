@@ -6,10 +6,12 @@ project: the seed, integration tests and smoke crawl refuse any non-localhost UR
 
 ## 1. Requirements
 
-- Node.js 22 and `npm ci`
+- Node.js 20 or newer (verified with Node 24) and `npm ci`
 - Docker Desktop running (the local stack needs roughly 3–4 GB of images on first start
   and about 2 GB of RAM while running)
 - No `.env.local` is needed for local work; keys come from `supabase status`
+- Run every command from the checkout of `release/erp-submission` (in this repository:
+  `.claude/worktrees/elegant-bohr-67698f`), not from the main checkout
 
 ## 2. Start the local stack
 
@@ -102,7 +104,9 @@ NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321 NEXT_PUBLIC_SUPABASE_ANON_KEY="$
 NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321 NEXT_PUBLIC_SUPABASE_ANON_KEY="$LOCAL_ANON_KEY" SUPABASE_SERVICE_ROLE_KEY="$LOCAL_SERVICE_ROLE_KEY" NEXT_PUBLIC_APP_URL=http://localhost:3999 npx next start -p 3999
 ```
 
-Open <http://localhost:3999/login>.
+Open <http://localhost:3999/login>. The build takes about 1–2 minutes; the start about
+5 seconds. `ONBOARDING_SECRET` is only needed for the school-onboarding API and can be
+left unset for the demo. Check the app is up with `curl http://localhost:3999/api/v1/health`.
 
 ## 6. Tests
 
@@ -120,24 +124,64 @@ demo data predictable: `supabase db reset --local && node scripts/seed-local.mjs
 
 ## 7. Demo walkthrough (about 15 minutes)
 
-1. **Admin** (`admin@greenfield.test`): dashboard KPIs → Students (search, open Aarav) →
-   Attendance overview → Exams → Report cards: generate for Grade 9 and preview a PDF →
-   Fees: record an offline cash payment for Sneha (`GPS-2026-006`) → Notices: create and
-   publish a school-wide notice → Academic years → Promotions preview.
-2. **Second admin** (`accounts@greenfield.test`): Fees → verify the payment recorded in
-   step 1 (the recording admin cannot verify their own entry).
-3. **Teacher** (`T-1001`): dashboard → mark attendance for 9-A (Present, Absent,
-   Late, Leave) → Marks: Grade 9 Maths is locked; enter Science or English for 9-A as
-   class teacher → Homework: create with a file attachment.
-4. **Parent** (`9876500301`): switch between Aarav and Diya → attendance →
-   results (only published subjects appear) → fees (read-only; shows verified payments) →
-   notices and notifications.
-5. **Student** (`GPS-2026-001`): timetable, homework with attachment download, results,
-   notices.
+Sign out between roles (account menu, top right). Start from freshly seeded data
+(section 4).
+
+1. **Admin** (`admin@greenfield.test`, Staff Portal → Administrator):
+   - Dashboard KPIs → Students: search "Aarav", open the profile (linked parent shown).
+   - Marks: choose *Unit Test 1 · Grade 10* → **Publish** Mathematics (English is already
+     published). Families only see a report card once every subject of the exam is
+     published.
+   - Report cards: *Unit Test 1 · Grade 10* → **Generate** for Diya → **Download PDF**.
+   - Fees: select Sneha (`GPS-2026-006`) → record an offline CASH payment. The page reloads
+     and shows "Saved"; the payment stays unverified until another admin verifies it.
+   - Notices: create a notice for *Entire School Community* with *Publish immediately*.
+   - Academic years, Promotions preview (optional).
+2. **Second admin** (`accounts@greenfield.test`): Fees → Sneha → **Verify** the payment
+   (the admin who recorded it cannot verify it). The page reloads with "Payment verified."
+3. **Teacher** (`T-1001`, Staff Portal → Faculty / Teacher):
+   - Attendance: section *Grade 9 A*, today → **Load** → **Mark all present** → set Aarav
+     to **LEAVE** → **Save attendance** ("Saved 4 students"). Statuses are PRESENT, ABSENT
+     and LEAVE.
+   - Marks entry: Grade 9 Mathematics is locked (published); open Science and change a mark
+     → **Save marks** (grade recalculates). A mark above 50 is rejected and the entries
+     stay on screen.
+   - Homework: create one for Mathematics. To show an attachment, use **Add attachment**
+     with any PDF or image of 4 MB or less (the seed has no homework attachments).
+4. **Parent** (`98765 00301`, Family Portal → Parent / Guardian): dashboard lists Aarav and
+   Diya → Attendance (Aarav's LEAVE from step 3) → Results (Grade 9: only Mathematics is
+   published) → Report cards: Diya, *Unit Test 1* → card and PDF → Fees (read-only, "pay at
+   the school office") → Notices (the school notice; staff-only notices are hidden).
+5. **Student** (`GPS-2026-001`, Family Portal → Student): attendance (LEAVE), timetable,
+   homework, results, fees (read-only), notices.
 6. **Isolation**: sign in as `admin@riverside.test`; none of Greenfield's students,
    notices or fees appear.
 
-## 8. Stop
+## 8. Demo-day checklist
+
+1. Start Docker Desktop and wait until it reports it is running.
+2. From the `release/erp-submission` checkout: section 2 (start the stack), section 3
+   (environment), section 4 (reset and seed), section 5 (build, then start).
+3. Check `http://localhost:3999/api/v1/health` returns `"status":"ok"`, then sign in once
+   with each of the four demo identifiers (password: `DEMO_PASSWORD` in
+   `scripts/local-demo.mjs`).
+4. Optional: `node scripts/smoke-crawl.mjs` (about 30 seconds) should report
+   `80 checks, 0 failure(s)`.
+5. Re-run section 4 after rehearsing so the demo starts from clean data.
+
+### If something fails
+
+| Symptom | Fix |
+| --- | --- |
+| `supabase start` fails: Docker daemon not running | Start Docker Desktop, wait, run section 2 again. |
+| `port is already allocated` / app will not start on 3999 | Stop the old process (`lsof -ti tcp:3999` lists it; end it with `kill <pid>`), then start again (or use another port and the matching `NEXT_PUBLIC_APP_URL`). |
+| Sign-in says the details are incorrect | Data was reset or not seeded: run section 4. Use the identifier for the selected tab (Teacher tab for `T-1001`, Parent tab for the phone number, Student tab for the admission number). |
+| Pages show an error or redirect to login after a reset | Old session cookies: sign out, or open a private window. |
+| A page looks wrong after code changes | Rebuild (section 5); `next start` serves the last build. |
+| Data looks inconsistent after rehearsals or tests | Section 4 (reset + seed) restores the demo data in under a minute. |
+| Everything is stuck | `npx --no-install supabase stop`, then sections 2–5 again. |
+
+## 9. Stop
 
 ```bash
 npx --no-install supabase stop

@@ -1,43 +1,51 @@
 # Submission report: branch `release/erp-submission`
 
-Status on 15 October 2026. Everything below was verified locally against an isolated
+Status on 16 October 2026. Everything below was verified locally against an isolated
 Supabase stack (Docker) seeded with two demo schools. Nothing was pushed, deployed or
-run against a hosted project. Setup and demo steps are in [LOCAL_DEMO.md](LOCAL_DEMO.md).
+run against a hosted project, and nothing here was verified against production.
+Setup, demo steps and recovery are in [LOCAL_DEMO.md](LOCAL_DEMO.md).
 
-## Test results
+## Test results (final run, freshly seeded data)
 
 | Check | Result | Notes |
 | --- | --- | --- |
-| Type check (`tsc --noEmit`) | PASS | 0 errors |
-| Lint (`eslint .`) | PASS | 0 errors; 1 warning in the unused `finalfrontendsimp-main/` copy |
+| Type check (`npm run typecheck`) | PASS | 0 errors |
+| Lint (`npm run lint`) | PASS | 0 errors; 1 warning in the unused `finalfrontendsimp-main/` copy |
 | Unit tests (`npm test`) | PASS, 389/389 | 30 files; services against an in-memory fake DB |
 | Integration tests (`npm run test:integration`) | PASS, 49/49 | 5 files; real PostgREST, Auth, Storage and RLS |
 | Database tests (`supabase test db`) | PASS, 288/288 | 12 pgTAP files, including RLS coverage of every table |
-| Production build (`next build`) | PASS | |
-| Smoke crawl (`scripts/smoke-crawl.mjs`) | PASS, 80/80 | Every page of the four portals as each role; other portals redirect |
-| Browser walkthrough (built-in Chromium) | PASS | See below |
-| Hosted staging/production checks | BLOCKED | Not run: needs your approval and rotated credentials |
-| Other browsers, screen readers | NOT RUN | Only the Chromium-based pane was used |
+| Production build (`npm run build`) | PASS | Built with the documented command |
+| Smoke crawl (`scripts/smoke-crawl.mjs`) | PASS, 80/80 | Every page of the four portals as each role; other portals redirect. Median 139 ms, slowest 384 ms |
+| Browser checks (headless Chromium and the in-app browser) | PASS | See below |
+| Hosted staging/production checks | NOT RUN | Needs your approval and rotated credentials |
+| Firefox, Safari, screen readers | NOT RUN | Only Chromium was used |
 
 Every bug fix that has a test was checked against the previous code: the new test fails
-there and passes with the fix.
+there and passes with the fix. The documented start-up path (stop, start, reset, seed,
+build, start) was run end to end from LOCAL_DEMO.md.
 
-Crawl timings were taken while the machine was under heavy background load (load
-average 16–26, swap in use): median about 400 ms per page, slowest pages (parent
-timetable and report cards) about 1.1–1.3 s. On a quiet machine earlier the same day:
-median 266 ms, slowest 635 ms.
+### Flows verified in a browser (production build, local data)
 
-### Browser walkthrough (production build, local data)
+- Sign-in for all four portals: admin email, teacher `T-1001`, parent `98765 00301`,
+  student `gps-2026-001` (lower case); wrong password shows the error; sign-out works.
+- Student records: search, open profile with real data and linked parent.
+- Attendance: teacher marks 9-A with one student on LEAVE; parent and student both see
+  the LEAVE.
+- Exams and marks: Science mark saved, grade recalculated; out-of-range mark rejected with
+  the entries kept; results show only published subjects to families.
+- Report cards: admin publishes the remaining Grade 10 subject, generates Diya's card;
+  the parent opens it and downloads a valid PDF.
+- Notices and homework: admin creates and publishes a school-wide notice (10 in-app
+  notifications created); teacher creates homework for 9-A. Families see the school's
+  published notices and their section's homework (checked on the seeded items), and
+  the staff-only notice is hidden from them.
+- Fees: record payment, verify by the second admin (maker-checker), assign to students,
+  create structure: each completes with a confirmation (10 of 10 runs); parent and student
+  fee pages are read-only.
+- Teacher deactivate/reactivate; mobile width (375 px) without horizontal scrolling.
 
-- Sign-in by teacher employee ID (`T-1001`), parent phone (`98765 00301`), student
-  admission number typed in lower case (`gps-2026-001`) and admin email; each lands in
-  its own portal. A wrong password shows the error message; sign-out works.
-- Teacher marks entry: a mark above the maximum is rejected and the grid and every
-  entry stay on screen; nothing is written.
-- Admin: deactivate and reactivate a teacher from the edit form; record an offline
-  payment; fee assignment to several students (skips students with recorded payments
-  and says so).
-- Mobile width (375 px): no horizontal scrolling; navigation drawer works.
+Not verified in a browser: uploading a file (receipt, homework attachment, notice
+attachment, photo). Uploads are covered by the storage integration tests.
 
 ## What changed on this branch
 
@@ -69,6 +77,15 @@ median 266 ms, slowest 635 ms.
 - Performance: set-based RLS helpers for family/teacher reads (parent timetable went
   from about 9 s to under 0.6 s).
 
+**Found and fixed during final verification (16 October)**
+- Fees page: saves stayed on "Saving…" although they had succeeded (most attempts). The
+  page could not apply an in-place update after a save; it now reloads after a successful
+  save and shows the result. This predates the branch's fee changes.
+- Attendance: unmarked students showed PRESENT while Save was disabled; they now show
+  "Select…" until marked.
+- Attendance and marks: the "Saved N students" confirmation was cleared immediately; it
+  now stays.
+
 **Design**: navy sidebar, bright-blue active state, white top bar and pale blue-grey
 background as one token set used by all four portals and the login page.
 
@@ -95,12 +112,14 @@ background as one token set used by all four portals and the login page.
    are only distributed from the SheetJS CDN, not npm.
 7. **Any teacher can send a notification to anyone in their own school** (RLS allows the
    insert). Cross-school sending is blocked.
-8. **Fees page observation.** An intermediate version that ran several student queries in
-   parallel made the page hang after a save. It was replaced with one query and never
-   committed, but the root cause was not isolated. Parallel queries during a
-   post-save re-render are worth watching.
+8. **Fees page reloads after each save.** The root cause of the in-place update failure
+   was not isolated (React stayed suspended; production builds only; not seen on the
+   notices or subjects pages, but other pages were not stress-tested the same way). The
+   reload is a workaround scoped to the fees page.
 9. **Out-of-range marks return 409** instead of 422. The message is correct; only the
    status code is unusual.
 10. **Branch state.** `release/erp-submission` is not merged into `main` or pushed. The
-    main checkout is mid-merge on `phase-16-production-infrastructure` and was left
-    untouched.
+    main checkout is mid-merge on `phase-16-production-infrastructure` (conflicts
+    resolved, merge not concluded) and was left untouched.
+11. **Attendance statuses** are PRESENT, ABSENT and LEAVE; there is no LATE status.
+12. **Demo data has no homework attachments**; add one during the demo if needed.
