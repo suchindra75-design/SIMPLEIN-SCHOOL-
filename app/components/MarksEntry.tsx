@@ -30,12 +30,15 @@ export function MarksEntry({ examSubjectId }: { examSubjectId: string }) {
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Save failures keep the grid (and the teacher's unsaved entries) on screen.
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
   const load = useCallback(async (id: string) => {
     if (id === "") return;
     setLoading(true);
     setError(null);
+    setSaveError(null);
     setSuccess(null);
     try {
       const res = await fetch(`/api/v1/marks/subjects/${id}`);
@@ -70,7 +73,7 @@ export function MarksEntry({ examSubjectId }: { examSubjectId: string }) {
   async function save() {
     if (grid === null) return;
     setBusy(true);
-    setError(null);
+    setSaveError(null);
     setSuccess(null);
     try {
       const records = grid.roster.map((s) => {
@@ -93,13 +96,13 @@ export function MarksEntry({ examSubjectId }: { examSubjectId: string }) {
         error?: { message: string };
       };
       if (!res.ok || body.data === undefined) {
-        setError(body.error?.message ?? "Save failed");
+        setSaveError(body.error?.message ?? "Save failed");
       } else {
         setSuccess(`Saved ${body.data.saved} students (${body.data.changed} changed).`);
         await load(examSubjectId);
       }
     } catch {
-      setError("Save failed");
+      setSaveError("Save failed");
     } finally {
       setBusy(false);
     }
@@ -136,6 +139,11 @@ export function MarksEntry({ examSubjectId }: { examSubjectId: string }) {
       {locked && (
         <p className="mb-2 rounded bg-amber-50 p-3 text-sm text-amber-800">
           Marks are locked. Only an administrator can unlock or correct them.
+        </p>
+      )}
+      {saveError !== null && (
+        <p role="alert" className="mb-2 rounded bg-red-50 p-3 text-sm text-red-700">
+          {saveError.replace(/\.?$/, ".")} Your entries are still here; correct them and save again.
         </p>
       )}
       {success !== null && (
