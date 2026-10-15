@@ -81,17 +81,10 @@ function SidebarNav({
                       "focus-visible:ring-2 focus-visible:ring-white/70",
                       itemLayout,
                       active
-                        ? "bg-sidebar-accent text-sidebar-foreground"
-                        : "text-sidebar-muted hover:bg-sidebar-accent/60 hover:text-sidebar-foreground",
+                        ? "bg-primary text-primary-foreground shadow-sm"
+                        : "text-sidebar-muted hover:bg-sidebar-accent hover:text-sidebar-foreground",
                     )}
                   >
-                    <span
-                      aria-hidden="true"
-                      className={cx(
-                        "absolute bottom-2 left-0 top-2 w-[3px] rounded-r-full bg-sidebar-foreground transition-opacity duration-200",
-                        active ? "opacity-100" : "opacity-0",
-                      )}
-                    />
                     <Icon aria-hidden="true" className="size-[18px] shrink-0" />
                     <span className={labelClass}>{item.label}</span>
                   </Link>
@@ -307,7 +300,7 @@ export function AppShell({ role, schoolName, userName, contextLine, children }: 
       </div>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="app-topbar sticky top-0 z-30 flex h-14 shrink-0 items-center gap-3 border-b border-border bg-background/85 px-4 backdrop-blur-md sm:px-6">
+        <header className="app-topbar sticky top-0 z-30 flex h-14 shrink-0 items-center gap-3 border-b border-border bg-surface/95 px-4 backdrop-blur-md sm:px-6">
           <button
             ref={menuButtonRef}
             type="button"

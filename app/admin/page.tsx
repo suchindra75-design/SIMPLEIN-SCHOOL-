@@ -104,9 +104,10 @@ export default async function AdminDashboardPage() {
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {kpis.map((kpi) => (
+        {kpis.map((kpi, i) => (
           <Link key={kpi.href} href={kpi.href} className="block rounded-[var(--radius-card)]">
             <StatCard
+              tone={(["blue", "green", "purple", "amber"] as const)[i % 4]}
               label={kpi.label}
               value={kpi.value}
               subtext={kpi.subtext}

@@ -10,76 +10,77 @@
 @theme static {
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, -apple-system,
     "Segoe UI", sans-serif;
-  --font-display: var(--font-source-serif), ui-serif, Georgia, serif;
+  --font-display: var(--font-inter), ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", sans-serif;
   --font-serif: var(--font-display);
 
-  /* SIMPLIN neutrals: ink #191919 on soft greys */
-  --color-background: #f1f1f2;
-  --color-foreground: #191919;
+  /* SIMPLEIN design system (Admin Portal UI spec): navy + bright blue on a pale blue-grey canvas */
+  --color-background: #f5f8fc;
+  --color-foreground: #14263d;
   --color-surface: #ffffff;
-  --color-surface-muted: #f7f7f8;
-  --color-muted: #ececee;
-  --color-muted-foreground: #5f5f64;
-  --color-border: #e2e2e6;
-  --color-border-strong: #c7c7cc;
-  --color-input: #8e8e93;
-  --color-ring: #191919;
-  --color-primary: #191919;
-  --color-primary-hover: #2d2d30;
+  --color-surface-muted: #f7fafd;
+  --color-muted: #eef3f8;
+  --color-muted-foreground: #55667e;
+  --color-border: #e1e8f0;
+  --color-border-strong: #c5d2e1;
+  --color-input: #7f91a8;
+  --color-ring: #0b6fdb;
+  --color-primary: #0b6fdb;
+  --color-primary-hover: #095dbb;
   --color-primary-foreground: #ffffff;
-  --color-family: #1e2238;
+  --color-family: #0f2a47;
 
-  /* Portal sidebar (staff = ink, family = navy; see [data-portal]) */
-  --color-sidebar: #18181b;
-  --color-sidebar-foreground: #f4f4f5;
-  --color-sidebar-muted: #a1a1aa;
-  --color-sidebar-accent: #2a2a2e;
-  --color-sidebar-border: #2f2f33;
+  /* Portal sidebar: navy for every portal; active item is a primary-blue pill */
+  --color-sidebar: #0f2a47;
+  --color-sidebar-foreground: #eef3fa;
+  --color-sidebar-muted: #a3b5cb;
+  --color-sidebar-accent: #1a3a5f;
+  --color-sidebar-border: #1d3c60;
 
   /* Status (muted, accessible on white) */
-  --color-success: #166534;
-  --color-success-soft: #ecfdf3;
-  --color-success-border: #bbf7d0;
-  --color-warning: #92400e;
-  --color-warning-soft: #fffbeb;
-  --color-warning-border: #fde68a;
-  --color-danger: #b42318;
-  --color-danger-soft: #fef3f2;
-  --color-danger-border: #fecdca;
-  --color-info: #1e2238;
-  --color-info-soft: #eef0f7;
-  --color-info-border: #d5d9ea;
+  --color-success: #137a4f;
+  --color-success-soft: #e8f7ef;
+  --color-success-border: #b7e4cb;
+  --color-warning: #8f5b00;
+  --color-warning-soft: #fff6e5;
+  --color-warning-border: #f6d68f;
+  --color-danger: #c0362c;
+  --color-danger-soft: #fdeeed;
+  --color-danger-border: #f6c9c5;
+  --color-info: #0b6fdb;
+  --color-info-soft: #eaf3fe;
+  --color-info-border: #c4dcfa;
 
   /*
-   * Legacy pages use Tailwind's gray/blue scales. Map them onto the SIMPLIN
-   * neutrals so every page shares one palette without per-page rewrites.
+   * Legacy pages use Tailwind's gray/blue scales. Map them onto the design
+   * system's slate and blue so every page shares one palette.
    */
-  --color-gray-50: #f7f7f8;
-  --color-gray-100: #ececee;
-  --color-gray-200: #e2e2e6;
-  --color-gray-300: #c7c7cc;
-  --color-gray-400: #8e8e93;
-  --color-gray-500: #6e6e73;
-  --color-gray-600: #5f5f64;
-  --color-gray-700: #48484a;
-  --color-gray-800: #2d2d30;
-  --color-gray-900: #191919;
-  --color-gray-950: #111113;
-  --color-blue-50: #f1f1f2;
-  --color-blue-100: #e7e7e9;
-  --color-blue-200: #dcdce0;
-  --color-blue-300: #c7c7cc;
-  --color-blue-400: #6e6e73;
-  --color-blue-500: #3a3a3f;
-  --color-blue-600: #191919;
-  --color-blue-700: #2d2d30;
-  --color-blue-800: #191919;
-  --color-blue-900: #111113;
+  --color-gray-50: #f7fafd;
+  --color-gray-100: #eef3f8;
+  --color-gray-200: #e1e8f0;
+  --color-gray-300: #c5d2e1;
+  --color-gray-400: #93a3b8;
+  --color-gray-500: #6b7c93;
+  --color-gray-600: #55667e;
+  --color-gray-700: #3d4e66;
+  --color-gray-800: #24364f;
+  --color-gray-900: #14263d;
+  --color-gray-950: #0d1b2e;
+  --color-blue-50: #eaf3fe;
+  --color-blue-100: #d6e7fd;
+  --color-blue-200: #b4d3fb;
+  --color-blue-300: #83b6f6;
+  --color-blue-400: #4c93ee;
+  --color-blue-500: #1f78e5;
+  --color-blue-600: #0b6fdb;
+  --color-blue-700: #095dbb;
+  --color-blue-800: #0a4c96;
+  --color-blue-900: #0d3d74;
 
   --radius-card: 0.75rem;
   --radius-control: 0.5rem;
 
-  --shadow-card: 0 1px 2px rgb(16 16 20 / 0.04), 0 1px 1px rgb(16 16 20 / 0.02);
+  --shadow-card: 0 1px 2px rgb(15 42 71 / 0.05), 0 1px 1px rgb(15 42 71 / 0.03);
   --shadow-raised: 0 4px 16px -4px rgb(16 16 20 / 0.12),
     0 2px 4px -2px rgb(16 16 20 / 0.06);
   --shadow-overlay: 0 16px 48px -12px rgb(16 16 20 / 0.28),
@@ -179,9 +180,9 @@
   /* Typography */
   .page-title {
     font-family: var(--font-display);
-    font-size: 1.5rem;
-    line-height: 2rem;
-    font-weight: 600;
+    font-size: 1.625rem;
+    line-height: 2.125rem;
+    font-weight: 700;
     letter-spacing: -0.015em;
     color: var(--color-foreground);
   }
@@ -531,14 +532,6 @@
 }
 
 /* Family portals use SIMPLIN's navy for the shell instead of ink. */
-[data-portal="family"] {
-  --color-sidebar: #1e2238;
-  --color-sidebar-foreground: #f4f5fa;
-  --color-sidebar-muted: #a9aecb;
-  --color-sidebar-accent: #2b3150;
-  --color-sidebar-border: #2e3453;
-}
-
 @keyframes shimmer {
   to {
     transform: translateX(100%);

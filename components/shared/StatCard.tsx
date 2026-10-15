@@ -12,7 +12,16 @@ interface StatCardProps {
   };
   onClick?: () => void;
   className?: string;
+  /** Accent for the value (Admin Portal UI spec KPI colours). */
+  tone?: "blue" | "green" | "purple" | "amber";
 }
+
+const TONE_CLASS: Record<NonNullable<StatCardProps["tone"]>, string> = {
+  blue: "text-primary",
+  green: "text-success",
+  purple: "text-[#6d3fc4]",
+  amber: "text-warning",
+};
 
 export function StatCard({
   label,
@@ -22,6 +31,7 @@ export function StatCard({
   trend,
   onClick,
   className = "",
+  tone,
 }: StatCardProps) {
   const renderIcon = () => {
     if (!icon) return null;
@@ -57,7 +67,7 @@ export function StatCard({
       </div>
 
       <div className="mt-2 flex flex-wrap items-baseline gap-2">
-        <span className="text-2xl font-semibold tracking-tight text-foreground tabular-nums sm:text-[1.75rem]">
+        <span className={`text-2xl font-bold tracking-tight tabular-nums sm:text-[1.75rem] ${tone === undefined ? "text-foreground" : TONE_CLASS[tone]}`}>
           {value}
         </span>
         {trend && <span className={`ui-badge ${trendTone}`}>{trend.text}</span>}
