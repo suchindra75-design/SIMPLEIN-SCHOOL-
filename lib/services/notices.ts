@@ -65,7 +65,7 @@ async function audienceRelevant(
     class_id: string | null;
     section_id: string | null;
   }[];
-  if (rows.length === 0) return true;
+  if (rows.length === 0 || rows.some((t) => t.audience_type === "SCHOOL")) return true;
 
   if (ctx.roles.includes("TEACHER")) {
     return teacherRelevant(db, ctx, rows);
@@ -139,55 +139,52 @@ async function parentScope(db: DbClient, ctx: SessionContext): Promise<{
   return { childSectionIds, childClassIds };
 }
 
+/**
+ * Same scope as the feed (listNotices): TEACHERS notices, SECTION notices for
+ * any section the teacher teaches or class-teaches, CLASS notices for a class
+ * containing such a section. Mirrors notices_select (0017).
+ */
 async function teacherRelevant(
   db: DbClient,
   ctx: SessionContext,
   targets: { audience_type: string; class_id: string | null; section_id: string | null }[],
 ): Promise<boolean> {
-  const { data: teacher, error: teacherError } = await db
-    .from("teachers")
-    .select("id")
-    .eq("user_id", ctx.profile.id)
-    .eq("school_id", ctx.profile.schoolId)
-    .maybeSingle();
-  throwForPostgrest(teacherError);
-  const teacherId = (teacher as { id: string } | null)?.id;
-  if (teacherId === undefined || teacherId === null) return false;
-  for (const t of targets) {
-    if (t.audience_type === "TEACHERS") return true;
-    if (t.audience_type === "SECTION" && t.section_id !== null) {
-      const { data: sec, error: secError } = await db
-        .from("sections")
-        .select("id")
-        .eq("id", t.section_id)
-        .eq("class_teacher_id", teacherId)
-        .eq("school_id", ctx.profile.schoolId)
-        .maybeSingle();
-      throwForPostgrest(secError);
-      if (sec !== null) return true;
-      const { data: ts, error: tsError } = await db
-        .from("teacher_subjects")
-        .select("id")
-        .eq("section_id", t.section_id)
-        .eq("teacher_id", teacherId)
-        .eq("school_id", ctx.profile.schoolId)
-        .maybeSingle();
-      throwForPostgrest(tsError);
-      if (ts !== null) return true;
-    }
-    if (t.audience_type === "CLASS" && t.class_id !== null) {
-      const { data: sec, error: secError } = await db
-        .from("sections")
-        .select("id")
-        .eq("class_id", t.class_id)
-        .eq("school_id", ctx.profile.schoolId)
-        .or(`class_teacher_id.eq.${teacherId}`);
-      throwForPostgrest(secError);
-      const rows = (sec as unknown as { id: string }[] | null) ?? [];
-      if (rows.length > 0) return true;
-    }
+  if (targets.some((t) => t.audience_type === "TEACHERS")) return true;
+  const scope = await getTeacherScope(db, ctx);
+  if (scope === null || scope.sectionIds.size === 0) return false;
+  if (
+    targets.some(
+      (t) => t.audience_type === "SECTION" && t.section_id !== null && scope.sectionIds.has(t.section_id),
+    )
+  ) {
+    return true;
   }
-  return false;
+  const classTargets = targets.filter((t) => t.audience_type === "CLASS" && t.class_id !== null);
+  if (classTargets.length === 0) return false;
+  const { data, error } = await db
+    .from("sections")
+    .select("class_id")
+    .in("id", [...scope.sectionIds])
+    .eq("school_id", ctx.profile.schoolId);
+  throwForPostgrest(error);
+  const classIds = new Set((data as { class_id: string | null }[]).map((s) => s.class_id));
+  return classTargets.some((t) => classIds.has(t.class_id));
+}
+
+/**
+ * The target row for an audience: only the id that matches the audience type
+ * is kept (the notice_targets shape CHECK rejects anything else).
+ */
+function targetFor(audience: Audience): { audience_type: string; class_id: string | null; section_id: string | null } {
+  if (audience.type === "CLASS") {
+    if (!audience.classId) throw new ConflictError("Choose a class for a class notice");
+    return { audience_type: "CLASS", class_id: audience.classId, section_id: null };
+  }
+  if (audience.type === "SECTION") {
+    if (!audience.sectionId) throw new ConflictError("Choose a section for a section notice");
+    return { audience_type: "SECTION", class_id: null, section_id: audience.sectionId };
+  }
+  return { audience_type: audience.type, class_id: null, section_id: null };
 }
 
 /* --------------------------------- reads --------------------------------- */
@@ -206,7 +203,8 @@ export async function listNotices(
     .eq("school_id", ctx.profile.schoolId)
     .order("created_at", { ascending: false })
     .range(from, from + f.limit - 1);
-  if (f.includeInactive !== true) {
+  // Drafts and archived notices are admin-only (also enforced by RLS, 0017).
+  if (f.includeInactive !== true || !isAdmin(ctx)) {
     query = query.eq("is_active", true).eq("is_published", true);
   }
   if (f.category !== undefined) query = query.eq("category", f.category);
@@ -298,6 +296,7 @@ export async function listNotices(
     const targets = targetsByNotice.get(n.id);
     if (targets === undefined || targets.size === 0) return true; // school-wide
     for (const t of targets) {
+      if (t === "SCHOOL") return true;
       if (t === "TEACHERS") {
         if (ctx.roles.includes("TEACHER")) return true;
         continue;
@@ -348,6 +347,7 @@ export async function getNotice(
   throwForPostgrest(error, "Notice not found");
   const notice = toCamel<NoticeDto>(data);
   if (!isAdmin(ctx)) {
+    if (!notice.isPublished || !notice.isActive) throw new TenantBoundaryError();
     const relevant = await audienceRelevant(db, ctx, id);
     if (!relevant) throw new TenantBoundaryError();
   }
@@ -369,6 +369,7 @@ export async function createNotice(
   },
 ): Promise<{ id: string }> {
   authorizeRoles(ctx, ["SCHOOL_ADMIN"]);
+  const target = targetFor(input.audience);
   // CLASS/SECTION targets must reference this school (404 on cross-tenant).
   if (input.audience.type === "CLASS" && input.audience.classId !== undefined) {
     const { data, error } = await db
@@ -407,13 +408,17 @@ export async function createNotice(
     .single();
   throwForPostgrest(error);
   const id = (data as { id: string }).id;
-  await db.from("notice_targets").insert({
+  // A notice without a target row is school-wide, so a failed target insert
+  // must not leave the notice behind with a wider audience than intended.
+  const { error: targetError } = await db.from("notice_targets").insert({
     school_id: ctx.profile.schoolId,
     notice_id: id,
-    audience_type: input.audience.type,
-    class_id: input.audience.classId ?? null,
-    section_id: input.audience.sectionId ?? null,
+    ...target,
   });
+  if (targetError !== null) {
+    await db.from("notices").delete().eq("id", id).eq("school_id", ctx.profile.schoolId);
+    throwForPostgrest(targetError);
+  }
   await logAudit(db, ctx, "notice.created", "notices", id, {
     title: input.title,
     audience: input.audience.type,
@@ -452,21 +457,22 @@ export async function updateNotice(
     void data;
   }
   if (patch.audience !== undefined) {
-    // Replace the target (audited as an important target change).
+    // Replace the target (audited as an important target change). Insert the
+    // new target first: if it is rejected the old one stays, rather than the
+    // notice briefly having no target (which reads as school-wide).
+    const { data: added, error: insError } = await db
+      .from("notice_targets")
+      .insert({ school_id: ctx.profile.schoolId, notice_id: id, ...targetFor(patch.audience) })
+      .select("id")
+      .single();
+    throwForPostgrest(insError);
     const { error: delError } = await db
       .from("notice_targets")
       .delete()
       .eq("notice_id", id)
-      .eq("school_id", ctx.profile.schoolId);
+      .eq("school_id", ctx.profile.schoolId)
+      .neq("id", (added as { id: string }).id);
     throwForPostgrest(delError);
-    const { error: insError } = await db.from("notice_targets").insert({
-      school_id: ctx.profile.schoolId,
-      notice_id: id,
-      audience_type: patch.audience.type,
-      class_id: patch.audience.classId ?? null,
-      section_id: patch.audience.sectionId ?? null,
-    });
-    throwForPostgrest(insError);
   }
   await logAudit(db, ctx, "notice.updated", "notices", id, {
     fields: Object.keys(row).concat(patch.audience !== undefined ? ["audience"] : []),

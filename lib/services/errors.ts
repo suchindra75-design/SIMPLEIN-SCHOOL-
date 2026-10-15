@@ -34,7 +34,8 @@ export function throwForPostgrest(
     throw new NotFoundError(notFoundMessage);
   }
   if (error.code === "23505") {
-    throw new ConflictError(`Duplicate value: ${error.message}`);
+    // Generic text: the raw Postgres message names internal constraints/indexes.
+    throw new ConflictError("A record with these details already exists");
   }
   throw new Error(error.message);
 }
