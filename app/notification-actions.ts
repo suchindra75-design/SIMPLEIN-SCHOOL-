@@ -24,6 +24,8 @@ import { MAX_HOMEWORK_FILE_BYTES } from "@/lib/services/storage";
 export interface ActionState {
   error?: string;
   success?: boolean;
+  /** Shown instead of "Saved" when the outcome needs explaining. */
+  notice?: string;
 }
 
 function err(error: unknown): ActionState {
@@ -255,19 +257,38 @@ export async function assignFeesAction(
   try {
     const ctx = await requireRole("SCHOOL_ADMIN");
     const db = await createServerSupabaseClient();
-    const { assignFees } = await import("@/lib/services/fees");
-    const studentIds = form
-      .getAll("studentIds")
-      .filter((v): v is string => typeof v === "string" && v.trim() !== "");
+    const { assignFees, studentIdsForStructure } = await import("@/lib/services/fees");
+    const { feeAssignSchema } = await import("@/lib/validation/fees");
+    const studentIds =
+      form.get("allInClass") === "on"
+        ? await studentIdsForStructure(db, ctx, structureId)
+        : form
+            .getAll("studentIds")
+            .filter((v): v is string => typeof v === "string" && v.trim() !== "");
     if (studentIds.length === 0) return { error: "Select at least one student" };
-    const totalRaw = str(form, "totalAmount");
-    await assignFees(db, ctx, structureId, {
+    const parsed = feeAssignSchema.safeParse({
       studentIds,
-      totalAmount: totalRaw === undefined ? null : Number(totalRaw),
+      totalAmount: str(form, "totalAmount") ?? null,
       dueDate: str(form, "dueDate") ?? null,
     });
+    if (!parsed.success) {
+      return { error: "Check the students, concession total and due date" };
+    }
+    const { assigned, skipped } = await assignFees(db, ctx, structureId, parsed.data);
     revalidateFeePaths();
-    return { success: true };
+    if (assigned === 0) {
+      return {
+        error: `Not changed: payments are already recorded for ${skipped === 1 ? "this student" : `all ${skipped} students`}.`,
+      };
+    }
+    const plural = (n: number) => `${n} student${n === 1 ? "" : "s"}`;
+    return {
+      success: true,
+      notice:
+        skipped > 0
+          ? `Assigned to ${plural(assigned)}. ${plural(skipped)} with recorded payments kept their totals.`
+          : `Assigned to ${plural(assigned)}.`,
+    };
   } catch (error) {
     return err(error);
   }

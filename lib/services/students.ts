@@ -147,6 +147,37 @@ export async function listStudents(
   return { students: toCamel<StudentDto[]>(data ?? []), total: count ?? 0 };
 }
 
+/** Admin pickers: active students of several classes in one query,
+ *  grouped by class. `truncated` when more than `cap` matched. */
+export async function listActiveStudentsByClass(
+  db: DbClient,
+  ctx: SessionContext,
+  classIds: string[],
+  cap = 2000,
+): Promise<{ byClass: Map<string, StudentDto[]>; truncated: boolean }> {
+  if (!isAdmin(ctx)) throw new TenantBoundaryError();
+  const byClass = new Map<string, StudentDto[]>();
+  if (classIds.length === 0) return { byClass, truncated: false };
+  const { data, error } = await db
+    .from("students")
+    .select(STUDENT_COLUMNS)
+    .eq("school_id", ctx.profile.schoolId)
+    .eq("status", "active")
+    .in("class_id", classIds)
+    .order("last_name")
+    .order("first_name")
+    .limit(cap + 1);
+  throwForPostgrest(error);
+  const rows = toCamel<StudentDto[]>(data ?? []);
+  for (const st of rows.slice(0, cap)) {
+    if (st.classId === null) continue;
+    const list = byClass.get(st.classId) ?? [];
+    list.push(st);
+    byClass.set(st.classId, list);
+  }
+  return { byClass, truncated: rows.length > cap };
+}
+
 /** Scoped single read (admin / assigned teacher / linked parent). */
 export async function getStudent(
   db: DbClient,

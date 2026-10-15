@@ -458,3 +458,21 @@ describe("audit logging", () => {
     expect(audits[0]?.payload).toMatchObject({ school_id: A });
   });
 });
+
+describe("re-assigning a fee structure", () => {
+  it("keeps the total of students who already have recorded payments", async () => {
+    const fake = createFakeDb(seed());
+    const client = fake as unknown as DbClient;
+    const paidFee = (fake.seed["student_fees"] as Row[]).find((f) =>
+      (fake.seed["fee_payment_records"] as Row[]).some(
+        (r) => r["student_fee_id"] === f["id"] && r["is_voided"] !== true,
+      ),
+    )!;
+    const result = await assignFees(client, adminCtx(), paidFee["fee_structure_id"] as string, {
+      studentIds: [paidFee["student_id"] as string],
+      totalAmount: 1,
+    });
+    expect(result).toEqual({ assigned: 0, skipped: 1 });
+    expect(fake.callsTo("student_fees", "upsert")).toHaveLength(0);
+  });
+});

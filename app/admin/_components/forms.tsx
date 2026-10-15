@@ -16,6 +16,7 @@ import {
   captureSubmittedValues,
   initialChecked,
   initialValue,
+  initialValues,
   type SubmittedValues,
 } from "@/app/admin/_components/form-values";
 
@@ -38,6 +39,10 @@ export interface FieldDef {
   defaultValue?: string;
   placeholder?: string;
   checked?: boolean;
+  /** For selects: allow choosing several options. */
+  multiple?: boolean;
+  /** Short help shown under the field. */
+  hint?: string;
 }
 
 type FormAction = (
@@ -159,7 +164,7 @@ export function SmartForm({
                   name={f.name}
                   type="checkbox"
                   defaultChecked={initialChecked(f, submitted)}
-                  className="size-4 rounded border-input accent-[#191919]"
+                  className="size-4 rounded border-input accent-primary"
                 />
                 <label htmlFor={id} className="text-sm font-medium text-foreground">
                   {label}
@@ -173,7 +178,24 @@ export function SmartForm({
               <label htmlFor={id} className="ui-label">
                 {label}
               </label>
-              {f.type === "select" ? (
+              {f.type === "select" && f.multiple === true ? (
+                <select
+                  id={id}
+                  name={f.name}
+                  multiple
+                  required={f.required}
+                  defaultValue={initialValues(f, submitted)}
+                  size={Math.min(8, Math.max(3, (f.options ?? []).length))}
+                  className="ui-input h-auto"
+                  aria-describedby={f.hint !== undefined ? `${id}-hint` : undefined}
+                >
+                  {(f.options ?? []).map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+              ) : f.type === "select" ? (
                 <select
                   id={id}
                   name={f.name}
@@ -213,6 +235,11 @@ export function SmartForm({
                   }
                 />
               )}
+              {f.hint !== undefined && (
+                <p id={`${id}-hint`} className="mt-1 text-xs text-muted-foreground">
+                  {f.hint}
+                </p>
+              )}
             </div>
           );
         })}
@@ -226,7 +253,7 @@ export function SmartForm({
           {result.success === true && redirectTo === undefined && !pending ? (
             <span className="inline-flex animate-fade-in items-center gap-1.5">
               <CircleCheck aria-hidden="true" className="size-4" />
-              Saved
+              {result.notice ?? "Saved"}
             </span>
           ) : null}
         </p>

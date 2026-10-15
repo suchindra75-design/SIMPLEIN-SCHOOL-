@@ -11,7 +11,7 @@ import { ConfirmButton, SmartForm } from "@/app/admin/_components/forms";
 import { AttachmentLink } from "@/app/components/AttachmentLink";
 import { listAcademicYears } from "@/lib/services/years";
 import { listClasses } from "@/lib/services/classes";
-import { listStudents } from "@/lib/services/students";
+import { listActiveStudentsByClass, listStudents } from "@/lib/services/students";
 import {
   listFeeStructures,
   listStudentFees,
@@ -31,17 +31,23 @@ export default async function AdminFeesPage({
   const sp = await searchParams;
   const ctx = await requireRole("SCHOOL_ADMIN");
   const db = await createServerSupabaseClient();
-  const [{ structures }, { academicYears }, { classes }, { students }] =
+  const q = (sp["q"] ?? "").trim().slice(0, 100);
+  const [{ structures }, { academicYears }, { classes }, { students, total: studentTotal }] =
     await Promise.all([
       listFeeStructures(db, ctx),
       listAcademicYears(db, ctx),
       listClasses(db, ctx),
       listStudents(db, ctx, {
         status: "active",
+        search: q === "" ? undefined : q,
         page: 1,
         limit: 100,
       }),
     ]);
+  // Assignment pickers list each structure's own class (school-wide
+  // structures use the lookup list); "all students" covers the rest.
+  const classIds = [...new Set(structures.map((s) => s.classId).filter((id): id is string => id !== null))];
+  const { byClass, truncated: pickerTruncated } = await listActiveStudentsByClass(db, ctx, classIds);
 
   // Student fee panel: ?studentId=
   const studentId = sp["studentId"] !== undefined && UUID_RE.test(sp["studentId"]) ? sp["studentId"] : "";
@@ -85,11 +91,23 @@ export default async function AdminFeesPage({
                   submitLabel="Assign to students"
                   fields={[
                     {
+                      name: "allInClass",
+                      label:
+                        s.classId === null
+                          ? "All active students in the school"
+                          : `All active students in ${s.classes?.name ?? "this class"}`,
+                      type: "checkbox",
+                    },
+                    {
                       name: "studentIds",
-                      label: "Students (multi-select)",
+                      label:
+                        (s.classId === null ? studentTotal > students.length : pickerTruncated)
+                          ? "Or choose students (list shortened; use the option above for everyone)"
+                          : "Or choose students",
                       type: "select",
-                      required: true,
-                      options: students.map((st) => ({
+                      multiple: true,
+                      hint: "Hold Ctrl (⌘ on Mac) to select several. Students with recorded payments keep their totals.",
+                      options: (s.classId === null ? students : (byClass.get(s.classId) ?? [])).map((st) => ({
                         value: st.id,
                         label: `${st.displayName} (${st.admissionNo})`,
                       })),
@@ -138,7 +156,23 @@ export default async function AdminFeesPage({
       />
 
       <h3 className="mb-2 mt-8 font-semibold">Student fees</h3>
-      <form method="get" className="mb-4">
+      <form method="get" className="mb-2 flex flex-wrap items-end gap-3">
+        <label className="text-sm">
+          <span className="ui-label">Search students</span>
+          <input
+            name="q"
+            type="search"
+            defaultValue={q}
+            placeholder="Name or admission number"
+            className="ui-input"
+          />
+        </label>
+        <button type="submit" className="ui-btn ui-btn-secondary">
+          Search
+        </button>
+      </form>
+      <form method="get" className="mb-4 flex flex-wrap items-end gap-3">
+        {q !== "" && <input type="hidden" name="q" value={q} />}
         <label className="text-sm">
           <span className="ui-label">Student</span>
           <select name="studentId" defaultValue={studentId} className="ui-input">
@@ -150,10 +184,15 @@ export default async function AdminFeesPage({
             ))}
           </select>
         </label>
-        <button type="submit" className="ui-btn ui-btn-primary ml-3">
+        <button type="submit" className="ui-btn ui-btn-primary">
           View
         </button>
       </form>
+      {studentTotal > students.length && (
+        <p className="-mt-2 mb-4 text-xs text-muted-foreground">
+          Showing {students.length} of {studentTotal} students. Search to find others.
+        </p>
+      )}
 
       {studentId === "" ? (
         <EmptyState message="Select a student to view fees, record payments, and upload receipts." />

@@ -1,7 +1,7 @@
 import type { FieldDef } from "@/app/admin/_components/forms";
 
 /** What the user entered in a SmartForm, keyed by field name. */
-export type SubmittedValues = Record<string, string>;
+export type SubmittedValues = Record<string, string | string[]>;
 
 /**
  * Snapshot the submitted values so a failed submit can show them again.
@@ -16,6 +16,10 @@ export function captureSubmittedValues(
   const values: SubmittedValues = {};
   for (const f of fields) {
     if (f.type === "password" || f.type === "file") continue;
+    if (f.multiple === true) {
+      values[f.name] = form.getAll(f.name).filter((v): v is string => typeof v === "string");
+      continue;
+    }
     const v = form.get(f.name);
     if (typeof v === "string") values[f.name] = v;
   }
@@ -26,7 +30,14 @@ export function captureSubmittedValues(
 export function initialValue(f: FieldDef, submitted: SubmittedValues | null): string {
   if (submitted === null) return f.defaultValue ?? "";
   if (f.type === "password" || f.type === "file") return "";
-  return submitted[f.name] ?? "";
+  const v = submitted[f.name];
+  return typeof v === "string" ? v : "";
+}
+
+/** Initial selection of a multiple select: the failed submit's choices, else none. */
+export function initialValues(f: FieldDef, submitted: SubmittedValues | null): string[] {
+  const v = submitted?.[f.name];
+  return Array.isArray(v) ? v : [];
 }
 
 /** Initial checked state of a checkbox: the failed submit's state, else its default. */

@@ -72,6 +72,8 @@ import type { ValidatedImportRow } from "@/lib/validation/import";
 export interface ActionState {
   error?: string;
   success?: boolean;
+  /** Shown instead of "Saved" when the outcome needs explaining. */
+  notice?: string;
   preview?: unknown;
 }
 

@@ -282,7 +282,7 @@ export async function assignFees(
   ctx: SessionContext,
   structureId: string,
   input: FeeAssignInput,
-): Promise<{ assigned: number }> {
+): Promise<{ assigned: number; skipped: number }> {
   authorizeRoles(ctx, ["SCHOOL_ADMIN"]);
   const { data: structure, error: structureError } = await db
     .from("fee_structures")
@@ -315,23 +315,76 @@ export async function assignFees(
   if ((students ?? []).length !== input.studentIds.length) {
     throw new NotFoundError("One or more students not found in this school");
   }
-  const { error } = await db.from("student_fees").upsert(
-    input.studentIds.map((studentId) => ({
-      school_id: ctx.profile.schoolId,
-      student_id: studentId,
-      fee_structure_id: structureId,
-      total_amount: snapshot,
-      due_date: input.dueDate ?? (structure as { due_date: string | null }).due_date,
-    })),
-    { onConflict: "student_id,fee_structure_id" },
-  );
-  throwForPostgrest(error);
+  // Re-assigning must not rewrite a total that payments were recorded
+  // against (the balance could drop below what was paid): skip those.
+  const { data: existingFees, error: existingError } = await db
+    .from("student_fees")
+    .select("id, student_id")
+    .eq("school_id", ctx.profile.schoolId)
+    .eq("fee_structure_id", structureId)
+    .in("student_id", input.studentIds);
+  throwForPostgrest(existingError);
+  const existing = (existingFees ?? []) as { id: string; student_id: string }[];
+  const withPayments = new Set<string>();
+  if (existing.length > 0) {
+    const { data: records, error: recordError } = await db
+      .from("fee_payment_records")
+      .select("student_fee_id")
+      .in("student_fee_id", existing.map((f) => f.id))
+      .eq("is_voided", false);
+    throwForPostgrest(recordError);
+    const paidFeeIds = new Set(
+      ((records ?? []) as { student_fee_id: string }[]).map((r) => r.student_fee_id),
+    );
+    for (const f of existing) if (paidFeeIds.has(f.id)) withPayments.add(f.student_id);
+  }
+  const toAssign = input.studentIds.filter((id) => !withPayments.has(id));
+  if (toAssign.length > 0) {
+    const { error } = await db.from("student_fees").upsert(
+      toAssign.map((studentId) => ({
+        school_id: ctx.profile.schoolId,
+        student_id: studentId,
+        fee_structure_id: structureId,
+        total_amount: snapshot,
+        due_date: input.dueDate ?? (structure as { due_date: string | null }).due_date,
+      })),
+      { onConflict: "student_id,fee_structure_id" },
+    );
+    throwForPostgrest(error);
+  }
   await logAudit(db, ctx, "fee_assigned", "student_fees", null, {
     structureId,
-    students: input.studentIds.length,
+    students: toAssign.length,
+    skippedWithPayments: withPayments.size,
     total: snapshot,
   });
-  return { assigned: input.studentIds.length };
+  return { assigned: toAssign.length, skipped: withPayments.size };
+}
+
+/** Active students a structure applies to: its class, or the whole school. */
+export async function studentIdsForStructure(
+  db: DbClient,
+  ctx: SessionContext,
+  structureId: string,
+): Promise<string[]> {
+  authorizeRoles(ctx, ["SCHOOL_ADMIN"]);
+  const { data: structure, error: structureError } = await db
+    .from("fee_structures")
+    .select("id, class_id")
+    .eq("id", structureId)
+    .eq("school_id", ctx.profile.schoolId)
+    .single();
+  throwForPostgrest(structureError, "Fee structure not found");
+  const classId = (structure as { class_id: string | null }).class_id;
+  let query = db
+    .from("students")
+    .select("id")
+    .eq("school_id", ctx.profile.schoolId)
+    .eq("status", "active");
+  if (classId !== null) query = query.eq("class_id", classId);
+  const { data, error } = await query;
+  throwForPostgrest(error);
+  return ((data ?? []) as { id: string }[]).map((r) => r.id);
 }
 
 /* ------------------------------ student fee views ------------------------ */
