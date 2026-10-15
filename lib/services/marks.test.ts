@@ -200,9 +200,11 @@ describe("tenant isolation", () => {
 });
 
 describe("teacher exam/subject scope", () => {
-  it("class teacher may enter all subjects for the exam's class", async () => {
+  it("class teacher may enter all subjects, for their own section only", async () => {
+    // t1 class-teaches sec7a; s2 is in sec7b of the same class and must not be
+    // on t1's roster (section-level scope, see markableSectionIds).
     const grid = await getMarksGrid(db(), teacherCtx(), "es-7m");
-    expect(grid.roster.map((s) => s.id).sort()).toEqual(["s1", "s2"]);
+    expect(grid.roster.map((s) => s.id).sort()).toEqual(["s1"]);
     const { subjects } = await listMarkableSubjects(db(), teacherCtx(), "ex-7");
     expect(subjects.map((s) => s.id).sort()).toEqual(["es-7e", "es-7m"]);
   });

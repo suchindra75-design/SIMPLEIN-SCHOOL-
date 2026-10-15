@@ -39,20 +39,21 @@ const SUBJECT_STATE_COLUMNS =
 /* ------------------------------ access helpers -------------------------- */
 
 /**
- * Teacher may enter marks for an exam subject iff the exam's class contains
- * one of their assigned sections AND (they are the class teacher of an
- * in-class section — all subjects — OR assigned to THIS subject in an
- * in-class section). Admin passes; others denied.
+ * Sections whose marks the caller may enter for an exam subject: null = every
+ * section (admin). A teacher gets the sections of the exam's class where they
+ * are the class teacher (all subjects) or are assigned THIS subject; an empty
+ * set means no access. Marks are per student, so the roster, the grid and the
+ * save are all limited to these sections.
  */
-export async function teacherCanEnterMarks(
+export async function markableSectionIds(
   db: DbClient,
   ctx: SessionContext,
   examSubject: { subjectId: string; examId: string },
-): Promise<boolean> {
-  if (isAdmin(ctx)) return true;
-  if (!ctx.roles.includes("TEACHER")) return false;
+): Promise<Set<string> | null> {
+  if (isAdmin(ctx)) return null;
+  if (!ctx.roles.includes("TEACHER")) return new Set();
   const scope = await getTeacherScope(db, ctx);
-  if (scope === null || scope.sectionIds.size === 0) return false;
+  if (scope === null || scope.sectionIds.size === 0) return new Set();
   const { data: exam, error: examError } = await db
     .from("exams")
     .select("class_id")
@@ -69,10 +70,7 @@ export async function teacherCanEnterMarks(
     .eq("school_id", ctx.profile.schoolId);
   throwForPostgrest(secError);
   const inClass = sections as { id: string; class_teacher_id: string | null }[];
-  if (inClass.length === 0) return false;
-  // Class teacher of an in-class section may enter all subjects for that class.
-  if (inClass.some((s) => s.class_teacher_id === scope.teacherId)) return true;
-  // Otherwise must be assigned to THIS subject in an in-class section.
+  if (inClass.length === 0) return new Set();
   const { data: ts, error: tsError } = await db
     .from("teacher_subjects")
     .select("section_id")
@@ -80,10 +78,22 @@ export async function teacherCanEnterMarks(
     .eq("subject_id", examSubject.subjectId)
     .eq("school_id", ctx.profile.schoolId);
   throwForPostgrest(tsError);
-  const assignedSectionIds = new Set(
-    (ts as { section_id: string }[]).map((r) => r.section_id),
+  const assigned = new Set((ts as { section_id: string }[]).map((r) => r.section_id));
+  return new Set(
+    inClass
+      .filter((s) => s.class_teacher_id === scope.teacherId || assigned.has(s.id))
+      .map((s) => s.id),
   );
-  return inClass.some((s) => assignedSectionIds.has(s.id));
+}
+
+/** Teacher may enter marks for an exam subject in at least one section. Admin passes. */
+export async function teacherCanEnterMarks(
+  db: DbClient,
+  ctx: SessionContext,
+  examSubject: { subjectId: string; examId: string },
+): Promise<boolean> {
+  const sections = await markableSectionIds(db, ctx, examSubject);
+  return sections === null || sections.size > 0;
 }
 
 /** Scope check for one exam subject (404 boundary; also fetches state). */
@@ -120,8 +130,11 @@ export async function getClassRoster(
   ctx: SessionContext,
   classId: string,
   academicYearId: string,
+  /** Limit to these sections (null/undefined = whole class). */
+  sectionIds?: ReadonlySet<string> | null,
 ): Promise<{ id: string; displayName: string; admissionNo: string; rollNumber: string | null }[]> {
-  const { data: enrollmentRows, error: enrollError } = await db
+  if (sectionIds != null && sectionIds.size === 0) return [];
+  let enrollQuery = db
     .from("student_enrollments")
     .select(
       "student_id, roll_number, students(id, admission_no, display_name, class_id, status)",
@@ -130,6 +143,8 @@ export async function getClassRoster(
     .eq("academic_year_id", academicYearId)
     .eq("class_id", classId)
     .eq("status", "enrolled");
+  if (sectionIds != null) enrollQuery = enrollQuery.in("section_id", [...sectionIds]);
+  const { data: enrollmentRows, error: enrollError } = await enrollQuery;
   throwForPostgrest(enrollError);
   const rows = (enrollmentRows ?? []) as unknown as {
     student_id: string;
@@ -150,12 +165,14 @@ export async function getClassRoster(
           ],
     );
   }
-  const { data: fallback, error: fbError } = await db
+  let fallbackQuery = db
     .from("students")
     .select("id, admission_no, display_name, roll_number")
     .eq("school_id", ctx.profile.schoolId)
     .eq("class_id", classId)
     .eq("status", "active");
+  if (sectionIds != null) fallbackQuery = fallbackQuery.in("section_id", [...sectionIds]);
+  const { data: fallback, error: fbError } = await fallbackQuery;
   throwForPostgrest(fbError);
   return toCamel(fallback ?? []);
 }
@@ -222,17 +239,21 @@ export async function getMarksGrid(
     academicYearId: string;
     classes?: { name: string } | null;
   }>(exam);
+  const sectionIds = await markableSectionIds(db, ctx, examSubject);
   const roster = await getClassRoster(
     db,
     ctx,
     typedExam.classId,
     typedExam.academicYearId,
+    sectionIds,
   );
-  const { data: marks, error: marksError } = await db
+  let marksQuery = db
     .from("marks")
     .select(MARK_COLUMNS)
     .eq("exam_subject_id", examSubjectId)
     .eq("school_id", ctx.profile.schoolId);
+  if (sectionIds !== null) marksQuery = marksQuery.in("student_id", roster.map((r) => r.id));
+  const { data: marks, error: marksError } = await marksQuery;
   throwForPostgrest(marksError);
   return {
     examSubject,
@@ -269,21 +290,24 @@ export async function saveMarks(
     .single();
   throwForPostgrest(examError, "Exam not found");
   const examRow = exam as { id: string; class_id: string; academic_year_id: string };
-  const roster = await getClassRoster(db, ctx, examRow.class_id, examRow.academic_year_id);
+  const sectionIds = await markableSectionIds(db, ctx, examSubject);
+  const roster = await getClassRoster(db, ctx, examRow.class_id, examRow.academic_year_id, sectionIds);
   const rosterIds = new Set(roster.map((s) => s.id));
   const invalid = input.records
     .map((r) => r.studentId)
     .filter((id) => !rosterIds.has(id));
   if (invalid.length > 0) {
     throw new ConflictError(
-      `${invalid.length} student(s) are not enrolled in the exam's class for this academic year`,
+      sectionIds === null
+        ? `${invalid.length} student(s) are not enrolled in the exam's class for this academic year`
+        : `${invalid.length} student(s) are not in a section you can enter marks for`,
     );
   }
 
   // Old values for the audit diff (one query, not N).
   const { data: existing, error: existError } = await db
     .from("marks")
-    .select("id, student_id, marks_obtained, is_absent, version")
+    .select("id, student_id, marks_obtained, is_absent, version, entered_by")
     .eq("exam_subject_id", examSubjectId)
     .eq("school_id", ctx.profile.schoolId);
   throwForPostgrest(existError);
@@ -293,6 +317,7 @@ export async function saveMarks(
     marks_obtained: number | null;
     is_absent: boolean;
     version: number;
+    entered_by: string | null;
   }[];
   // Value snapshot (not row references): the diff must reflect pre-save state.
   const oldByStudent = new Map(
@@ -302,6 +327,7 @@ export async function saveMarks(
         marks_obtained: r.marks_obtained,
         is_absent: r.is_absent,
         version: r.version,
+        entered_by: r.entered_by,
       },
     ]),
   );
@@ -342,9 +368,9 @@ export async function saveMarks(
         is_absent: r.isAbsent,
         grade,
         updated_by: ctx.profile.id,
-        ...(oldByStudent.has(r.studentId)
-          ? {}
-          : { entered_by: ctx.profile.id }),
+        // Always sent: a bulk upsert uses the union of keys, so omitting it on
+        // existing rows would overwrite their original author with NULL.
+        entered_by: oldByStudent.get(r.studentId)?.entered_by ?? ctx.profile.id,
       };
     }),
     { onConflict: "exam_subject_id,student_id" },
@@ -484,17 +510,22 @@ export async function getStudentResult(
   const examRow = exam as { id: string; class_id: string };
 
   let published: boolean;
-  // Actual publish state (all roles see it; parents/students gated by it).
+  // Results are published per subject. `published` = every subject published;
+  // parents/students see the result once any subject is published, limited to
+  // the published subjects (matching marks RLS, exam_subject_is_published).
+  const publishedSubjectIds = new Set<string>();
   {
     const { data: states, error: stError } = await db
       .from("exam_subjects")
-      .select("is_published")
+      .select("id, is_published")
       .eq("exam_id", examId)
       .eq("school_id", ctx.profile.schoolId);
     throwForPostgrest(stError);
-    const rows = (states ?? []) as { is_published: boolean }[];
-    published = rows.length > 0 && rows.every((r) => r.is_published);
+    const rows = (states ?? []) as { id: string; is_published: boolean }[];
+    for (const r of rows) if (r.is_published) publishedSubjectIds.add(r.id);
+    published = rows.length > 0 && publishedSubjectIds.size === rows.length;
   }
+  const familyView = !isAdmin(ctx) && !ctx.roles.includes("TEACHER");
   if (!isAdmin(ctx)) {
     if (ctx.roles.includes("TEACHER")) {
       // Teacher scope: an assigned section in the exam's class.
@@ -515,8 +546,8 @@ export async function getStudentResult(
       if (scope === null || !scope.studentIds.has(studentId)) {
         throw new TenantBoundaryError();
       }
-      // Published-only: parents never see unpublished results.
-      if (!published) throw new NotFoundError("Results are not published yet");
+      // Published-only: parents never see unpublished subjects.
+      if (publishedSubjectIds.size === 0) throw new NotFoundError("Results are not published yet");
     } else if (ctx.roles.includes("STUDENT")) {
       // Student: own results only, published-only.
       const { getStudentScope } = await import("@/lib/services/students");
@@ -524,7 +555,7 @@ export async function getStudentResult(
       if (scope === null || scope.studentId !== studentId) {
         throw new TenantBoundaryError();
       }
-      if (!published) throw new NotFoundError("Results are not published yet");
+      if (publishedSubjectIds.size === 0) throw new NotFoundError("Results are not published yet");
     } else {
       throw new TenantBoundaryError();
     }
@@ -536,12 +567,12 @@ export async function getStudentResult(
     .eq("exam_id", examId)
     .eq("school_id", ctx.profile.schoolId);
   throwForPostgrest(subError);
-  const subjectRowsRaw = (subjects ?? []) as unknown as {
+  const subjectRowsRaw = ((subjects ?? []) as unknown as {
     id: string;
     subject_id: string;
     max_marks: number;
     subjects: { name: string } | null;
-  }[];
+  }[]).filter((s) => !familyView || publishedSubjectIds.has(s.id));
   const { data: marks, error: marksError } = await db
     .from("marks")
     .select("exam_subject_id, marks_obtained, is_absent, grade")
