@@ -108,10 +108,11 @@ export function AttendanceMarker({
       if (!res.ok || body.data === undefined) {
         setError(body.error?.message ?? "Save failed");
       } else {
+        // Reload first: load() clears messages.
+        await load(sectionId, date);
         setSuccess(
           `Saved ${body.data.saved} students (${body.data.changed} changed).`,
         );
-        await load(sectionId, date);
       }
     } catch {
       setError("Save failed");
@@ -229,7 +230,9 @@ export function AttendanceMarker({
                     </td>
                     <td>
                       <select
-                        value={marks[s.id] ?? "PRESENT"}
+                        // Unmarked students show "Select…", matching the
+                        // save rule that every student needs a status.
+                        value={marks[s.id] ?? ""}
                         onChange={(e) =>
                           setMarks((prev) => ({
                             ...prev,
@@ -239,6 +242,11 @@ export function AttendanceMarker({
                         className="rounded border px-2 py-1"
                         aria-label={`Status for ${s.displayName}`}
                       >
+                        {marks[s.id] === undefined && (
+                          <option value="" disabled>
+                            Select…
+                          </option>
+                        )}
                         {STATUSES.map((st) => (
                           <option key={st} value={st}>
                             {st}

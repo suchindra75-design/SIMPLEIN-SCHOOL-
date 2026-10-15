@@ -98,8 +98,9 @@ export function MarksEntry({ examSubjectId }: { examSubjectId: string }) {
       if (!res.ok || body.data === undefined) {
         setSaveError(body.error?.message ?? "Save failed");
       } else {
-        setSuccess(`Saved ${body.data.saved} students (${body.data.changed} changed).`);
+        // Reload first: load() clears messages.
         await load(examSubjectId);
+        setSuccess(`Saved ${body.data.saved} students (${body.data.changed} changed).`);
       }
     } catch {
       setSaveError("Save failed");
