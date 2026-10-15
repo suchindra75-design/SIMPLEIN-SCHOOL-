@@ -60,17 +60,67 @@ interface SmartFormState {
 
 const INITIAL_STATE: SmartFormState = { result: {}, submitted: null, submission: 0 };
 
+const FLASH_KEY = "simplin:flash";
+
+/**
+ * Full reload that shows `message` afterwards (see FlashMessage).
+ *
+ * The admin fees page could not reliably apply an in-place update: after a
+ * save (or router.refresh()) React stayed suspended and the form showed
+ * "Saving…" although the save had succeeded. A full reload always shows the
+ * new data. The message travels in sessionStorage (this tab only), never in
+ * the URL.
+ */
+export function reloadWithFlash(message: string): void {
+  try {
+    sessionStorage.setItem(FLASH_KEY, message.slice(0, 300));
+  } catch {
+    // Storage unavailable: reload without the message.
+  }
+  window.location.reload();
+}
+
+/** Shows (once) the message left by reloadWithFlash. */
+export function FlashMessage() {
+  const [message, setMessage] = useState<string | null>(null);
+  useEffect(() => {
+    try {
+      const stored = sessionStorage.getItem(FLASH_KEY);
+      if (stored !== null) {
+        sessionStorage.removeItem(FLASH_KEY);
+        setMessage(stored);
+      }
+    } catch {
+      // Storage unavailable: nothing to show.
+    }
+  }, []);
+  if (message === null) return null;
+  return (
+    <p
+      role="status"
+      className="mb-4 inline-flex animate-fade-in items-center gap-2 rounded-lg border border-success-border bg-success-soft px-3 py-2 text-sm text-success"
+    >
+      <CircleCheck aria-hidden="true" className="size-4" />
+      {message}
+    </p>
+  );
+}
+
 /** Reusable create/edit form: error state, pending state, redirect on success. */
 export function SmartForm({
   action,
   fields,
   submitLabel,
   redirectTo,
+  reloadOnSuccess = false,
 }: {
   action: FormAction;
   fields: FieldDef[];
   submitLabel: string;
   redirectTo?: string;
+  /** After a successful save, reload the page (showing the result in a
+   *  FlashMessage) instead of relying on server revalidation. */
+  reloadOnSuccess?: boolean;
 }) {
   const router = useRouter();
   const formId = useId();
@@ -88,7 +138,7 @@ export function SmartForm({
     },
     INITIAL_STATE,
   );
-  const { result, submitted } = state;
+  const { result, submitted, submission } = state;
   const [isRedirecting, setIsRedirecting] = useState(false);
 
   useEffect(() => {
@@ -97,6 +147,12 @@ export function SmartForm({
       router.push(redirectTo);
     }
   }, [result.success, redirectTo, router]);
+
+  useEffect(() => {
+    if (reloadOnSuccess && result.success === true && redirectTo === undefined) {
+      reloadWithFlash(result.notice ?? "Saved");
+    }
+  }, [submission, reloadOnSuccess, result.success, result.notice, redirectTo]);
 
   // The fields remount after each submit and the submit button is disabled
   // while pending, so keyboard focus would fall back to <body>. Return it to
@@ -311,10 +367,15 @@ export function ConfirmButton({
   label,
   confirmMessage,
   run,
+  reloadOnSuccess = false,
+  successMessage = "Done",
 }: {
   label: string;
   confirmMessage: string;
   run: () => Promise<ActionState>;
+  /** Reload the page afterwards (see reloadWithFlash) instead of router.refresh(). */
+  reloadOnSuccess?: boolean;
+  successMessage?: string;
 }) {
   const router = useRouter();
   const dialogRef = useRef<HTMLDialogElement>(null);
@@ -336,7 +397,8 @@ export function ConfirmButton({
         setError(state.error);
       } else {
         close();
-        router.refresh();
+        if (reloadOnSuccess) reloadWithFlash(successMessage);
+        else router.refresh();
       }
     });
   };

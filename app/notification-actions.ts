@@ -207,13 +207,12 @@ export async function markAllNotificationsReadAction(): Promise<ActionState> {
 
 /* --------------------------------- fees ---------------------------------- */
 
-function revalidateFeePaths() {
-  revalidatePath("/admin/fees");
-  revalidatePath("/student/fees");
-  revalidatePath("/parent/fees");
-  revalidatePath("/student");
-  revalidatePath("/parent");
-}
+// The fee actions do not call revalidatePath. With it, the admin fees page
+// often never applied the re-rendered tree that comes back with the action
+// response (the form stayed on "Saving…" although the save had succeeded).
+// The fees page refreshes from the client instead (SmartForm
+// refreshOnSuccess, ConfirmButton). Family fee pages are dynamic and are
+// fetched fresh on every visit.
 
 export async function createFeeStructureAction(
   _prev: ActionState,
@@ -242,7 +241,6 @@ export async function createFeeStructureAction(
       dueDate: str(form, "dueDate") ?? null,
       components,
     });
-    revalidateFeePaths();
     return { success: true };
   } catch (error) {
     return err(error);
@@ -275,7 +273,6 @@ export async function assignFeesAction(
       return { error: "Check the students, concession total and due date" };
     }
     const { assigned, skipped } = await assignFees(db, ctx, structureId, parsed.data);
-    revalidateFeePaths();
     if (assigned === 0) {
       return {
         error: `Not changed: payments are already recorded for ${skipped === 1 ? "this student" : `all ${skipped} students`}.`,
@@ -313,7 +310,6 @@ export async function recordPaymentAction(
         | "OTHER",
       referenceNo: str(form, "referenceNo") ?? null,
     });
-    revalidateFeePaths();
     return { success: true };
   } catch (error) {
     return err(error);
@@ -328,7 +324,6 @@ export async function verifyPaymentAction(
     const db = await createServerSupabaseClient();
     const { verifyPaymentRecord } = await import("@/lib/services/fees");
     await verifyPaymentRecord(db, ctx, recordId);
-    revalidateFeePaths();
     return { success: true };
   } catch (error) {
     return err(error);
@@ -347,7 +342,6 @@ export async function voidPaymentAction(
     const reason = str(form, "reason") ?? "";
     if (reason.length < 3) return { error: "Provide a void reason" };
     await voidPaymentRecord(db, ctx, recordId, { reason });
-    revalidateFeePaths();
     return { success: true };
   } catch (error) {
     return err(error);
@@ -374,7 +368,6 @@ export async function uploadReceiptAction(
       size: file.size,
       bytes: await file.arrayBuffer(),
     });
-    revalidateFeePaths();
     return { success: true };
   } catch (error) {
     return err(error);

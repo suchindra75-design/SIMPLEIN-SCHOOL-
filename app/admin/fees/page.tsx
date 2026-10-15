@@ -7,7 +7,7 @@ import {
   verifyPaymentAction,
   voidPaymentAction,
 } from "@/app/notification-actions";
-import { ConfirmButton, SmartForm } from "@/app/admin/_components/forms";
+import { ConfirmButton, FlashMessage, SmartForm } from "@/app/admin/_components/forms";
 import { AttachmentLink } from "@/app/components/AttachmentLink";
 import { listAcademicYears } from "@/lib/services/years";
 import { listClasses } from "@/lib/services/classes";
@@ -59,6 +59,7 @@ export default async function AdminFeesPage({
   return (
     <div>
       <PageHeader title="Fees" />
+      <FlashMessage />
 
       <p className="mb-4 text-xs text-gray-500">
         V1 records school-received payments only — no online payments, no
@@ -87,6 +88,7 @@ export default async function AdminFeesPage({
               </div>
               <div className="mt-2">
                 <SmartForm
+                  reloadOnSuccess
                   action={assignFeesAction.bind(null, s.id)}
                   submitLabel="Assign to students"
                   fields={[
@@ -128,6 +130,7 @@ export default async function AdminFeesPage({
 
       <h4 className="mb-2 mt-4 font-medium">New fee structure</h4>
       <SmartForm
+        reloadOnSuccess
         action={createFeeStructureAction}
         submitLabel="Create structure"
         fields={[
@@ -245,6 +248,8 @@ export default async function AdminFeesPage({
                         <span className="ml-2 flex gap-2">
                           {r.verifiedBy === null && (
                             <ConfirmButton
+                              reloadOnSuccess
+                              successMessage="Payment verified."
                               label="Verify"
                               confirmMessage={`Verify ${r.amount} received on ${r.paidOn}? (maker-checker: another admin must have recorded it)`}
                               run={verifyPaymentAction.bind(null, r.id)}
@@ -259,6 +264,7 @@ export default async function AdminFeesPage({
               {!f.overdue || true ? (
                 <div className="mt-2 grid gap-3 md:grid-cols-2">
                   <SmartForm
+                    reloadOnSuccess
                     action={recordPaymentAction.bind(null, f.id)}
                     submitLabel="Record payment received"
                     fields={[
@@ -285,6 +291,7 @@ export default async function AdminFeesPage({
                       f.records.filter((r) => !r.isVoided).map((r) => (
                         <div key={r.id} className="mb-2">
                           <SmartForm
+                            reloadOnSuccess
                             action={voidPaymentAction.bind(null, r.id)}
                             submitLabel={`Void ${r.amount} (${r.paidOn})`}
                             fields={[{ name: "reason", label: "Reason", required: true }]}
@@ -297,6 +304,7 @@ export default async function AdminFeesPage({
               ) : null}
               <div className="mt-2">
                 <SmartForm
+                  reloadOnSuccess
                   action={uploadReceiptAction.bind(null, f.records[0]?.id ?? "")}
                   submitLabel="Upload receipt for latest record"
                   fields={[{ name: "file", label: "Receipt file (PDF/images, ≤4 MB)", type: "file", required: true }]}
