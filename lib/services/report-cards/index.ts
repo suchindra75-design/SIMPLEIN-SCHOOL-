@@ -38,9 +38,9 @@ async function assertReportCardAccess(
   studentId: string,
 ): Promise<void> {
   if (isAdmin(ctx)) return;
+  // Any role the account holds may grant access (teacher who is a parent).
   if (ctx.roles.includes("TEACHER")) {
     const scope = await getTeacherScope(db, ctx);
-    if (scope === null) throw new TenantBoundaryError();
     const { data: sec, error: secError } = await db
       .from("students")
       .select("section_id")
@@ -49,25 +49,16 @@ async function assertReportCardAccess(
       .single();
     throwForPostgrest(secError, "Student not found");
     const sectionId = (sec as { section_id: string | null }).section_id;
-    if (sectionId === null || !scope.sectionIds.has(sectionId)) {
-      throw new TenantBoundaryError();
-    }
-    return;
+    if (scope !== null && sectionId !== null && scope.sectionIds.has(sectionId)) return;
   }
   if (ctx.roles.includes("PARENT")) {
     const scope = await getParentScope(db, ctx);
-    if (scope === null || !scope.studentIds.has(studentId)) {
-      throw new TenantBoundaryError();
-    }
-    return;
+    if (scope !== null && scope.studentIds.has(studentId)) return;
   }
   if (ctx.roles.includes("STUDENT")) {
     const { getStudentScope } = await import("@/lib/services/students");
     const scope = await getStudentScope(db, ctx);
-    if (scope === null || scope.studentId !== studentId) {
-      throw new TenantBoundaryError();
-    }
-    return;
+    if (scope !== null && scope.studentId === studentId) return;
   }
   throw new TenantBoundaryError();
 }

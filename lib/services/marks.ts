@@ -525,39 +525,39 @@ export async function getStudentResult(
     for (const r of rows) if (r.is_published) publishedSubjectIds.add(r.id);
     published = rows.length > 0 && publishedSubjectIds.size === rows.length;
   }
-  const familyView = !isAdmin(ctx) && !ctx.roles.includes("TEACHER");
+  let familyView = false;
   if (!isAdmin(ctx)) {
+    let teacherAccess = false;
     if (ctx.roles.includes("TEACHER")) {
       // Teacher scope: an assigned section in the exam's class.
       const scope = await getTeacherScope(db, ctx);
-      if (scope === null || scope.sectionIds.size === 0) {
-        throw new TenantBoundaryError();
+      if (scope !== null && scope.sectionIds.size > 0) {
+        const { data: sections, error: secError } = await db
+          .from("sections")
+          .select("id")
+          .in("id", [...scope.sectionIds])
+          .eq("class_id", examRow.class_id)
+          .eq("school_id", ctx.profile.schoolId);
+        throwForPostgrest(secError);
+        teacherAccess = (sections ?? []).length > 0;
       }
-      const { data: sections, error: secError } = await db
-        .from("sections")
-        .select("id")
-        .in("id", [...scope.sectionIds])
-        .eq("class_id", examRow.class_id)
-        .eq("school_id", ctx.profile.schoolId);
-      throwForPostgrest(secError);
-      if ((sections ?? []).length === 0) throw new TenantBoundaryError();
-    } else if (ctx.roles.includes("PARENT")) {
-      const scope = await getParentScope(db, ctx);
-      if (scope === null || !scope.studentIds.has(studentId)) {
-        throw new TenantBoundaryError();
+    }
+    if (!teacherAccess) {
+      // Family access (also a teacher viewing their own child): the
+      // parent's linked child or the student's own result, published only.
+      let familyAccess = false;
+      if (ctx.roles.includes("PARENT")) {
+        const scope = await getParentScope(db, ctx);
+        familyAccess = scope !== null && scope.studentIds.has(studentId);
       }
-      // Published-only: parents never see unpublished subjects.
+      if (!familyAccess && ctx.roles.includes("STUDENT")) {
+        const { getStudentScope } = await import("@/lib/services/students");
+        const scope = await getStudentScope(db, ctx);
+        familyAccess = scope !== null && scope.studentId === studentId;
+      }
+      if (!familyAccess) throw new TenantBoundaryError();
+      familyView = true;
       if (publishedSubjectIds.size === 0) throw new NotFoundError("Results are not published yet");
-    } else if (ctx.roles.includes("STUDENT")) {
-      // Student: own results only, published-only.
-      const { getStudentScope } = await import("@/lib/services/students");
-      const scope = await getStudentScope(db, ctx);
-      if (scope === null || scope.studentId !== studentId) {
-        throw new TenantBoundaryError();
-      }
-      if (publishedSubjectIds.size === 0) throw new NotFoundError("Results are not published yet");
-    } else {
-      throw new TenantBoundaryError();
     }
   }
 

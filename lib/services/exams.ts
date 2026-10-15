@@ -57,42 +57,44 @@ export async function examScopeClassIds(
     throwForPostgrest(error);
     return new Set((data as { id: string }[]).map((c) => c.id));
   }
+  // Union over the roles the account holds (a teacher may also be a parent).
+  if (!ctx.roles.some((r) => r === "TEACHER" || r === "PARENT" || r === "STUDENT")) {
+    throw new TenantBoundaryError();
+  }
+  const classIds = new Set<string>();
   if (ctx.roles.includes("TEACHER")) {
     const scope = await getTeacherScope(db, ctx);
-    if (scope === null || scope.sectionIds.size === 0) return new Set();
-    const { data, error } = await db
-      .from("sections")
-      .select("id, class_id")
-      .in("id", [...scope.sectionIds])
-      .eq("school_id", ctx.profile.schoolId);
-    throwForPostgrest(error);
-    return new Set(
-      (data as { class_id: string }[]).map((s) => s.class_id),
-    );
+    if (scope !== null && scope.sectionIds.size > 0) {
+      const { data, error } = await db
+        .from("sections")
+        .select("id, class_id")
+        .in("id", [...scope.sectionIds])
+        .eq("school_id", ctx.profile.schoolId);
+      throwForPostgrest(error);
+      for (const s of data as { class_id: string }[]) classIds.add(s.class_id);
+    }
   }
   if (ctx.roles.includes("PARENT")) {
     const scope = await getParentScope(db, ctx);
-    if (scope === null || scope.studentIds.size === 0) return new Set();
-    const { data, error } = await db
-      .from("students")
-      .select("id, class_id")
-      .in("id", [...scope.studentIds])
-      .eq("school_id", ctx.profile.schoolId);
-    throwForPostgrest(error);
-    return new Set(
-      (data as { class_id: string | null }[])
-        .map((s) => s.class_id)
-        .filter((c): c is string => c !== null),
-    );
+    if (scope !== null && scope.studentIds.size > 0) {
+      const { data, error } = await db
+        .from("students")
+        .select("id, class_id")
+        .in("id", [...scope.studentIds])
+        .eq("school_id", ctx.profile.schoolId);
+      throwForPostgrest(error);
+      for (const s of data as { class_id: string | null }[]) {
+        if (s.class_id !== null) classIds.add(s.class_id);
+      }
+    }
   }
   if (ctx.roles.includes("STUDENT")) {
     // Student: own class's exams.
     const { getStudentScope } = await import("@/lib/services/students");
     const scope = await getStudentScope(db, ctx);
-    if (scope === null || scope.classId === null) return new Set();
-    return new Set([scope.classId]);
+    if (scope !== null && scope.classId !== null) classIds.add(scope.classId);
   }
-  throw new TenantBoundaryError();
+  return classIds;
 }
 
 /* ------------------------------- validation ------------------------------ */

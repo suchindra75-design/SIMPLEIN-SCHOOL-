@@ -210,32 +210,20 @@ export async function assertStudentAccess(
   row: { id: string; section_id: string | null },
 ): Promise<void> {
   if (isAdmin(ctx)) return;
-  if (ctx.roles.includes("TEACHER")) {
-    if (row.section_id === null) throw new TenantBoundaryError();
+  // One account can hold several roles (a teacher who is also a parent):
+  // access is granted when any of them allows it.
+  if (ctx.roles.includes("TEACHER") && row.section_id !== null) {
     const scope = await getTeacherScope(db, ctx);
-    assertTeacherSectionAccess(
-      ctx,
-      row.section_id,
-      scope === null ? new Set() : scope.sectionIds,
-    );
-    return;
+    if (scope !== null && scope.sectionIds.has(row.section_id)) return;
   }
   if (ctx.roles.includes("PARENT")) {
     const scope = await getParentScope(db, ctx);
-    assertParentStudentAccess(
-      ctx,
-      row.id,
-      scope === null ? new Set() : scope.studentIds,
-    );
-    return;
+    if (scope !== null && scope.studentIds.has(row.id)) return;
   }
   if (ctx.roles.includes("STUDENT")) {
     // Student: own row only.
     const scope = await getStudentScope(db, ctx);
-    if (scope === null || scope.studentId !== row.id) {
-      throw new TenantBoundaryError();
-    }
-    return;
+    if (scope !== null && scope.studentId === row.id) return;
   }
   throw new TenantBoundaryError();
 }

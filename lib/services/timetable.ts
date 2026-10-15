@@ -54,39 +54,32 @@ export async function assertTimetableSectionAccess(
   sectionId: string,
 ): Promise<void> {
   if (isAdmin(ctx)) return;
+  // Any role the account holds may grant access (teacher who is a parent).
   if (ctx.roles.includes("TEACHER")) {
     const scope = await getTeacherScope(db, ctx);
-    if (scope === null || !scope.sectionIds.has(sectionId)) {
-      throw new TenantBoundaryError();
-    }
-    return;
+    if (scope !== null && scope.sectionIds.has(sectionId)) return;
   }
   if (ctx.roles.includes("PARENT")) {
     // Parent: at least one linked child must be in the section.
     const scope = await getParentScope(db, ctx);
-    if (scope === null || scope.studentIds.size === 0) {
-      throw new TenantBoundaryError();
+    if (scope !== null && scope.studentIds.size > 0) {
+      const { data, error } = await db
+        .from("students")
+        .select("id, section_id")
+        .in("id", [...scope.studentIds])
+        .eq("school_id", ctx.profile.schoolId);
+      throwForPostgrest(error);
+      const inSection = (
+        data as { section_id: string | null }[]
+      ).some((s) => s.section_id === sectionId);
+      if (inSection) return;
     }
-    const { data, error } = await db
-      .from("students")
-      .select("id, section_id")
-      .in("id", [...scope.studentIds])
-      .eq("school_id", ctx.profile.schoolId);
-    throwForPostgrest(error);
-    const inSection = (
-      data as { section_id: string | null }[]
-    ).some((s) => s.section_id === sectionId);
-    if (!inSection) throw new TenantBoundaryError();
-    return;
   }
   if (ctx.roles.includes("STUDENT")) {
     // Student: own section only.
     const { getStudentScope } = await import("@/lib/services/students");
     const scope = await getStudentScope(db, ctx);
-    if (scope === null || scope.sectionId !== sectionId) {
-      throw new TenantBoundaryError();
-    }
-    return;
+    if (scope !== null && scope.sectionId === sectionId) return;
   }
   throw new TenantBoundaryError();
 }
