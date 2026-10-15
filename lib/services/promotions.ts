@@ -268,6 +268,7 @@ export async function promoteStudents(
           throw new NotFoundError("Next class not found in this school");
         }
       }
+      let nextClassId = a.nextClassId ?? null;
       if (a.nextSectionId !== undefined && a.nextSectionId !== null) {
         const { data, error } = await db
           .from("sections")
@@ -279,13 +280,11 @@ export async function promoteStudents(
           throw new NotFoundError("Next section not found in this school");
         }
         const sec = data as { id: string; class_id: string };
-        if (
-          a.nextClassId !== undefined &&
-          a.nextClassId !== null &&
-          sec.class_id !== a.nextClassId
-        ) {
+        if (nextClassId !== null && sec.class_id !== nextClassId) {
           throw new ConflictError("Section does not belong to the next class");
         }
+        // A section always implies its class (never promote into class NULL).
+        nextClassId = sec.class_id;
       }
 
       if (a.hold) {
@@ -298,7 +297,7 @@ export async function promoteStudents(
       }
 
       const graduate =
-        (a.nextClassId === undefined || a.nextClassId === null) &&
+        nextClassId === null &&
         (a.nextSectionId === undefined || a.nextSectionId === null);
 
       if (graduate) {
@@ -318,34 +317,48 @@ export async function promoteStudents(
 
       // PROMOTE: insert the next-year enrollment (history preserved) +
       // repoint the current placement.
-      const { error: insError } = await db.from("student_enrollments").insert({
-        school_id: ctx.profile.schoolId,
-        student_id: a.studentId,
-        academic_year_id: input.toYearId,
-        class_id: a.nextClassId ?? null,
-        section_id: a.nextSectionId ?? null,
-        roll_number: null,
-        status: "enrolled",
-      });
+      const { data: enrollment, error: insError } = await db
+        .from("student_enrollments")
+        .insert({
+          school_id: ctx.profile.schoolId,
+          student_id: a.studentId,
+          academic_year_id: input.toYearId,
+          class_id: nextClassId,
+          section_id: a.nextSectionId ?? null,
+          roll_number: null,
+          status: "enrolled",
+        })
+        .select("id")
+        .single();
       if (insError !== null) {
         if (insError.code === "23505") {
           throw new ConflictError(
             "Student already has an enrollment for the target year",
           );
         }
-        throw new Error(insError.message);
+        throw new Error("Could not create the next-year enrollment");
       }
+      // Roll numbers are per section: clear it so the move cannot collide with
+      // an existing roll number in the new section (assign a new one later).
       const { error: updateError } = await db
         .from("students")
-        .update({ class_id: a.nextClassId ?? null, section_id: a.nextSectionId ?? null })
+        .update({ class_id: nextClassId, section_id: a.nextSectionId ?? null, roll_number: null })
         .eq("id", a.studentId)
         .eq("school_id", ctx.profile.schoolId);
-      if (updateError !== null) throw new Error(updateError.message);
+      if (updateError !== null) {
+        // Keep enrollment and placement consistent: undo the new enrollment.
+        await db
+          .from("student_enrollments")
+          .delete()
+          .eq("id", (enrollment as { id: string }).id)
+          .eq("school_id", ctx.profile.schoolId);
+        throw new Error("Could not move the student to the next class");
+      }
       result.promoted += 1;
       await logAudit(db, ctx, "promotion.approved", "students", a.studentId, {
         fromYearId: input.fromYearId,
         toYearId: input.toYearId,
-        nextClassId: a.nextClassId ?? null,
+        nextClassId,
         nextSectionId: a.nextSectionId ?? null,
       });
     } catch (error) {

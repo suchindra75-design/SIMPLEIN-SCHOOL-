@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { requireRole } from "@/lib/auth/session";
 import {
   addTeacherAssignment,
@@ -953,12 +954,55 @@ export async function deleteTimetableSlotAction(
   }
 }
 
+/* ---------------------------- academic years ---------------------------- */
+
+export async function createAcademicYearAction(
+  _prev: ActionState,
+  form: FormData,
+): Promise<ActionState> {
+  try {
+    const ctx = await requireRole("SCHOOL_ADMIN");
+    const db = await createServerSupabaseClient();
+    const name = str(form, "name");
+    const startsOn = str(form, "startsOn");
+    const endsOn = str(form, "endsOn");
+    if (name === undefined || name.length < 2) return { error: "Enter a year name, e.g. 2027-28" };
+    if (startsOn === undefined || endsOn === undefined) return { error: "Enter both start and end dates" };
+    const { createAcademicYear } = await import("@/lib/services/years");
+    await createAcademicYear(db, ctx, {
+      name,
+      startsOn,
+      endsOn,
+      isCurrent: form.get("isCurrent") === "on",
+    });
+    revalidatePath("/admin/academic-years");
+    return { success: true };
+  } catch (error) {
+    return err(error);
+  }
+}
+
+export async function setCurrentAcademicYearAction(id: string): Promise<ActionState> {
+  try {
+    const ctx = await requireRole("SCHOOL_ADMIN");
+    const db = await createServerSupabaseClient();
+    const { setCurrentAcademicYear } = await import("@/lib/services/years");
+    await setCurrentAcademicYear(db, ctx, id);
+    revalidatePath("/admin/academic-years");
+    return { success: true };
+  } catch (error) {
+    return err(error);
+  }
+}
+
 /* ------------------------------ promotions ------------------------------ */
 
 export async function promoteStudentsAction(
   _prev: ActionState,
   form: FormData,
-): Promise<ActionState & { promoted?: number; failed?: number }> {
+): Promise<
+  ActionState & { promoted?: number; graduated?: number; held?: number; failed?: number; failure?: string }
+> {
   try {
     const ctx = await requireRole("SCHOOL_ADMIN");
     const db = await createServerSupabaseClient();
@@ -999,19 +1043,38 @@ export async function promoteStudentsAction(
     return {
       success: true,
       promoted: result.promoted,
+      graduated: result.graduated,
+      held: result.held,
       failed: result.failed.length,
+      ...(result.failed[0] !== undefined ? { failure: result.failed[0].message } : {}),
     };
   } catch (error) {
     return err(error);
   }
 }
 
-/** Void-returning wrapper for plain-form promotion submission. */
+/** Plain-form promotion submission: runs the promotion, then returns to the
+ *  page with the outcome in the query string so it is shown to the admin. */
 export async function promoteStudentsFormAction(
   prev: ActionState,
   form: FormData,
 ): Promise<void> {
-  await promoteStudentsAction(prev, form);
+  const result = await promoteStudentsAction(prev, form);
+  const params = new URLSearchParams();
+  for (const key of ["fromYearId", "toYearId", "classId"]) {
+    const value = str(form, key);
+    if (value !== undefined) params.set(key, value);
+  }
+  if (result.error !== undefined) {
+    params.set("error", result.error);
+  } else {
+    params.set("promoted", String(result.promoted ?? 0));
+    params.set("graduated", String(result.graduated ?? 0));
+    params.set("held", String(result.held ?? 0));
+    params.set("failed", String(result.failed ?? 0));
+    if (result.failure !== undefined) params.set("failure", result.failure);
+  }
+  redirect(`/admin/promotions?${params.toString()}`);
 }
 
 /* --------------------------------- pyqs ---------------------------------- */

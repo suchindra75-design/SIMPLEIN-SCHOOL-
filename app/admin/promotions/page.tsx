@@ -1,6 +1,5 @@
 import { requireRole } from "@/lib/auth/session";
 import { promoteStudentsFormAction } from "@/app/admin/actions";
-import { SmartForm } from "@/app/admin/_components/forms";
 import { previewPromotion } from "@/lib/services/promotions";
 import { listAcademicYears } from "@/lib/services/years";
 import { listClasses } from "@/lib/services/classes";
@@ -64,6 +63,19 @@ export default async function AdminPromotionsPage({
         action (never automatic). Final classes graduate safely.
       </p>
 
+      {sp["error"] !== undefined && (
+        <p role="alert" className="ui-alert ui-alert-error mt-4">
+          {sp["error"]}
+        </p>
+      )}
+      {sp["promoted"] !== undefined && (
+        <p role="status" className={`ui-alert mt-4 ${sp["failed"] !== undefined && sp["failed"] !== "0" ? "ui-alert-warning" : "ui-alert-success"}`}>
+          Promotion complete: {sp["promoted"]} promoted, {sp["graduated"] ?? "0"} graduated,{" "}
+          {sp["held"] ?? "0"} held, {sp["failed"] ?? "0"} failed.
+          {sp["failure"] !== undefined ? ` First problem: ${sp["failure"]}` : ""}
+        </p>
+      )}
+
       <form method="get" className="mt-4 flex flex-wrap items-end gap-3">
         <label className="text-sm">
           <span className="ui-label">From year</span>
@@ -124,6 +136,7 @@ export default async function AdminPromotionsPage({
             >
               <input type="hidden" name="fromYearId" value={fromYearId} />
               <input type="hidden" name="toYearId" value={toYearId} />
+              {classId !== "" && <input type="hidden" name="classId" value={classId} />}
               {preview.proposals.map((p, i) => {
                 const classOptions =
                   p.nextClassId === null
@@ -131,7 +144,13 @@ export default async function AdminPromotionsPage({
                     : (sectionOptionsByClass.get(p.nextClassId) ?? []);
                 return (
                   <div key={p.studentId} className="ui-panel">
-                    <input type="hidden" name={`studentId_${i}`} value={p.studentId} />
+                    {/* Already-promoted students are shown but not resubmitted. */}
+                    {p.action !== "ALREADY_PROMOTED" && (
+                      <input type="hidden" name={`studentId_${i}`} value={p.studentId} />
+                    )}
+                    {p.action === "PROMOTE" && p.nextClassId !== null && (
+                      <input type="hidden" name={`nextClassId_${i}`} value={p.nextClassId} />
+                    )}
                     <div className="flex flex-wrap items-center gap-3">
                       <span className="font-medium">{p.displayName}</span>
                       <span className="text-gray-600">
@@ -148,16 +167,16 @@ export default async function AdminPromotionsPage({
                         </span>
                       )}
                     </div>
-                    {p.action !== "GRADUATE" && (
+                    {p.action === "PROMOTE" && (
                       <div className="mt-2 flex flex-wrap items-end gap-3">
                         <label className="text-xs">
                           <span className="ui-label">Next section</span>
                           <select
                             name={`nextSectionId_${i}`}
                             defaultValue={p.nextSectionId ?? ""}
-                            className="rounded border px-2 py-1"
+                            className="ui-input"
                           >
-                            <option value="">None</option>
+                            <option value="">No section yet (class only)</option>
                             {classOptions.map((o) => (
                               <option key={o.value} value={o.value}>
                                 {o.label}

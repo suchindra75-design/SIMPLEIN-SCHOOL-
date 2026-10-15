@@ -5,6 +5,7 @@ import {
   BookOpen,
   CalendarCheck,
   CalendarDays,
+  CalendarRange,
   ClipboardList,
   CreditCard,
   FileSpreadsheet,
@@ -73,6 +74,7 @@ export const PORTALS: Record<ShellRole, PortalConfig> = {
       {
         label: "Academics",
         items: [
+          { href: "/admin/academic-years", label: "Academic years", icon: CalendarRange },
           { href: "/admin/classes", label: "Classes & sections", icon: Layers },
           { href: "/admin/subjects", label: "Subjects", icon: Library },
           { href: "/admin/timetable", label: "Timetable", icon: CalendarDays },
