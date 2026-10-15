@@ -7,10 +7,7 @@ import {
   previewStudentImport,
 } from "@/lib/services/imports";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import {
-  MAX_IMPORT_BYTES,
-  type ValidatedImportRow,
-} from "@/lib/validation/import";
+import { MAX_IMPORT_BYTES } from "@/lib/validation/import";
 
 export const dynamic = "force-dynamic";
 
@@ -61,11 +58,8 @@ export async function POST(request: Request) {
 
     const body: unknown = await request.json();
     const { rows } = confirmSchema.parse(body);
-    const result = await confirmStudentImport(
-      db,
-      ctx,
-      rows as unknown as ValidatedImportRow[],
-    );
+    // Each row is re-validated by confirmStudentImport.
+    const result = await confirmStudentImport(db, ctx, rows);
     return ok(result, undefined, 201);
   } catch (error) {
     return routeErrorResponse(error);

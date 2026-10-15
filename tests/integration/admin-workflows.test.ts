@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { listStudentFees, recordPayment, verifyPaymentRecord, voidPaymentRecord } from "@/lib/services/fees";
 import { createGradingSystem } from "@/lib/services/grades";
+import { confirmStudentImport } from "@/lib/services/imports";
+import { updateStudent } from "@/lib/services/students";
 import { createNotice, setNoticePublished } from "@/lib/services/notices";
 import { previewPromotion, promoteStudents } from "@/lib/services/promotions";
 import { createAcademicYear, listAcademicYears, setCurrentAcademicYear } from "@/lib/services/years";
@@ -206,6 +208,79 @@ describe("promotions", () => {
         await db.from("students").update(rest).eq("id", id as string);
       }
       await removeYear("2027-28");
+    }
+  });
+});
+
+describe("student import confirm", () => {
+  it("imports valid rows and rejects rows altered after the preview", async () => {
+    const admin = await as("admin");
+    const db = serviceClient();
+    const school = await schoolId("greenfield-demo");
+    const { data: section } = await db
+      .from("sections")
+      .select("id, class_id, classes!inner(name, school_id)")
+      .eq("name", "A")
+      .eq("classes.name", "Grade 9")
+      .eq("classes.school_id", school)
+      .single();
+    const { id: sectionId, class_id: classId } = section as { id: string; class_id: string };
+    const stamp = Date.now();
+    const valid = { row: 2, firstName: "Import", lastName: "Valid", admissionNo: `IMP-${stamp}-1`, classId, sectionId };
+    try {
+      const result = await confirmStudentImport(admin.db, admin.ctx, [
+        valid,
+        { ...valid, row: 3, admissionNo: `IMP-${stamp}-2`, firstName: "" },
+        { ...valid, row: 4, admissionNo: `IMP-${stamp}-3`, schoolId: "00000000-0000-0000-0000-000000000000" },
+        { ...valid, row: 5, admissionNo: `IMP-${stamp}-4`, dob: "31/12/2012" },
+      ]);
+      expect(result.created).toBe(1);
+      expect(result.failed.map((f) => f.row)).toEqual([3, 4, 5]);
+      const { data: created } = await db.from("students").select("admission_no, school_id, section_id").like("admission_no", `IMP-${stamp}-%`);
+      expect(created).toEqual([{ admission_no: valid.admissionNo, school_id: school, section_id: sectionId }]);
+    } finally {
+      const { data: rows } = await db.from("students").select("id").like("admission_no", `IMP-${stamp}-%`);
+      for (const r of (rows ?? []) as { id: string }[]) {
+        await db.from("student_enrollments").delete().eq("student_id", r.id);
+        await db.from("students").delete().eq("id", r.id);
+      }
+    }
+  });
+});
+
+describe("student class and section", () => {
+  it("moving a student to another section also moves the class; a bare class change is refused", async () => {
+    const admin = await as("admin");
+    const db = serviceClient();
+    const aarav = await studentByAdmission("GPS-2026-001"); // Grade 9 · A
+    const { data: before } = await db.from("students").select("class_id, section_id, roll_number").eq("id", aarav.id).single();
+    const { data: enrollments } = await db
+      .from("student_enrollments")
+      .select("id, class_id, section_id, roll_number")
+      .eq("student_id", aarav.id);
+    const school = await schoolId("greenfield-demo");
+    const { data: tenA } = await db
+      .from("sections")
+      .select("id, class_id, classes!inner(name, school_id)")
+      .eq("name", "A")
+      .eq("classes.name", "Grade 10")
+      .eq("classes.school_id", school)
+      .single();
+    const target = tenA as { id: string; class_id: string };
+    try {
+      await expect(updateStudent(admin.db, admin.ctx, aarav.id, { classId: target.class_id })).rejects.toThrow(
+        /section in the new class/,
+      );
+      // Roll numbers are unique per section, so a move clears it.
+      await updateStudent(admin.db, admin.ctx, aarav.id, { sectionId: target.id, rollNumber: null });
+      const { data: moved } = await db.from("students").select("class_id, section_id").eq("id", aarav.id).single();
+      expect(moved).toEqual({ class_id: target.class_id, section_id: target.id });
+    } finally {
+      await db.from("students").update(before as Record<string, unknown>).eq("id", aarav.id);
+      for (const e of (enrollments ?? []) as Record<string, unknown>[]) {
+        const { id, ...rest } = e;
+        await db.from("student_enrollments").update(rest).eq("id", id as string);
+      }
     }
   });
 });

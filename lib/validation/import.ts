@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { genderSchema } from "@/lib/validation/people";
+import { genderSchema, studentCreateSchema } from "@/lib/validation/people";
 
 /**
  * Student import column format (documented in docs/STUDENT_IMPORT.md).
@@ -122,6 +122,48 @@ export interface ValidatedImportRow {
   guardianPhone?: string;
   address?: string;
   admissionDate?: string;
+}
+
+/**
+ * Confirm-step check. Rows come back from the browser after the preview, so
+ * they are untrusted: re-parse each one with the same rules as a manually
+ * created student (class and section required). Class/section ownership is
+ * checked again by createStudent against the session school.
+ */
+const confirmedRowSchema = studentCreateSchema
+  .omit({ guardianPhone: true })
+  .extend({
+    row: z.number().int().min(1),
+    classId: z.string().uuid(),
+    sectionId: z.string().uuid(),
+    guardianPhone: z.string().trim().max(40).optional(),
+    parentName: z.string().trim().max(200).optional(),
+    parentPhone: z.string().trim().max(40).optional(),
+  })
+  .strict();
+
+export function revalidateConfirmedRow(
+  raw: unknown,
+): { ok: true; row: ValidatedImportRow } | { ok: false; message: string } {
+  const parsed = confirmedRowSchema.safeParse(raw);
+  if (parsed.success) {
+    const { middleName, dob, gender, rollNumber, address, admissionDate, ...rest } = parsed.data;
+    return {
+      ok: true,
+      row: {
+        ...rest,
+        middleName: middleName ?? undefined,
+        dob: dob ?? undefined,
+        gender: gender ?? undefined,
+        rollNumber: rollNumber ?? undefined,
+        address: address ?? undefined,
+        admissionDate: admissionDate ?? undefined,
+      },
+    };
+  }
+  const issue = parsed.error.issues[0];
+  const field = issue?.path.join(".") || "row";
+  return { ok: false, message: `Invalid ${field}: ${issue?.message ?? "invalid value"}` };
 }
 
 export interface ClassSectionRef {

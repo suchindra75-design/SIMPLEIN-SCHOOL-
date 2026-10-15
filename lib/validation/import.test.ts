@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   normalizeHeader,
+  revalidateConfirmedRow,
   splitFullName,
   validateImportRows,
 } from "@/lib/validation/import";
@@ -118,5 +119,43 @@ describe("validateImportRows", () => {
       new Set(),
     );
     expect(valid[0]?.gender).toBe("female");
+  });
+});
+
+describe("revalidateConfirmedRow (confirm step, untrusted rows)", () => {
+  const good = {
+    row: 2,
+    firstName: "Asha",
+    lastName: "Rao",
+    admissionNo: "ADM-1",
+    dob: "2012-05-04",
+    gender: "female",
+    classId: "8f1b7a52-3c2d-4e5f-9a6b-1c2d3e4f5a6b",
+    sectionId: "9a2c8b63-4d3e-4f60-8b7c-2d3e4f5a6b7c",
+    parentPhone: "9876500001",
+  };
+
+  it("accepts a row exactly as the preview produced it", () => {
+    const result = revalidateConfirmedRow(good);
+    expect(result).toEqual({ ok: true, row: expect.objectContaining({ admissionNo: "ADM-1", gender: "female" }) });
+  });
+
+  it("rejects rows altered after the preview", () => {
+    expect(revalidateConfirmedRow({ ...good, firstName: "" }).ok).toBe(false);
+    expect(revalidateConfirmedRow({ ...good, admissionNo: "x".repeat(81) }).ok).toBe(false);
+    expect(revalidateConfirmedRow({ ...good, dob: "04/05/2012" }).ok).toBe(false);
+    expect(revalidateConfirmedRow({ ...good, gender: "unknown" }).ok).toBe(false);
+    expect(revalidateConfirmedRow({ ...good, classId: "not-a-uuid" }).ok).toBe(false);
+    expect(revalidateConfirmedRow({ ...good, sectionId: undefined }).ok).toBe(false);
+  });
+
+  it("rejects extra fields, such as an attempt to set the school", () => {
+    const result = revalidateConfirmedRow({ ...good, schoolId: "other-school" });
+    expect(result).toMatchObject({ ok: false });
+  });
+
+  it("rejects non-objects", () => {
+    expect(revalidateConfirmedRow(null).ok).toBe(false);
+    expect(revalidateConfirmedRow("ADM-1").ok).toBe(false);
   });
 });

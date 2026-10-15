@@ -12,6 +12,7 @@ import {
   MAX_IMPORT_BYTES,
   MAX_IMPORT_ROWS,
   normalizeHeader,
+  revalidateConfirmedRow,
   validateImportRows,
   type ImportRowError,
   type RawImportRow,
@@ -153,20 +154,31 @@ export interface ImportResult {
   failed: { row: number; admissionNo: string; message: string }[];
 }
 
-/** Confirm step: inserts preview-validated rows (re-validated structurally).
- *  Per-row failures are collected, never aborting the batch silently —
- *  every success is audited. */
+/** Confirm step: inserts preview-validated rows, re-validating each one
+ *  because they come back from the browser. Per-row failures are collected,
+ *  never aborting the batch silently — every success is audited. */
 export async function confirmStudentImport(
   db: DbClient,
   ctx: SessionContext,
-  rows: ValidatedImportRow[],
+  rows: unknown[],
 ): Promise<ImportResult> {
   assertCanWritePeople(ctx);
-  if (rows.length === 0 || rows.length > MAX_IMPORT_ROWS) {
+  if (!Array.isArray(rows) || rows.length === 0 || rows.length > MAX_IMPORT_ROWS) {
     throw new ConflictError(`Import between 1 and ${MAX_IMPORT_ROWS} rows`);
   }
   const result: ImportResult = { created: 0, parentsLinked: 0, failed: [] };
-  for (const r of rows) {
+  for (const [index, raw] of rows.entries()) {
+    const checked = revalidateConfirmedRow(raw);
+    if (!checked.ok) {
+      const { admissionNo, row } = (raw ?? {}) as { admissionNo?: unknown; row?: unknown };
+      result.failed.push({
+        row: typeof row === "number" && Number.isInteger(row) ? row : index + 1,
+        admissionNo: typeof admissionNo === "string" ? admissionNo.slice(0, 80) : "",
+        message: checked.message,
+      });
+      continue;
+    }
+    const r = checked.row;
     try {
       const { id } = await createStudent(db, ctx, {
         admissionNo: r.admissionNo,

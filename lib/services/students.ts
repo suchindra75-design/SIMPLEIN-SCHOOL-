@@ -48,13 +48,15 @@ function toCreateRow(schoolId: string, input: StudentCreateInput) {
 }
 
 /** Verify class/section pair: both in this school, section belongs to class. */
+/** Checks class/section belong to the school (and to each other). Returns
+ *  the section's class id when a section is given, else null. */
 async function assertClassSection(
   db: DbClient,
   schoolId: string,
   classId: string | null | undefined,
   sectionId: string | null | undefined,
-): Promise<void> {
-  if (classId === undefined && sectionId === undefined) return;
+): Promise<string | null> {
+  if (classId === undefined && sectionId === undefined) return null;
   if (sectionId !== undefined && sectionId !== null) {
     const { data, error } = await db
       .from("sections")
@@ -69,6 +71,7 @@ async function assertClassSection(
     if (classId !== undefined && classId !== null && row.class_id !== classId) {
       throw new ConflictError("Section does not belong to the given class");
     }
+    return row.class_id;
   } else if (classId !== undefined && classId !== null) {
     const { data, error } = await db
       .from("classes")
@@ -80,6 +83,7 @@ async function assertClassSection(
       throw new NotFoundError("Class not found in this school");
     }
   }
+  return null;
 }
 
 /**
@@ -249,12 +253,15 @@ export async function createStudent(
   input: StudentCreateInput,
 ) {
   assertCanWritePeople(ctx);
-  await assertClassSection(
+  const sectionClassId = await assertClassSection(
     db,
     ctx.profile.schoolId,
     input.classId,
     input.sectionId,
   );
+  if (sectionClassId !== null && (input.classId === undefined || input.classId === null)) {
+    input = { ...input, classId: sectionClassId };
+  }
   const { data, error } = await db
     .from("students")
     .insert(toCreateRow(ctx.profile.schoolId, input))
@@ -280,14 +287,23 @@ export async function updateStudent(
   // Verify the row is in this school first (404 otherwise).
   const { data: existing, error: existingError } = await db
     .from("students")
-    .select("id, first_name, last_name")
+    .select("id, first_name, last_name, section_id")
     .eq("id", id)
     .eq("school_id", ctx.profile.schoolId)
     .single();
   if (existingError !== null || existing === null) {
     throw new NotFoundError("Student not found");
   }
-  await assertClassSection(db, ctx.profile.schoolId, patch.classId, patch.sectionId);
+  const sectionClassId = await assertClassSection(db, ctx.profile.schoolId, patch.classId, patch.sectionId);
+  // Keep class and section consistent: a new section brings its class; a new
+  // class must come with a section in it unless the current one already is.
+  const currentSection = (existing as { section_id: string | null }).section_id;
+  if (patch.classId !== undefined && patch.sectionId === undefined && currentSection !== null) {
+    const currentSectionClass = await assertClassSection(db, ctx.profile.schoolId, undefined, currentSection);
+    if (currentSectionClass !== patch.classId) {
+      throw new ConflictError("Choose a section in the new class");
+    }
+  }
   const row: Record<string, unknown> = {};
   if (patch.admissionNo !== undefined) row["admission_no"] = patch.admissionNo;
   if (patch.firstName !== undefined) row["first_name"] = patch.firstName;
@@ -300,6 +316,7 @@ export async function updateStudent(
   if (patch.admissionDate !== undefined) row["admission_date"] = patch.admissionDate;
   if (patch.classId !== undefined) row["class_id"] = patch.classId;
   if (patch.sectionId !== undefined) row["section_id"] = patch.sectionId;
+  if (sectionClassId !== null && patch.classId === undefined) row["class_id"] = sectionClassId;
   if (patch.rollNumber !== undefined) row["roll_number"] = patch.rollNumber;
   if (patch.status !== undefined) row["status"] = patch.status;
   if (patch.firstName !== undefined || patch.lastName !== undefined) {
