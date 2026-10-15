@@ -233,7 +233,7 @@ type SupabaseServerClient = Awaited<
   ReturnType<typeof createServerSupabaseClient>
 >;
 
-function adaptSupabase(client: SupabaseServerClient): SessionDataClient {
+export function adaptSupabase(client: SupabaseServerClient): SessionDataClient {
   return {
     async getAuthUserId() {
       try {
