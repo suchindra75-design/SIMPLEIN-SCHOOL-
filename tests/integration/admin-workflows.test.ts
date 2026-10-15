@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { listStudentFees, recordPayment, verifyPaymentRecord, voidPaymentRecord } from "@/lib/services/fees";
+import { createGradingSystem } from "@/lib/services/grades";
+import { createNotice, setNoticePublished } from "@/lib/services/notices";
 import { previewPromotion, promoteStudents } from "@/lib/services/promotions";
 import { createAcademicYear, listAcademicYears, setCurrentAcademicYear } from "@/lib/services/years";
 import { as, schoolId, serviceClient, studentByAdmission } from "./helpers";
@@ -47,6 +49,57 @@ describe("academic years", () => {
     await expect(
       createAcademicYear(admin.db, admin.ctx, { name: "Bad", startsOn: "2031-04-01", endsOn: "2031-03-01", isCurrent: false }),
     ).rejects.toThrow(/end date/i);
+  });
+});
+
+describe("grading systems", () => {
+  it("creating a new default grading system replaces the old default", async () => {
+    const admin = await as("admin");
+    const db = serviceClient();
+    const school = await schoolId("greenfield-demo");
+    const { data: before } = await db.from("grading_systems").select("id").eq("school_id", school).eq("is_default", true).single();
+    let createdId = "";
+    try {
+      createdId = (
+        await createGradingSystem(admin.db, admin.ctx, {
+          name: `Pass/fail ${Date.now()}`,
+          isDefault: true,
+          rules: [
+            { minPercentage: 33, maxPercentage: 100, grade: "P" },
+            { minPercentage: 0, maxPercentage: 32.99, grade: "F" },
+          ],
+        })
+      ).id;
+      const { data: defaults } = await db.from("grading_systems").select("id").eq("school_id", school).eq("is_default", true);
+      expect((defaults ?? []).map((d) => d.id)).toEqual([createdId]);
+    } finally {
+      if (createdId !== "") await db.from("grading_systems").delete().eq("id", createdId);
+      await db.from("grading_systems").update({ is_default: true }).eq("id", (before as { id: string }).id);
+    }
+  });
+});
+
+describe("notice publishing", () => {
+  it("publishes a notice with a long title and notifies its audience", async () => {
+    const admin = await as("admin");
+    const db = serviceClient();
+    const title = "Annual sports meet: schedule, venues and timings for every house. ".repeat(4).slice(0, 195);
+    expect(title.length).toBe(195); // + "New notice: " prefix > 200-char limit
+    const { id } = await createNotice(admin.db, admin.ctx, {
+      title,
+      content: "Details inside.",
+      category: "GENERAL",
+      audience: { type: "SCHOOL" },
+    });
+    try {
+      await setNoticePublished(admin.db, admin.ctx, id, true);
+      const { data } = await db.from("notifications").select("title").eq("entity_id", id);
+      expect((data ?? []).length).toBeGreaterThan(0);
+      expect((data ?? []).every((n) => (n.title as string).length <= 200)).toBe(true);
+    } finally {
+      await db.from("notifications").delete().eq("entity_id", id);
+      await db.from("notices").delete().eq("id", id);
+    }
   });
 });
 

@@ -2,6 +2,8 @@
  * Rate limiting (Phase 13 — now IMPLEMENTED; previously documented-only).
  *
  * In-memory sliding-window limiter, keyed per IP (+ route class). Tiers:
+ * - LOGIN:   POST /login (sign-in server action)   → 30 req / 5 min / IP
+ *            (looser than AUTH: a school lab or staff room often shares one IP)
  * - AUTH:    /api/v1/auth/* + /api/v1/onboarding/* → 10 req / 10 min / IP
  * - WRITE:   other /api/v1/* mutations            → 120 req / min / IP
  * - READ:    other /api/v1/* reads                → 600 req / min / IP
@@ -12,7 +14,7 @@
  * shared store (e.g. Upstash Redis) can replace it without touching callers.
  */
 
-export type RateTier = "AUTH" | "WRITE" | "READ";
+export type RateTier = "LOGIN" | "AUTH" | "WRITE" | "READ";
 
 export interface RateLimitResult {
   allowed: boolean;
@@ -25,6 +27,7 @@ interface TierConfig {
 }
 
 const TIERS: Record<RateTier, TierConfig> = {
+  LOGIN: { limit: 30, windowMs: 5 * 60 * 1000 },
   AUTH: { limit: 10, windowMs: 10 * 60 * 1000 },
   WRITE: { limit: 120, windowMs: 60 * 1000 },
   READ: { limit: 600, windowMs: 60 * 1000 },
@@ -52,6 +55,8 @@ export function checkRate(
 
 /** Classify a request path+method into a tier (null = no limiting). */
 export function tierFor(pathname: string, method: string): RateTier | null {
+  // The login form posts its server action to /login itself.
+  if (pathname === "/login" && method === "POST") return "LOGIN";
   if (pathname.startsWith("/api/v1/auth/") || pathname.startsWith("/api/v1/onboarding/")) {
     return "AUTH";
   }
@@ -88,7 +93,10 @@ export class RateLimiter {
   }
 }
 
-/** Extract the client IP from proxy headers (Vercel) or the request. */
+/**
+ * Client IP from proxy headers. On Vercel these are set by the platform edge;
+ * behind another proxy, make sure it overwrites client-supplied values.
+ */
 export function clientIp(headers: Headers): string {
   return (
     headers.get("x-real-ip") ??

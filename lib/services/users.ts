@@ -14,6 +14,7 @@ import type {
   UserUpdateInput,
 } from "@/lib/validation/people";
 import type { AppRole } from "@/lib/auth/rbac";
+import { containsSearchTerm } from "@/lib/services/search";
 
 /** Roles a School Admin may grant. SCHOOL_ADMIN is onboarding-only. */
 const GRANTABLE: AppRole[] = ["TEACHER", "PARENT", "STUDENT"];
@@ -47,8 +48,8 @@ export async function listUsers(
     .order("full_name")
     .range(from, from + f.limit - 1);
   if (f.isActive !== undefined) query = query.eq("is_active", f.isActive);
-  if (f.search !== undefined && f.search !== "") {
-    const q = `%${f.search.replace(/[%_]/g, "")}%`;
+  const q = f.search === undefined ? null : containsSearchTerm(f.search);
+  if (q !== null) {
     query = query.or(`full_name.ilike.${q},email.ilike.${q}`);
   }
   if (f.role !== undefined) {

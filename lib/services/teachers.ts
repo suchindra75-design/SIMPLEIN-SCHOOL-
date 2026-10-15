@@ -62,8 +62,8 @@ export async function listTeachers(
     .order("display_name")
     .range(from, from + f.limit - 1);
   if (f.isActive !== undefined) query = query.eq("is_active", f.isActive);
-  if (f.search !== undefined && f.search !== "") {
-    const q = `%${f.search.replace(/[%_]/g, "")}%`;
+  const q = f.search === undefined ? null : containsSearchTerm(f.search);
+  if (q !== null) {
     query = query.or(`display_name.ilike.${q},employee_no.ilike.${q}`);
   }
   const { data, error, count } = await query;
@@ -228,6 +228,7 @@ async function getTeacherRow(
 }
 
 import { cache } from "react";
+import { containsSearchTerm } from "@/lib/services/search";
 
 /* ------------------------- assignments & scope ------------------------- */
 

@@ -132,8 +132,8 @@ export async function listStudents(
 
   if (f.classId !== undefined) query = query.eq("class_id", f.classId);
   if (f.status !== undefined) query = query.eq("status", f.status);
-  if (f.search !== undefined && f.search !== "") {
-    const q = `%${f.search.replace(/[%_]/g, "")}%`;
+  const q = f.search === undefined ? null : containsSearchTerm(f.search);
+  if (q !== null) {
     query = query.or(
       `display_name.ilike.${q},admission_no.ilike.${q},first_name.ilike.${q},last_name.ilike.${q}`,
     );
@@ -206,6 +206,7 @@ export async function assertStudentAccess(
 }
 
 import { cache } from "react";
+import { containsSearchTerm } from "@/lib/services/search";
 
 export interface StudentScope {
   studentId: string;

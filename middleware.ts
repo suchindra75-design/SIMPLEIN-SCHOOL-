@@ -33,7 +33,8 @@ export async function middleware(request: NextRequest) {
   // 1. Rate limiting (works without Supabase env too).
   const tier = tierFor(request.nextUrl.pathname, request.method);
   if (tier !== null) {
-    const result = limiter.check(tier, clientIp(request.headers));
+    // Bucket per tier + IP, so API traffic cannot exhaust the login allowance.
+    const result = limiter.check(tier, `${tier}:${clientIp(request.headers)}`);
     if (!result.allowed) {
       return NextResponse.json(
         { error: { code: "RATE_LIMITED", message: "Too many requests" } },

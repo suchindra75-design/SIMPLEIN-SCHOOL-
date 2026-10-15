@@ -29,6 +29,8 @@ export async function createGradingSystem(
   authorizeRoles(ctx, ["SCHOOL_ADMIN"]);
   const problem = validateGradingRules(input.rules);
   if (problem !== null) throw new ConflictError(problem);
+  // One default per school (partial unique index): clear the old default first.
+  if (input.isDefault) await unsetDefaultGradingSystems(db, ctx, null);
   const { data, error } = await db
     .from("grading_systems")
     .insert({
@@ -52,15 +54,6 @@ export async function createGradingSystem(
     })),
   );
   throwForPostgrest(rulesError);
-  if (input.isDefault) {
-    // Keep exactly one default system per school.
-    const { error: unsetError } = await db
-      .from("grading_systems")
-      .update({ is_default: false })
-      .eq("school_id", ctx.profile.schoolId)
-      .neq("id", id);
-    if (unsetError !== null) throw new Error(unsetError.message);
-  }
   await logAudit(db, ctx, "grading_system.created", "grading_systems", id, {
     name: input.name,
     rules: input.rules.length,
@@ -115,6 +108,7 @@ export async function updateGradingSystem(
     );
     throwForPostgrest(insError);
   }
+  if (input.isDefault === true) await unsetDefaultGradingSystems(db, ctx, id);
   if (Object.keys(row).length > 0) {
     const { error: updError } = await db
       .from("grading_systems")
@@ -123,18 +117,26 @@ export async function updateGradingSystem(
       .eq("school_id", ctx.profile.schoolId);
     throwForPostgrest(updError);
   }
-  if (input.isDefault === true) {
-    const { error: unsetError } = await db
-      .from("grading_systems")
-      .update({ is_default: false })
-      .eq("school_id", ctx.profile.schoolId)
-      .neq("id", id);
-    if (unsetError !== null) throw new Error(unsetError.message);
-  }
   await logAudit(db, ctx, "grading_system.updated", "grading_systems", id, {
     fields: Object.keys(row).concat(input.rules !== undefined ? ["rules"] : []),
   });
   return { id };
+}
+
+/** Clear the school's default grading system(s), optionally sparing one id. */
+async function unsetDefaultGradingSystems(
+  db: DbClient,
+  ctx: SessionContext,
+  exceptId: string | null,
+): Promise<void> {
+  let query = db
+    .from("grading_systems")
+    .update({ is_default: false })
+    .eq("school_id", ctx.profile.schoolId)
+    .eq("is_default", true);
+  if (exceptId !== null) query = query.neq("id", exceptId);
+  const { error } = await query;
+  if (error !== null) throw new Error(error.message);
 }
 
 export { listGradingSystems };

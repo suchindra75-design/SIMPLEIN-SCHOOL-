@@ -41,8 +41,8 @@ export async function listParents(
     .order("full_name")
     .range(from, from + f.limit - 1);
   if (f.isActive !== undefined) query = query.eq("is_active", f.isActive);
-  if (f.search !== undefined && f.search !== "") {
-    const q = `%${f.search.replace(/[%_]/g, "")}%`;
+  const q = f.search === undefined ? null : containsSearchTerm(f.search);
+  if (q !== null) {
     query = query.or(`full_name.ilike.${q},phone.ilike.${q}`);
   }
   const { data, error, count } = await query;
@@ -128,6 +128,7 @@ export async function updateParent(
 }
 
 import { cache } from "react";
+import { containsSearchTerm } from "@/lib/services/search";
 
 export interface ParentScope {
   parentId: string;

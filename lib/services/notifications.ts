@@ -215,7 +215,8 @@ export async function fanOutNotification(
         school_id: ctx.profile.schoolId,
         user_id: userId,
         type: input.type,
-        title: input.title,
+        // notifications.title is CHECK-limited to 200 characters.
+        title: input.title.length > 200 ? `${input.title.slice(0, 199)}…` : input.title,
         message: input.message,
         entity: input.entity ?? null,
         entity_id: input.entityId ?? null,

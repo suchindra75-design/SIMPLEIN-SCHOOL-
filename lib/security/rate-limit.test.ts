@@ -67,6 +67,21 @@ describe("tierFor (route classification)", () => {
     expect(tierFor("/admin/students", "GET")).toBeNull();
     expect(tierFor("/login", "GET")).toBeNull();
   });
+
+  it("sign-in submissions (POST /login) → LOGIN tier, 30 per 5 minutes", () => {
+    expect(tierFor("/login", "POST")).toBe("LOGIN");
+    const thirty = Array.from({ length: 30 }, (_, i) => 1000 + i);
+    expect(checkRate("LOGIN", 2000, thirty).allowed).toBe(false);
+    expect(checkRate("LOGIN", 2000, thirty.slice(1)).allowed).toBe(true);
+    expect(checkRate("LOGIN", 1000 + 5 * 60 * 1000, thirty).allowed).toBe(true);
+  });
+
+  it("keeps a separate bucket per tier for the same client", () => {
+    const limiter = new RateLimiter();
+    for (let i = 0; i < 10; i++) limiter.check("AUTH", "AUTH:1.2.3.4", 1000 + i);
+    expect(limiter.check("AUTH", "AUTH:1.2.3.4", 2000).allowed).toBe(false);
+    expect(limiter.check("LOGIN", "LOGIN:1.2.3.4", 2000).allowed).toBe(true);
+  });
 });
 
 describe("clientIp", () => {
