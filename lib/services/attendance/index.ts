@@ -494,12 +494,12 @@ export async function getStudentAttendance(
   let query = db
     .from("attendance_records")
     .select(
-      "id, status, remark, attendance_session_id, attendance_sessions(attendance_date)",
+      "id, status, remark, attendance_session_id, attendance_sessions!inner(attendance_date)",
       { count: "exact" },
     )
     .eq("school_id", ctx.profile.schoolId)
     .eq("student_id", studentId)
-    .order("attendance_session_id")
+    .order("attendance_sessions(attendance_date)", { ascending: false })
     .range(from, from + q.limit - 1);
   if (q.from !== undefined) {
     query = query.gte("attendance_sessions.attendance_date", q.from);
@@ -548,7 +548,7 @@ export async function getStudentSummary(
   // compute with the shared pure calculator — never client-side math.
   let query = db
     .from("attendance_records")
-    .select("status, attendance_sessions(attendance_date)")
+    .select("status, attendance_sessions!inner(attendance_date)")
     .eq("school_id", ctx.profile.schoolId)
     .eq("student_id", studentId)
     .limit(1000);
