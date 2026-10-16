@@ -1,31 +1,30 @@
 # SIMPLEIN SCHOOL ERP — CI/CD & Release Management (V1, Phase 15)
 
-Status: NO CI pipeline exists (verified: no `.github/workflows`, no CI
-config in `package.json`). The flow below is REQUIRED before production;
-until it exists, releases are manual and must still follow the gates.
+Status: `.github/workflows/ci.yml` exists (branch `production-hardening`;
+not yet run on GitHub because nothing has been pushed). It runs on pushes to
+`main`, `release/**`, `production-hardening`, `phase-16-production-infrastructure`
+and on pull requests to `main` / `release/**`, with read-only permissions.
 
-## 1. Required pipeline (per pull request)
+## 1. Pipeline
 
-```
-feature branch
-  → pull request
-    → npm run typecheck
-    → npm run lint
-    → npm test            (currently 289 tests; tenant/RBAC suites block merges)
-    → npm run build
-    → deploy preview (Vercel)
-    → staging deploy + migrate + live RLS suites green
-    → human approval
-    → production deploy + migrate (forward-only)
-```
+Job `validate` (placeholder env values, never real secrets):
 
-Minimum CI job (GitHub Actions example shape — create
-`.github/workflows/ci.yml` when CI is adopted):
+1. `npm ci`
+2. `npm run typecheck`, `npm run lint`, `npm test`
+3. `npm audit --omit=dev --audit-level=critical` (known high advisories are
+   tracked in `docs/PRODUCTION_READINESS.md` §4)
+4. `node scripts/check-env.mjs`, `npm run build`
 
-1. Checkout + Node 20+ + `npm ci`.
-2. `npm run typecheck && npm run lint && npm test && npm run build`.
-3. Fail the PR on any red step. Tenant/RBAC test files block merges on
-   failure (see testing strategy in `docs/ARCHITECTURE.md` §15).
+Job `database` (throwaway local Supabase in Docker on the runner):
+
+1. `supabase start` (only Auth, PostgREST, Postgres, Storage, Kong)
+2. `supabase test db` — every migration + all pgTAP suites, including
+   `fee_integrity.sql` and `storage_limits.sql`
+3. seed (`scripts/seed-local.mjs`, localhost-only) + `npm run test:integration`
+4. `supabase stop --no-backup`
+
+Required before production deploys (manual today): staging migrate + live
+checks, human approval, then production migrate (forward-only) and deploy.
 
 ## 2. Migration promotion
 

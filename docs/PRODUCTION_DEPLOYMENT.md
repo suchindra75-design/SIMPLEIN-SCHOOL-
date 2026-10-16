@@ -9,8 +9,8 @@ No secrets in this file — names only.
 
 | Concern | Development | Staging | Production |
 |---------|-------------|---------|------------|
-| Supabase project | dev project (or CLI-linked staging for DB work) | `simplein school` (ap-northeast-2) | **separate new project — NOT created** |
-| Database | dev/staging PG | staging PG (migrations 0001–0015 applied) | new PG, forward migrations only |
+| Supabase project | local Docker stack (`docs/LOCAL_DEMO.md`) | `simplein school` (`krzbajfioftoubcbyeso`, ap-northeast-2) | `simplin school production` (`rpcydhgavfebywhlfukp`, ap-southeast-1): **exists, paused; owner must confirm it is production** |
+| Database | local PG (all migrations) | 0001–0015 applied (Phase 14); **0016–0023 pending** | state unknown until unpaused and inspected; forward migrations only |
 | App hosting | `npm run dev` (localhost) | staging Vercel project | production Vercel project |
 | App URL | `http://localhost:3000` | staging URL | production URL (TBD) |
 | Secrets | local `.env.local` only | staging Vercel env | production Vercel env (different values) |
@@ -29,6 +29,7 @@ reviewed (see §5).
 | `NEXT_PUBLIC_APP_URL` | public | all | canonical origin (links, emails, redirects) |
 | `SUPABASE_SERVICE_ROLE_KEY` | **server-only** | all | Vercel env only; never in browser bundle or Git |
 | `ONBOARDING_SECRET` | **server-only** | all | `openssl rand -hex 32` per environment; guards onboarding |
+| `NEXT_PUBLIC_STAFF_PORTAL_URL` / `NEXT_PUBLIC_FAMILY_PORTAL_URL` | public | optional | only for split `staff.` / `family.` subdomains; leave unset on a single domain (the app then stays on its own origin) |
 
 Public (`NEXT_PUBLIC_*`) values ship in the browser bundle by design — they
 are identifiers, not secrets. The service-role key and onboarding secret must
@@ -45,17 +46,21 @@ exist ONLY in server env (local `.env.local`, Vercel project settings).
 7. Onboard first school via `ONBOARDING_SECRET`; rotate the secret after pilot
    onboarding if it was ever shared.
 
-## 4. Production Supabase setup procedure (project NOT created)
+## 4. Production Supabase setup procedure (project exists but is paused)
 
-1. **Create production Supabase project** (new project, production tier for
-   PITR — see `docs/BACKUP_AND_RECOVERY.md`). Record URL + keys into
+1. **Confirm and prepare the production project** (`rpcydhgavfebywhlfukp`,
+   pending owner confirmation): unpause it, choose a plan with PITR (see
+   `docs/BACKUP_AND_RECOVERY.md`), generate fresh API keys (never reuse a key
+   that was in Git history or `.env.local`). Record URL + keys into the
    production Vercel env only.
-2. **Configure Auth:** enable email confirmations; set site URL + redirect
-   allow-list to the production app URL; review password requirements;
-   configure SMTP sender (REQUIRED for password-reset emails — unconfigured
-   anywhere as of Phase 15).
-3. **Configure Storage:** buckets are created by migrations (private); verify
-   `public = false` on all 7 buckets after migrate (see §6).
+2. **Configure Auth:** set Site URL + redirect allow-list to the production
+   app URL; **disable public signups** (all accounts are provisioned by admins
+   or onboarding); keep email confirmations on; review password requirements;
+   configure SMTP only if password-reset e-mails will be offered (the app has
+   no in-app reset flow).
+3. **Configure Storage:** buckets are created by migrations (private) and get
+   size/type limits from 0023; verify `public = false` and a non-null
+   `file_size_limit` on all 7 buckets after migrating.
 4. **Apply migrations 0001 → latest, forward-only** (§5). Never edit a
    migration that has run anywhere; fix forward with a new file.
 5. **Verify migration history** (`supabase migration list` — local and remote
@@ -81,6 +86,22 @@ exist ONLY in server env (local `.env.local`, Vercel project settings).
   typecheck`, `npm test`, `npm run lint`, `npm run build`, all live RLS
   suites green on staging, OpenAPI regenerated (`scripts/generate-openapi.mjs`).
 
+### Pending migrations (branch `production-hardening`)
+
+Apply in order; each is re-runnable. All were verified on a fresh local
+database (`supabase db reset` + seed + pgTAP + integration tests).
+
+| File | Effect | Depends on | Rollback |
+|------|--------|-----------|----------|
+| 0016 | enable RLS on `pyqs` | 0012 | `ALTER TABLE pyqs DISABLE RLS` (reopens cross-school access; don't) |
+| 0017 | notice audience/draft policies, notification recipients same-school | 0003, 0010, 0012 | re-run the 0010/0012 policy blocks (reopens the issues) |
+| 0018 | family read policies (additive) | 0012 | drop the added policies/function |
+| 0019 | marks scope helpers + marks policies | 0006, 0012, 0013 | re-run the 0006/0013 policy blocks |
+| 0020 | set-based scope helpers, 12 policies replaced | 0003–0014, 0017–0018 | re-run previous policy blocks (listed in the file) |
+| 0021 | storage SELECT scoped to referencing rows; homework write scope; indexes | 0020 | re-run previous storage policy blocks |
+| 0022 | fee maker-checker triggers + DB audit | 0002, 0003, 0011 | `DROP TRIGGER/FUNCTION` statements in the file header (data untouched) |
+| 0023 | bucket size/type limits | 0003, 0007, 0009–0012 | set `file_size_limit`/`allowed_mime_types` to NULL (statement in the file) |
+
 ## 6. Rollback process
 
 - **App:** redeploy the previous Vercel deployment (instant rollback; Vercel
@@ -90,7 +111,10 @@ exist ONLY in server env (local `.env.local`, Vercel project settings).
   pre-launch blockers. A bad migration that only ADDS objects (table, policy,
   index) can alternatively be neutralized forward (new migration dropping or
   fixing the object); a bad migration that ALTERs shared semantics requires
-  restore. When in doubt, restore.
+  restore. When in doubt, restore. Note: 0017 and 0019–0021 *replace*
+  existing policies; rolling them back by re-running older definitions
+  reintroduces the access problems they fixed, so prefer fixing forward.
+  0022 and 0023 carry their own rollback statements.
 - **Promotion flow:** `main` → staging (verify §5 gate) → approval →
   production deploy + migrate. Hotfixes follow the same path, expedited
   (see `docs/CI_CD.md`); never patch production directly.

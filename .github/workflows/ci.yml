@@ -2,9 +2,12 @@ name: SIMPLEIN SCHOOL ERP — CI Pipeline
 
 on:
   push:
-    branches: [ main, phase-16-production-infrastructure ]
+    branches: [ main, phase-16-production-infrastructure, 'release/**', production-hardening ]
   pull_request:
-    branches: [ main, phase-16-production-infrastructure ]
+    branches: [ main, 'release/**' ]
+
+permissions:
+  contents: read
 
 jobs:
   validate:
@@ -40,8 +43,52 @@ jobs:
       - name: Unit Tests
         run: npm test
 
+      - name: Production dependency audit (fails on critical)
+        # Known high advisories (xlsx, build-time postcss) are tracked in
+        # docs/PRODUCTION_READINESS.md; critical ones block the build.
+        run: npm audit --omit=dev --audit-level=critical
+
       - name: Verify Environment Check
         run: node scripts/check-env.mjs
 
       - name: Next.js Production Build
         run: npm run build
+
+  database:
+    name: Database (pgTAP) & integration tests on a throwaway local Supabase
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22 (LTS)
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Start local Supabase (Docker, this runner only)
+        run: npx --no-install supabase start -x realtime,studio,edge-runtime,logflare,vector,imgproxy,postgres-meta,supavisor,mailpit
+
+      - name: Database tests (all migrations + pgTAP, incl. fee integrity and storage limits)
+        run: npx --no-install supabase test db
+
+      - name: Export local keys (local default keys of the throwaway stack)
+        run: |
+          npx --no-install supabase status -o env \
+            | sed -nE 's/^(API_URL|ANON_KEY|SERVICE_ROLE_KEY)="?([^"]*)"?$/LOCAL_\1=\2/p' >> "$GITHUB_ENV"
+
+      - name: Seed demo data and run integration tests
+        run: |
+          export LOCAL_SUPABASE_URL="$LOCAL_API_URL"
+          export LOCAL_SUPABASE_ANON_KEY="$LOCAL_ANON_KEY"
+          export LOCAL_SUPABASE_SERVICE_ROLE_KEY="$LOCAL_SERVICE_ROLE_KEY"
+          node scripts/seed-local.mjs
+          npm run test:integration
+
+      - name: Stop local Supabase
+        if: always()
+        run: npx --no-install supabase stop --no-backup
