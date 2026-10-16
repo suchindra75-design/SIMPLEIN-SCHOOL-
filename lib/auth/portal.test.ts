@@ -1,7 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  crossPortalRedirectUrl,
   detectPortal,
   getPortalBaseUrl,
+  isLocalDevHost,
   getPortalForPath,
   getPortalHome,
   isPathAllowedForPortal,
@@ -157,5 +159,41 @@ describe("validateSafeRedirect", () => {
     expect(validateSafeRedirect(null, "/fallback")).toBe("/fallback");
     expect(validateSafeRedirect(undefined, "/fallback")).toBe("/fallback");
     expect(validateSafeRedirect("", "/fallback")).toBe("/fallback");
+  });
+});
+
+describe("single-domain deployments", () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  it("keeps users on the deployment's own host instead of a hard-coded domain", () => {
+    expect(getPortalBaseUrl("staff", "simplin-erp.vercel.app")).toBe("https://simplin-erp.vercel.app");
+    expect(getPortalBaseUrl("family", "erp.someschool.edu.in")).toBe("https://erp.someschool.edu.in");
+    expect(getPortalBaseUrl("staff", null)).toBe("");
+  });
+
+  it("still honours explicit portal URLs", () => {
+    vi.stubEnv("NEXT_PUBLIC_STAFF_PORTAL_URL", "https://staff.example.org/");
+    expect(getPortalBaseUrl("staff", "simplin-erp.vercel.app")).toBe("https://staff.example.org");
+  });
+
+  it("does not loop when switching portals on the same host", () => {
+    const url = crossPortalRedirectUrl("https://simplin-erp.vercel.app", "/parent", "?portal=staff&x=1", "simplin-erp.vercel.app");
+    expect(url.toString()).toBe("https://simplin-erp.vercel.app/parent?x=1");
+    const cross = crossPortalRedirectUrl("https://family.simplinschool.com", "/parent", "?portal=staff", "staff.simplinschool.com");
+    expect(cross.toString()).toBe("https://family.simplinschool.com/parent?portal=staff");
+  });
+});
+
+describe("isLocalDevHost (DEV MODE badge only on local hosts)", () => {
+  it("recognises local development hosts", () => {
+    for (const h of ["localhost:3000", "127.0.0.1:3999", "staff.localhost:3000", "[::1]:3000", "staff.127.0.0.1.nip.io"]) {
+      expect(isLocalDevHost(h)).toBe(true);
+    }
+  });
+
+  it("treats real hosts as production", () => {
+    for (const h of ["simplin-erp.vercel.app", "staff.simplinschool.com", "erp.someschool.edu.in", "", null]) {
+      expect(isLocalDevHost(h)).toBe(false);
+    }
   });
 });

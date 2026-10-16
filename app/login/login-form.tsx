@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
+import { isLocalDevHost } from "@/lib/auth/portal";
 import { loginAction } from "@/app/auth-actions";
 import {
   School,
@@ -189,7 +190,7 @@ export function LoginForm({
           </Link>
 
           <div className="flex items-center gap-3">
-            {initialPortal === "unified" && (
+            {initialPortal === "unified" && isLocalDevHost(currentHost) && (
               <span className="hidden sm:inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-mono bg-muted text-gray-700 border border-border">
                 <Laptop className="w-3 h-3" />
                 <span>DEV MODE: UNIFIED</span>
@@ -208,7 +209,7 @@ export function LoginForm({
       {/* Main Login Card Area */}
       <main className="flex-1 flex items-center justify-center p-4 sm:p-6 lg:p-8">
         <div className="w-full max-w-lg">
-          {/* Unified Dev Mode Portal Selector */}
+          {/* Portal selector for single-domain hosts (and local development) */}
           {initialPortal === "unified" && (
             <div className="mb-6 p-2 bg-muted border border-border rounded-xl flex items-center justify-between">
               <span className="text-[11px] font-mono font-semibold uppercase tracking-wider text-muted-foreground px-2">

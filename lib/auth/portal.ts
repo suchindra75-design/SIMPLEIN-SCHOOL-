@@ -13,8 +13,8 @@ export const FAMILY_ROUTE_PREFIXES = ["/parent", "/student"] as const;
  * Supports:
  * - staff.simplinschool.com / staff.localhost / staff.127.0.0.1.nip.io -> "staff"
  * - family.simplinschool.com / family.localhost / family.127.0.0.1.nip.io -> "family"
- * - localhost / 127.0.0.1 with ?portal=staff -> "staff"
- * - localhost / 127.0.0.1 with ?portal=family -> "family"
+ * - ?portal=staff / ?portal=family on any host -> that portal (single-domain
+ *   deployments rely on this; roles are still enforced at sign-in and per route)
  * - default fallback (plain localhost or main domain) -> "unified"
  */
 export function detectPortal(
@@ -156,17 +156,46 @@ export function getPortalBaseUrl(
       return `${protocol}://${targetPortal}.localhost${port}`;
     }
 
-    // Custom domain or production
-    if (hostname.includes("simplinschool.com")) {
+    // Branded portal subdomains
+    if (hostname === "simplinschool.com" || hostname.endsWith(".simplinschool.com")) {
       return `https://${targetPortal}.simplinschool.com`;
+    }
+
+    // Any other host is a single-domain deployment (e.g. *.vercel.app or a
+    // school's own domain): both portals live on this origin and are chosen
+    // with ?portal=. Never send users to a domain this deployment may not own.
+    if (hostname !== "") {
+      return `https://${hostname}${port}`;
     }
   }
 
-  // Fallback defaults
-  if (targetPortal === "staff") {
-    return "https://staff.simplinschool.com";
-  }
-  return "https://family.simplinschool.com";
+  // No host information at all: stay relative to the current origin.
+  return "";
+}
+
+/** Local development hosts (localhost, 127.0.0.1, *.localhost, ::1, *.nip.io). */
+export function isLocalDevHost(host: string | null | undefined): boolean {
+  if (!host) return false;
+  const hostname = host.startsWith("[") ? host.slice(1, host.indexOf("]")) : (host.split(":")[0] ?? "");
+  const h = hostname.toLowerCase();
+  return h === "localhost" || h.endsWith(".localhost") || h === "127.0.0.1" || h === "::1" || h.endsWith(".nip.io");
+}
+
+/**
+ * Redirect target for a request that belongs to the other portal. On a
+ * single-domain deployment the target is this same host, so the `portal`
+ * query parameter that caused the switch is dropped (otherwise the request
+ * would be redirected back and forth forever).
+ */
+export function crossPortalRedirectUrl(
+  targetBase: string,
+  pathname: string,
+  search: string,
+  currentHost: string,
+): URL {
+  const url = new URL(`${pathname}${search}`, targetBase || `https://${currentHost}`);
+  if (url.host === currentHost) url.searchParams.delete("portal");
+  return url;
 }
 
 /**

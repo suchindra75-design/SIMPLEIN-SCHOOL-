@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { clientIp, RateLimiter, tierFor } from "@/lib/security/rate-limit";
 import {
+  crossPortalRedirectUrl,
   detectPortal,
   getPortalBaseUrl,
   getPortalForPath,
@@ -55,12 +56,12 @@ export async function middleware(request: NextRequest) {
   if (portal === "staff" && routePortal === "family") {
     // Cross-portal navigation from staff to family
     const familyBase = getPortalBaseUrl("family", host);
-    return NextResponse.redirect(new URL(`${pathname}${search}`, familyBase));
+    return NextResponse.redirect(crossPortalRedirectUrl(familyBase, pathname, search, host));
   }
   if (portal === "family" && routePortal === "staff") {
     // Cross-portal navigation from family to staff
     const staffBase = getPortalBaseUrl("staff", host);
-    return NextResponse.redirect(new URL(`${pathname}${search}`, staffBase));
+    return NextResponse.redirect(crossPortalRedirectUrl(staffBase, pathname, search, host));
   }
 
   // If visiting the root on a branded portal subdomain:
