@@ -110,7 +110,7 @@ export function ImportClient() {
       {preview !== null && (
         <div className="mt-6">
           <p className="text-sm">
-            {preview.totalRows} rows read{preview.truncated ? " (truncated to 200)" : ""} —{" "}
+            {preview.truncated ? "More than 200 rows found; only the first 200 are checked" : `${preview.totalRows} rows read`} —{" "}
             <strong>{preview.validCount} valid</strong>,{" "}
             <strong>{preview.errorCount} errors</strong>.
           </p>

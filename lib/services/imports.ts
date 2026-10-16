@@ -50,7 +50,17 @@ export async function previewStudentImport(
     throw new ConflictError("File must be non-empty and under 2 MB");
   }
 
-  const workbook = XLSX.read(file.bytes, { type: "array" });
+  // xlsx 0.18.5 (latest on npm) has published advisories (prototype pollution
+  // fixed in 0.19.3, ReDoS in 0.20.2; fixes ship only from the SheetJS CDN).
+  // Limit the work done on an uploaded workbook: only the header plus one row
+  // beyond the import cap is parsed, and formulas/HTML/styles are skipped.
+  const workbook = XLSX.read(file.bytes, {
+    type: "array",
+    sheetRows: MAX_IMPORT_ROWS + 2,
+    cellFormula: false,
+    cellHTML: false,
+    cellStyles: false,
+  });
   const firstSheet = workbook.SheetNames[0];
   const sheet = firstSheet === undefined ? undefined : workbook.Sheets[firstSheet];
   if (sheet === undefined) {
