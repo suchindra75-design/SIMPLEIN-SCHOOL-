@@ -1,3 +1,4 @@
+import { publicErrorMessage } from "@/lib/errors/public-error";
 import { requireRole } from "@/lib/auth/session";
 import { promoteStudentsFormAction } from "@/app/admin/actions";
 import { previewPromotion } from "@/lib/services/promotions";
@@ -41,7 +42,7 @@ export default async function AdminPromotionsPage({
         classId: classId === "" ? null : classId,
       });
     } catch (error) {
-      previewError = error instanceof Error ? error.message : "Failed to load";
+      previewError = publicErrorMessage(error, "page:/admin/promotions");
     }
   }
 

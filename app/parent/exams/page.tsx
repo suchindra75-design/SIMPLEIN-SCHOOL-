@@ -1,3 +1,4 @@
+import { publicErrorMessage } from "@/lib/errors/public-error";
 import Link from "next/link";
 import { requireRole } from "@/lib/auth/session";
 import { listChildExamSchedule } from "@/lib/services/exams";
@@ -34,7 +35,7 @@ export default async function ParentExamsPage({
     try {
       ({ exams } = await listChildExamSchedule(db, ctx, selectedId));
     } catch (error) {
-      loadError = error instanceof Error ? error.message : "Failed to load";
+      loadError = publicErrorMessage(error, "page:/parent/exams");
     }
   }
 

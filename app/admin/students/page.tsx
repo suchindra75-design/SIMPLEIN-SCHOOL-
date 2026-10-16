@@ -1,3 +1,4 @@
+import { publicErrorMessage } from "@/lib/errors/public-error";
 import Link from "next/link";
 import { requireRole } from "@/lib/auth/session";
 import { listClasses } from "@/lib/services/classes";
@@ -46,7 +47,7 @@ export default async function StudentsPage({
     total = studentsRes.total;
     classes = classesRes.classes;
   } catch (error) {
-    loadError = error instanceof Error ? error.message : "Failed to load";
+    loadError = publicErrorMessage(error, "page:/admin/students");
     if (classes.length === 0) {
       try {
         ({ classes } = await listClasses(db, ctx));

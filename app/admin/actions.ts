@@ -1,5 +1,6 @@
 "use server";
 
+import { publicErrorMessage } from "@/lib/errors/public-error";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireRole } from "@/lib/auth/session";
@@ -78,7 +79,7 @@ export interface ActionState {
 }
 
 function err(error: unknown): ActionState {
-  return { error: error instanceof Error ? error.message : "Unexpected error" };
+  return { error: publicErrorMessage(error, "admin-action") };
 }
 
 function str(form: FormData, key: string): string | undefined {

@@ -1,3 +1,4 @@
+import { publicErrorMessage } from "@/lib/errors/public-error";
 import { requireRole } from "@/lib/auth/session";
 import { ReportCardView } from "@/app/components/ReportCardView";
 import { PrintButton } from "@/app/components/ReportCardButtons";
@@ -47,7 +48,7 @@ export default async function StudentReportCardsPage({
       // Self-only + published-only (Phase 7 logic reused via the service).
       preview = await buildReportCard(db, ctx, scope.studentId, examId);
     } catch (error) {
-      loadError = error instanceof Error ? error.message : "Failed to load";
+      loadError = publicErrorMessage(error, "page:/student/report-cards");
     }
   }
 

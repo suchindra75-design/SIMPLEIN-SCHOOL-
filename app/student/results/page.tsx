@@ -1,3 +1,4 @@
+import { publicErrorMessage } from "@/lib/errors/public-error";
 import Link from "next/link";
 import { requireRole } from "@/lib/auth/session";
 import { getStudentResult } from "@/lib/services/marks";
@@ -46,7 +47,7 @@ export default async function StudentResultsPage({
       result = await getStudentResult(db, ctx, scope.studentId, examId);
     } catch (error) {
       // Unpublished results → controlled message (service 404 boundary).
-      loadError = error instanceof Error ? error.message : "Failed to load";
+      loadError = publicErrorMessage(error, "page:/student/results");
     }
   }
 

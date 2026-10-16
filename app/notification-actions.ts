@@ -1,5 +1,6 @@
 "use server";
 
+import { publicErrorMessage } from "@/lib/errors/public-error";
 import { revalidatePath } from "next/cache";
 import { requireRole } from "@/lib/auth/session";
 import {
@@ -29,7 +30,7 @@ export interface ActionState {
 }
 
 function err(error: unknown): ActionState {
-  return { error: error instanceof Error ? error.message : "Unexpected error" };
+  return { error: publicErrorMessage(error, "notice-fee-action") };
 }
 
 function str(form: FormData, key: string): string | undefined {

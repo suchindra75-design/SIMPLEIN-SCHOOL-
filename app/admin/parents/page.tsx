@@ -1,3 +1,4 @@
+import { publicErrorMessage } from "@/lib/errors/public-error";
 import Link from "next/link";
 import { requireRole } from "@/lib/auth/session";
 import type { ParentDto } from "@/lib/services/dto";
@@ -33,7 +34,7 @@ export default async function ParentsPage({
       limit: 20,
     }));
   } catch (error) {
-    loadError = error instanceof Error ? error.message : "Failed to load";
+    loadError = publicErrorMessage(error, "page:/admin/parents");
   }
 
   return (

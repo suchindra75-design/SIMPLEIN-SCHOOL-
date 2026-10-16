@@ -1,3 +1,4 @@
+import { publicErrorMessage } from "@/lib/errors/public-error";
 import Link from "next/link";
 import { requireRole } from "@/lib/auth/session";
 import { listChildExamSchedule } from "@/lib/services/exams";
@@ -49,7 +50,7 @@ export default async function ParentResultsPage({
       result = await getStudentResult(db, ctx, selectedId, examId);
     } catch (error) {
       // Unpublished results surface as NotFoundError → controlled message.
-      loadError = error instanceof Error ? error.message : "Failed to load";
+      loadError = publicErrorMessage(error, "page:/parent/results");
     }
   }
 

@@ -1,3 +1,4 @@
+import { publicErrorMessage } from "@/lib/errors/public-error";
 import * as XLSX from "xlsx";
 import { assertCanWritePeople } from "@/lib/auth/scope";
 import type { SessionContext } from "@/lib/auth/session";
@@ -211,7 +212,7 @@ export async function confirmStudentImport(
       result.failed.push({
         row: r.row,
         admissionNo: r.admissionNo,
-        message: error instanceof Error ? error.message : "Unknown error",
+        message: publicErrorMessage(error, "student-import"),
       });
     }
   }

@@ -1,3 +1,4 @@
+import { publicErrorMessage } from "@/lib/errors/public-error";
 import { authorizeRoles, type SessionContext } from "@/lib/auth/session";
 import { logAudit } from "@/lib/services/audit";
 import { toCamel } from "@/lib/services/camel";
@@ -336,7 +337,7 @@ export async function promoteStudents(
             "Student already has an enrollment for the target year",
           );
         }
-        throw new Error("Could not create the next-year enrollment");
+        throw new ConflictError("Could not create the next-year enrollment");
       }
       // Roll numbers are per section: clear it so the move cannot collide with
       // an existing roll number in the new section (assign a new one later).
@@ -352,7 +353,7 @@ export async function promoteStudents(
           .delete()
           .eq("id", (enrollment as { id: string }).id)
           .eq("school_id", ctx.profile.schoolId);
-        throw new Error("Could not move the student to the next class");
+        throw new ConflictError("Could not move the student to the next class");
       }
       result.promoted += 1;
       await logAudit(db, ctx, "promotion.approved", "students", a.studentId, {
@@ -364,7 +365,7 @@ export async function promoteStudents(
     } catch (error) {
       result.failed.push({
         studentId: a.studentId,
-        message: error instanceof Error ? error.message : "Unknown error",
+        message: publicErrorMessage(error, "promotions"),
       });
     }
   }

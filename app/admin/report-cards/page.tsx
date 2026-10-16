@@ -1,3 +1,4 @@
+import { publicErrorMessage } from "@/lib/errors/public-error";
 import Link from "next/link";
 import { requireRole } from "@/lib/auth/session";
 import { ReportCardView } from "@/app/components/ReportCardView";
@@ -47,7 +48,7 @@ export default async function AdminReportCardsPage({
     try {
       preview = await buildReportCard(db, ctx, previewId, examId);
     } catch (error) {
-      previewError = error instanceof Error ? error.message : "Failed to load";
+      previewError = publicErrorMessage(error, "page:/admin/report-cards");
     }
   }
 

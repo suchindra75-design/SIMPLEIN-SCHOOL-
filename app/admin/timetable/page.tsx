@@ -1,3 +1,4 @@
+import { publicErrorMessage } from "@/lib/errors/public-error";
 import { requireRole } from "@/lib/auth/session";
 import {
   createTimetableSlotAction,
@@ -40,7 +41,7 @@ export default async function AdminTimetablePage({
     try {
       ({ slots } = await listSectionTimetable(db, ctx, sectionId));
     } catch (error) {
-      loadError = error instanceof Error ? error.message : "Failed to load";
+      loadError = publicErrorMessage(error, "page:/admin/timetable");
     }
   }
 

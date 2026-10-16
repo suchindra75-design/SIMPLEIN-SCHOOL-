@@ -1,3 +1,4 @@
+import { publicErrorMessage } from "@/lib/errors/public-error";
 import Link from "next/link";
 import { requireRole } from "@/lib/auth/session";
 import { setUserActiveAction } from "@/app/admin/actions";
@@ -22,7 +23,7 @@ export default async function UsersPage() {
   try {
     ({ users } = await listUsers(db, ctx, { page: 1, limit: 100 }));
   } catch (error) {
-    loadError = error instanceof Error ? error.message : "Failed to load";
+    loadError = publicErrorMessage(error, "page:/admin/users");
   }
 
   return (

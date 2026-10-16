@@ -1,3 +1,4 @@
+import { publicErrorMessage } from "@/lib/errors/public-error";
 import Link from "next/link";
 import { requireRole } from "@/lib/auth/session";
 import {
@@ -51,7 +52,7 @@ export default async function ParentAttendancePage({
         }),
       ]);
     } catch (error) {
-      loadError = error instanceof Error ? error.message : "Failed to load";
+      loadError = publicErrorMessage(error, "page:/parent/attendance");
     }
   }
 

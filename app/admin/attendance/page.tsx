@@ -1,3 +1,4 @@
+import { publicErrorMessage } from "@/lib/errors/public-error";
 import { AttendanceMarker } from "@/app/components/AttendanceMarker";
 import { requireRole } from "@/lib/auth/session";
 import {
@@ -34,7 +35,7 @@ export default async function AdminAttendancePage({
     try {
       summary = await getSectionSummary(db, ctx, sectionId, date);
     } catch (error) {
-      loadError = error instanceof Error ? error.message : "Failed to load";
+      loadError = publicErrorMessage(error, "page:/admin/attendance");
     }
   }
 

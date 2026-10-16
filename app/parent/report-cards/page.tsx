@@ -1,3 +1,4 @@
+import { publicErrorMessage } from "@/lib/errors/public-error";
 import Link from "next/link";
 import { requireRole } from "@/lib/auth/session";
 import { ReportCardView } from "@/app/components/ReportCardView";
@@ -60,7 +61,7 @@ export default async function ParentReportCardsPage({
       }
     } catch (error) {
       // Unpublished results → controlled message (service 404 boundary).
-      loadError = error instanceof Error ? error.message : "Failed to load";
+      loadError = publicErrorMessage(error, "page:/parent/report-cards");
     }
   }
 

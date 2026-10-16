@@ -1,3 +1,4 @@
+import { logServerError, newReference } from "@/lib/errors/server-log";
 import { authorizeRoles, type SessionContext } from "@/lib/auth/session";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { logAudit } from "@/lib/services/audit";
@@ -253,7 +254,7 @@ export async function setUserActive(
       ban_duration: active ? "none" : "876000h",
     });
   } catch (authError) {
-    console.error("[users] auth ban update failed", authError);
+    logServerError("users.auth-ban", authError, newReference());
   }
   await logAudit(db, ctx, active ? "user.enabled" : "user.disabled", "users", id, {});
   return toCamel(row);
