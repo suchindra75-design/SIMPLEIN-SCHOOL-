@@ -18,9 +18,11 @@ const nextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
   experimental: {
-    // Uploads (≤4 MB attachments, ≤2 MB photos) are posted to server actions;
-    // the 1 MB default rejected anything larger.
-    serverActions: { bodySizeLimit: "5mb" },
+    // Uploads are posted to server actions. 4,262,144 bytes = the 4,000,000
+    // byte file budget per request + a 256 KiB multipart reserve, kept below
+    // Vercel's 4.5 MB request-body limit. Must equal
+    // SERVER_ACTION_BODY_LIMIT_BYTES in lib/uploads/limits.ts (unit-tested).
+    serverActions: { bodySizeLimit: 4_262_144 },
   },
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];

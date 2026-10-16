@@ -1,8 +1,8 @@
 import { fail, ok } from "@/lib/api/response";
+import { checkRequestFiles, declaredBodyTooLarge } from "@/lib/uploads/limits";
 import { requireAuth } from "@/lib/auth/session";
 import { routeErrorResponse } from "@/lib/services/errors";
 import { createPyq } from "@/lib/services/pyqs";
-import { MAX_HOMEWORK_FILE_BYTES } from "@/lib/services/storage";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { pyqCreateSchema } from "@/lib/validation/pyqs";
 
@@ -15,21 +15,22 @@ export const dynamic = "force-dynamic";
 export async function POST(request: Request) {
   try {
     const ctx = await requireAuth();
+    if (declaredBodyTooLarge(request.headers.get("content-length"))) {
+      return fail("PAYLOAD_TOO_LARGE", "Upload is too large: files must be 4 MB or less in total");
+    }
     const form = await request.formData();
     const file = form.get("file");
     if (!(file instanceof File)) {
       return fail("VALIDATION_ERROR", "Attach the question paper as 'file'");
     }
-    if (file.size > MAX_HOMEWORK_FILE_BYTES) {
-      return fail("VALIDATION_ERROR", "File must be under 4 MB");
-    }
     const solutionRaw = form.get("solution");
     const answerKeyRaw = form.get("answerKey");
-    if (solutionRaw instanceof File && solutionRaw.size > MAX_HOMEWORK_FILE_BYTES) {
-      return fail("VALIDATION_ERROR", "Solution must be under 4 MB");
-    }
-    if (answerKeyRaw instanceof File && answerKeyRaw.size > MAX_HOMEWORK_FILE_BYTES) {
-      return fail("VALIDATION_ERROR", "Answer key must be under 4 MB");
+    // The question paper, solution and answer key share one request budget.
+    const tooLarge = checkRequestFiles(
+      [file, solutionRaw, answerKeyRaw].filter((f): f is File => f instanceof File),
+    );
+    if (tooLarge !== null) {
+      return fail("PAYLOAD_TOO_LARGE", tooLarge);
     }
     const metadata = pyqCreateSchema.parse({
       classId: form.get("classId"),

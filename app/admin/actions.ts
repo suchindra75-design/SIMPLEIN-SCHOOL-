@@ -1146,12 +1146,18 @@ export async function createPyqAction(
     const ctx = await requireRole("SCHOOL_ADMIN");
     const db = await createServerSupabaseClient();
     const { createPyq } = await import("@/lib/services/pyqs");
-    const { MAX_HOMEWORK_FILE_BYTES } = await import("@/lib/services/storage");
+    const { checkRequestFiles } = await import("@/lib/uploads/limits");
+    // The question paper, solution and answer key share one request budget.
+    const tooLarge = checkRequestFiles(
+      ["file", "solution", "answerKey"]
+        .map((key) => form.get(key))
+        .filter((raw): raw is File => raw instanceof File),
+    );
+    if (tooLarge !== null) return { error: tooLarge };
     // Empty optional file inputs arrive as 0-byte Files: treat them as absent.
     const fileField = async (key: string) => {
       const raw = form.get(key);
       if (!(raw instanceof File) || raw.size === 0) return null;
-      if (raw.size > MAX_HOMEWORK_FILE_BYTES) throw new Error(`${raw.name} must be under 4 MB`);
       return { name: raw.name, type: raw.type, size: raw.size, bytes: await raw.arrayBuffer() };
     };
     const file = await fileField("file");

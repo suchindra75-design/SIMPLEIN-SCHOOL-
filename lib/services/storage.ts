@@ -1,4 +1,5 @@
 import type { DbClient } from "@/lib/services/errors";
+import { MAX_DOCUMENT_BYTES, MAX_PHOTO_BYTES as UPLOAD_MAX_PHOTO_BYTES } from "@/lib/uploads/limits";
 
 export const PHOTO_BUCKETS = {
   student: "student-photos",
@@ -7,7 +8,7 @@ export const PHOTO_BUCKETS = {
 
 export type PhotoKind = keyof typeof PHOTO_BUCKETS;
 
-export const MAX_PHOTO_BYTES = 2 * 1024 * 1024;
+export const MAX_PHOTO_BYTES = UPLOAD_MAX_PHOTO_BYTES;
 export const ALLOWED_PHOTO_MIME = new Set([
   "image/jpeg",
   "image/png",
@@ -81,10 +82,11 @@ export async function signedPhotoUrl(
 
 export const HOMEWORK_BUCKET = "homework-attachments";
 /**
- * 4 MB: uploads go through server actions/route handlers, and Vercel caps a
- * function request body at 4.5 MB (multipart overhead included).
+ * 4,000,000 bytes: uploads go through server actions/route handlers, and
+ * Vercel caps a function request body at 4.5 MB including multipart overhead.
+ * See lib/uploads/limits.ts (requests with several files share this budget).
  */
-export const MAX_HOMEWORK_FILE_BYTES = 4 * 1024 * 1024;
+export const MAX_HOMEWORK_FILE_BYTES = MAX_DOCUMENT_BYTES;
 
 /** PDF / images / Office docs — macro-enabled formats are blocked. */
 export const ALLOWED_HOMEWORK_MIME = new Set([

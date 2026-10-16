@@ -11,6 +11,7 @@ const CODES = [
   "VALIDATION_ERROR",
   "CONFLICT",
   "RATE_LIMITED",
+  "PAYLOAD_TOO_LARGE",
   "INTERNAL",
 ] as const;
 
@@ -23,6 +24,7 @@ const STATUS: Record<ErrorCode, number> = {
   VALIDATION_ERROR: 422,
   CONFLICT: 409,
   RATE_LIMITED: 429,
+  PAYLOAD_TOO_LARGE: 413,
   INTERNAL: 500,
 };
 

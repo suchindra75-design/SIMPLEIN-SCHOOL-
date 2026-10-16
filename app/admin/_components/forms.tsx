@@ -12,6 +12,7 @@ import {
 import { useRouter } from "next/navigation";
 import { CircleAlert, CircleCheck, Loader2 } from "lucide-react";
 import type { ActionState } from "@/app/admin/actions";
+import { checkRequestFiles } from "@/lib/uploads/limits";
 import {
   captureSubmittedValues,
   initialChecked,
@@ -140,6 +141,8 @@ export function SmartForm({
   );
   const { result, submitted, submission } = state;
   const [isRedirecting, setIsRedirecting] = useState(false);
+  // Size problems found in the browser, before anything is uploaded.
+  const [clientError, setClientError] = useState<string | null>(null);
 
   useEffect(() => {
     if (result.success === true && redirectTo !== undefined) {
@@ -179,6 +182,17 @@ export function SmartForm({
       ref={formRef}
       action={formAction}
       onSubmit={(e) => {
+        // Stop oversized uploads here: the platform would reject the request
+        // body (4.5 MB) before the server action could answer.
+        const files = Array.from(
+          e.currentTarget.querySelectorAll<HTMLInputElement>('input[type="file"]'),
+        ).flatMap((input) => Array.from(input.files ?? []));
+        const tooLarge = checkRequestFiles(files);
+        setClientError(tooLarge);
+        if (tooLarge !== null) {
+          e.preventDefault();
+          return;
+        }
         const active = document.activeElement;
         submittedFrom.current =
           (active instanceof HTMLInputElement ||
@@ -190,10 +204,10 @@ export function SmartForm({
       }}
       className="max-w-lg space-y-4"
     >
-      {result.error !== undefined && !pending && (
+      {(clientError ?? (pending ? undefined : result.error)) !== undefined && (
         <div role="alert" className="ui-alert ui-alert-error animate-fade-in">
           <CircleAlert aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
-          <p>{result.error}</p>
+          <p>{clientError ?? result.error}</p>
         </div>
       )}
       <Fragment key={state.submission}>
