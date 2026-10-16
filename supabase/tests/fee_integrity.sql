@@ -125,7 +125,7 @@ select lives_ok(
   'total: raising the assignment total is allowed');
 update public.student_fees set total_amount = 5000 where id = 'fe22fe22-fe22-4e22-8e22-7200000000a1';
 select lives_ok(
-  $$ update public.fee_payment_records set receipt_bucket = 'fee-receipts', receipt_path = 'schools/fe22fe22-fe22-4e22-8e22-1000000000a1/fee-receipts/r1.pdf', receipt_name = 'r1.pdf', receipt_mime = 'application/pdf', receipt_bytes = 100
+  $$ update public.fee_payment_records set receipt_bucket = 'fee-receipts', receipt_path = 'schools/fe22fe22-fe22-4e22-8e22-1000000000a1/fee-receipts/fe22fe22-fe22-4e22-8e22-7300000000a1/r1.pdf', receipt_name = 'r1.pdf', receipt_mime = 'application/pdf', receipt_bytes = 100
      where id = 'fe22fe22-fe22-4e22-8e22-7300000000a1' $$,
   'receipt: a receipt can be attached');
 select throws_matching(

@@ -18,6 +18,13 @@ import {
   updateHomework,
 } from "@/lib/services/homework";
 
+/** Fake upload content that starts like a real PDF (uploads are signature-checked). */
+const pdfBytes = (size: number) => {
+  const bytes = new Uint8Array(size);
+  bytes.set(new TextEncoder().encode("%PDF-1.4\n"));
+  return bytes.buffer;
+};
+
 /**
  * Server-boundary authorization suite for Phase 9 homework. A programmable
  * fake stands in for PostgREST/Storage so tests assert tenant injection,
@@ -348,7 +355,7 @@ describe("attachment authorization", () => {
         name: "notes.pdf",
         type: "application/pdf",
         size: 2048,
-        bytes: new ArrayBuffer(2048),
+        bytes: pdfBytes(2048),
       },
     );
     expect(result.id).toBeDefined();
@@ -366,7 +373,7 @@ describe("attachment authorization", () => {
         name: "evil.pdf",
         type: "application/pdf",
         size: 2048,
-        bytes: new ArrayBuffer(2048),
+        bytes: pdfBytes(2048),
       }),
     ).rejects.toThrow(TenantBoundaryError);
     expect(fake.callsTo("storage:homework-attachments", "insert")).toHaveLength(0);
@@ -425,7 +432,7 @@ describe("audit logging", () => {
       name: "file.pdf",
       type: "application/pdf",
       size: 1024,
-      bytes: new ArrayBuffer(1024),
+      bytes: pdfBytes(1024),
     });
     const audits = fake.callsTo("audit_logs", "insert");
     expect(audits.map((a) => (a.payload as Row)["action"])).toEqual([

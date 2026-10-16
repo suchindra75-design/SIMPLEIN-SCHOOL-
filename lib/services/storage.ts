@@ -1,5 +1,87 @@
-import type { DbClient } from "@/lib/services/errors";
+import { ForbiddenError } from "@/lib/auth/session";
+import { redactForLog } from "@/lib/errors/server-log";
+import { ConflictError, NotFoundError, type DbClient } from "@/lib/services/errors";
 import { MAX_DOCUMENT_BYTES, MAX_PHOTO_BYTES as UPLOAD_MAX_PHOTO_BYTES } from "@/lib/uploads/limits";
+
+/** Unexpected Storage failure. Logged (redacted), shown as the generic message. */
+export class StorageServiceError extends Error {
+  readonly code: string | undefined;
+  constructor(message: string, code?: string) {
+    super(redactForLog(message));
+    this.name = "StorageServiceError";
+    this.code = code;
+  }
+}
+
+interface StorageErrorLike {
+  message: string;
+  status?: number;
+  statusCode?: string;
+  code?: string;
+}
+
+/**
+ * Map a Storage API rejection to an error users can act on. Storage answers
+ * with HTTP 400 and puts the real reason in statusCode/code (e.g. "413" /
+ * EntityTooLarge), so both are checked. Anything unrecognised stays generic.
+ */
+export function throwForStorage(error: StorageErrorLike, notFoundMessage = "File not found"): never {
+  const status = error.statusCode ?? String(error.status ?? "");
+  const code = error.code ?? "";
+  if (status === "413" || code === "EntityTooLarge") {
+    throw new ConflictError("The file is too large for this upload.");
+  }
+  if (status === "415" || code === "InvalidMimeType") {
+    throw new ConflictError("This file type is not allowed.");
+  }
+  if (status === "409" || code === "KeyAlreadyExists" || code === "ResourceAlreadyExists" || code === "Duplicate") {
+    throw new ConflictError("A file with this name was just uploaded. Please try again.");
+  }
+  if (status === "403" || status === "401" || code === "AccessDenied" || code === "Unauthorized") {
+    throw new ForbiddenError("You do not have permission to change this file.");
+  }
+  if (status === "404" || code === "NoSuchKey" || code === "NoSuchBucket") {
+    throw new NotFoundError(notFoundMessage);
+  }
+  throw new StorageServiceError(`storage: ${error.message}`, code || status || undefined);
+}
+
+/* ------------------------- content signatures (L4) ------------------------- */
+
+function startsWith(bytes: Uint8Array, signature: readonly number[], at = 0): boolean {
+  return signature.every((value, i) => bytes[at + i] === value);
+}
+
+const PDF_MARKER = [0x25, 0x50, 0x44, 0x46, 0x2d]; // "%PDF-"
+const ZIP_LOCAL_HEADER = [0x50, 0x4b, 0x03, 0x04]; // DOCX/XLSX are ZIP packages
+
+/**
+ * True when the file starts the way its declared type requires. Checked for
+ * the types with a fixed signature; legacy Word/Excel and plain text have no
+ * reliable one (Windows also labels .csv files as Excel) and pass unchanged.
+ */
+export function matchesDeclaredType(type: string, data: ArrayBuffer): boolean {
+  const bytes = new Uint8Array(data, 0, Math.min(data.byteLength, 1024));
+  switch (type) {
+    case "application/pdf":
+      // The PDF header may follow up to 1 KB of leading bytes.
+      for (let i = 0; i + PDF_MARKER.length <= bytes.length; i++) {
+        if (startsWith(bytes, PDF_MARKER, i)) return true;
+      }
+      return false;
+    case "image/jpeg":
+      return startsWith(bytes, [0xff, 0xd8, 0xff]);
+    case "image/png":
+      return startsWith(bytes, [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    case "image/webp":
+      return startsWith(bytes, [0x52, 0x49, 0x46, 0x46]) && startsWith(bytes, [0x57, 0x45, 0x42, 0x50], 8);
+    case "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+    case "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":
+      return startsWith(bytes, ZIP_LOCAL_HEADER);
+    default:
+      return true;
+  }
+}
 
 export const PHOTO_BUCKETS = {
   student: "student-photos",
@@ -33,6 +115,7 @@ export function validatePhotoUpload(file: {
   size: number;
   type: string;
   name: string;
+  bytes?: ArrayBuffer;
 }): string | null {
   if (!ALLOWED_PHOTO_MIME.has(file.type)) {
     return "Photo must be JPEG, PNG, or WebP";
@@ -42,6 +125,9 @@ export function validatePhotoUpload(file: {
   }
   if (file.name.trim() === "") {
     return "Photo must have a file name";
+  }
+  if (file.bytes !== undefined && !matchesDeclaredType(file.type, file.bytes)) {
+    return "The photo's content does not match its type (JPEG, PNG, or WebP)";
   }
   return null;
 }
@@ -57,9 +143,7 @@ export async function uploadPhoto(
   const { error } = await db.storage
     .from(PHOTO_BUCKETS[kind])
     .upload(path, bytes, { contentType, upsert: false });
-  if (error !== null) {
-    throw new Error(`photo_upload_failed: ${error.message}`);
-  }
+  if (error !== null) throwForStorage(error);
 }
 
 /** Short-lived signed read URL (caller must already be authorized). */
@@ -72,9 +156,8 @@ export async function signedPhotoUrl(
   const { data, error } = await db.storage
     .from(PHOTO_BUCKETS[kind])
     .createSignedUrl(path, expiresInSeconds);
-  if (error !== null || data === null) {
-    throw new Error(`photo_url_failed: ${error?.message ?? "unknown"}`);
-  }
+  if (error !== null) throwForStorage(error, "Photo not found");
+  if (data === null) throw new StorageServiceError("storage: no signed URL returned");
   return data.signedUrl;
 }
 
@@ -100,7 +183,13 @@ export const ALLOWED_HOMEWORK_MIME = new Set([
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   "text/plain",
 ]);
-const BLOCKED_EXTENSIONS = new Set(["docm", "xlsm", "exe", "bat", "sh", "js"]);
+/** Macro-enabled Office, executables/scripts, and types a browser renders as
+ *  active content (HTML/SVG/XML) — never stored under their own extension. */
+const BLOCKED_EXTENSIONS = new Set([
+  "docm", "dotm", "xlsm", "xltm", "xlam", "pptm",
+  "exe", "msi", "bat", "cmd", "com", "scr", "ps1", "vbs", "jar", "sh", "js", "mjs",
+  "html", "htm", "xhtml", "svg", "xml", "hta",
+]);
 
 /** Tenant-prefixed attachment path (RLS enforces the school segment). */
 export function buildAttachmentPath(
@@ -120,7 +209,9 @@ export function validateHomeworkUpload(file: {
   size: number;
   type: string;
   name: string;
-}): string | null {  if (!ALLOWED_HOMEWORK_MIME.has(file.type)) {
+  bytes?: ArrayBuffer;
+}): string | null {
+  if (!ALLOWED_HOMEWORK_MIME.has(file.type)) {
     return "Attachment type is not allowed";
   }
   if (file.size <= 0 || file.size > MAX_HOMEWORK_FILE_BYTES) {
@@ -131,7 +222,10 @@ export function validateHomeworkUpload(file: {
   }
   const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
   if (BLOCKED_EXTENSIONS.has(ext)) {
-    return "Macro-enabled or executable files are not allowed";
+    return "Macro-enabled, executable or web-page files are not allowed";
+  }
+  if (file.bytes !== undefined && !matchesDeclaredType(file.type, file.bytes)) {
+    return "The file's content does not match its type";
   }
   return null;
 }
@@ -146,9 +240,7 @@ export async function uploadHomeworkAttachment(
   const { error } = await db.storage
     .from(HOMEWORK_BUCKET)
     .upload(path, bytes, { contentType, upsert: false });
-  if (error !== null) {
-    throw new Error(`homework_upload_failed: ${error.message}`);
-  }
+  if (error !== null) throwForStorage(error);
 }
 
 /** Short-lived signed read URL (caller must already be authorized). */
@@ -160,9 +252,8 @@ export async function signedHomeworkUrl(
   const { data, error } = await db.storage
     .from(HOMEWORK_BUCKET)
     .createSignedUrl(path, expiresInSeconds);
-  if (error !== null || data === null) {
-    throw new Error(`homework_url_failed: ${error?.message ?? "unknown"}`);
-  }
+  if (error !== null) throwForStorage(error, "Attachment not found");
+  if (data === null) throw new StorageServiceError("storage: no signed URL returned");
   return data.signedUrl;
 }
 
@@ -183,9 +274,7 @@ export async function uploadToBucket(
   const { error } = await db.storage
     .from(bucket)
     .upload(path, bytes, { contentType, upsert: false });
-  if (error !== null) {
-    throw new Error(`upload_failed: ${error.message}`);
-  }
+  if (error !== null) throwForStorage(error);
 }
 
 /** Short-lived signed read URL for any private bucket (caller authorized). */
@@ -198,8 +287,7 @@ export async function signedBucketUrl(
   const { data, error } = await db.storage
     .from(bucket)
     .createSignedUrl(path, expiresInSeconds);
-  if (error !== null || data === null) {
-    throw new Error(`url_failed: ${error?.message ?? "unknown"}`);
-  }
+  if (error !== null) throwForStorage(error);
+  if (data === null) throw new StorageServiceError("storage: no signed URL returned");
   return data.signedUrl;
 }

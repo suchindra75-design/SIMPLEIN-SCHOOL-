@@ -392,18 +392,62 @@ describe("payment-record validation", () => {
 });
 
 describe("receipt authorization", () => {
-  it("admin sets a receipt (validated, private bucket, audited)", async () => {
-    const fake = createFakeDb(seed());
-    await setPaymentReceipt(fake as unknown as DbClient, adminCtx(), "pr1", {
+  const pdf = (size: number) => {
+    const bytes = new Uint8Array(size);
+    bytes.set(new TextEncoder().encode("%PDF-1.4\n"));
+    return bytes.buffer;
+  };
+  const withUnverified = () => {
+    const data = seed();
+    data.fee_payment_records!.push({
+      id: "pr2", school_id: A, student_fee_id: "sf2", amount: 1000,
+      paid_on: "2026-05-21", mode: "CASH", reference_no: null,
+      receipt_bucket: null, receipt_path: null, receipt_name: null,
+      receipt_mime: null, receipt_bytes: null,
+      recorded_by: "u-admin2", verified_by: null, is_voided: false,
+      void_reason: null, version: 1,
+    } as never);
+    return createFakeDb(data);
+  };
+
+  it("admin sets a receipt on an unverified payment (validated, private bucket, own folder)", async () => {
+    const fake = withUnverified();
+    await setPaymentReceipt(fake as unknown as DbClient, adminCtx(), "pr2", {
       name: "receipt.pdf",
       type: "application/pdf",
       size: 2048,
-      bytes: new ArrayBuffer(2048),
+      bytes: pdf(2048),
     });
     const uploads = fake.callsTo("storage:fee-receipts", "insert");
     expect(uploads).toHaveLength(1);
     const path = (uploads[0]?.payload as { path: string }).path;
-    expect(path.startsWith(`schools/${A}/fee-receipts/`)).toBe(true);
+    expect(path.startsWith(`schools/${A}/fee-receipts/pr2/`)).toBe(true);
+  });
+
+  it("the receipt of a verified payment cannot be replaced (nothing is uploaded)", async () => {
+    const fake = createFakeDb(seed());
+    await expect(
+      setPaymentReceipt(fake as unknown as DbClient, adminCtx(), "pr1", {
+        name: "swap.pdf",
+        type: "application/pdf",
+        size: 2048,
+        bytes: pdf(2048),
+      }),
+    ).rejects.toThrow(/verified or voided payment cannot be changed/);
+    expect(fake.callsTo("storage:fee-receipts", "insert")).toHaveLength(0);
+  });
+
+  it("a file whose content does not match its declared type is rejected", async () => {
+    const fake = withUnverified();
+    await expect(
+      setPaymentReceipt(fake as unknown as DbClient, adminCtx(), "pr2", {
+        name: "receipt.pdf",
+        type: "application/pdf",
+        size: 2048,
+        bytes: new ArrayBuffer(2048),
+      }),
+    ).rejects.toThrow(/content does not match/);
+    expect(fake.callsTo("storage:fee-receipts", "insert")).toHaveLength(0);
   });
 
   it("invalid receipt types are rejected", async () => {

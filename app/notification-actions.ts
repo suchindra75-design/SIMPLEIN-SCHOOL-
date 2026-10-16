@@ -14,6 +14,7 @@ import {
   markAllNotificationsRead,
   markNotificationRead,
 } from "@/lib/services/notifications";
+import { throwForPostgrest } from "@/lib/services/errors";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { MAX_HOMEWORK_FILE_BYTES } from "@/lib/services/storage";
 
@@ -144,7 +145,7 @@ export async function restoreNoticeAction(id: string): Promise<ActionState> {
       .update({ is_active: true })
       .eq("id", id)
       .eq("school_id", ctx.profile.schoolId);
-    if (error !== null) return { error: error.message };
+    throwForPostgrest(error);
     revalidatePath("/admin/notices");
     return { success: true };
   } catch (error) {

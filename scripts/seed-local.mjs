@@ -134,7 +134,7 @@ async function seedGreenfield() {
   });
 
   // Second admin: fee payments use maker-checker (another admin verifies).
-  await createLogin(S, {
+  const accounts = await createLogin(S, {
     email: "accounts@greenfield.test",
     fullName: "Farah Khan",
     roles: ["SCHOOL_ADMIN"],
@@ -480,10 +480,10 @@ async function seedGreenfield() {
   );
   const feeOf = (adm) => studentFees.find((f) => f.student_id === st[adm].id);
   await insert("fee_payment_records", [
-    { school_id: S, student_fee_id: feeOf("GPS-2026-001").id, amount: 25000, paid_on: "2026-06-12", mode: "BANK_TRANSFER", reference_no: "NEFT-DEMO-0001", recorded_by: admin.id, verified_by: admin.id },
+    { school_id: S, student_fee_id: feeOf("GPS-2026-001").id, amount: 25000, paid_on: "2026-06-12", mode: "BANK_TRANSFER", reference_no: "NEFT-DEMO-0001", recorded_by: admin.id, verified_by: accounts.id },
     { school_id: S, student_fee_id: feeOf("GPS-2026-002").id, amount: 10000, paid_on: "2026-06-20", mode: "CASH", reference_no: "RCPT-DEMO-0002", recorded_by: admin.id },
-    { school_id: S, student_fee_id: feeOf("GPS-2026-007").id, amount: 15000, paid_on: "2026-06-15", mode: "CHEQUE", reference_no: "CHQ-DEMO-0003", recorded_by: admin.id, verified_by: admin.id },
-    { school_id: S, student_fee_id: feeOf("GPS-2026-008").id, amount: 30000, paid_on: "2026-06-18", mode: "BANK_TRANSFER", reference_no: "NEFT-DEMO-0004", recorded_by: admin.id, verified_by: admin.id },
+    { school_id: S, student_fee_id: feeOf("GPS-2026-007").id, amount: 15000, paid_on: "2026-06-15", mode: "CHEQUE", reference_no: "CHQ-DEMO-0003", recorded_by: admin.id, verified_by: accounts.id },
+    { school_id: S, student_fee_id: feeOf("GPS-2026-008").id, amount: 30000, paid_on: "2026-06-18", mode: "BANK_TRANSFER", reference_no: "NEFT-DEMO-0004", recorded_by: admin.id, verified_by: accounts.id },
   ]);
 
   // Past paper (a tiny synthetic PDF in the tenant-prefixed pyqs path)

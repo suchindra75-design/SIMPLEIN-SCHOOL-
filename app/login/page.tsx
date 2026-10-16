@@ -63,8 +63,9 @@ export default async function LoginPage({
     // Inactive/unprovisioned: fall through to show the login form
   }
 
-  const staffBaseUrl = getPortalBaseUrl("staff", host);
-  const familyBaseUrl = getPortalBaseUrl("family", host);
+  // "" = no trusted origin for this host: link to the portal on this origin.
+  const staffBaseUrl = getPortalBaseUrl("staff", host) || "/login?portal=staff";
+  const familyBaseUrl = getPortalBaseUrl("family", host) || "/login?portal=family";
 
   return (
     <LoginForm

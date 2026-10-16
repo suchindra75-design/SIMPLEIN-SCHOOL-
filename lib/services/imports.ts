@@ -1,5 +1,4 @@
 import { publicErrorMessage } from "@/lib/errors/public-error";
-import * as XLSX from "xlsx";
 import { assertCanWritePeople } from "@/lib/auth/scope";
 import type { SessionContext } from "@/lib/auth/session";
 import { logAudit } from "@/lib/services/audit";
@@ -9,6 +8,7 @@ import {
 } from "@/lib/services/errors";
 import { createParent, linkChild } from "@/lib/services/parents";
 import { createStudent } from "@/lib/services/students";
+import { classifyImportFile, parseImportGrid } from "@/lib/uploads/spreadsheet";
 import {
   MAX_IMPORT_BYTES,
   MAX_IMPORT_ROWS,
@@ -42,35 +42,19 @@ export async function previewStudentImport(
   mapping?: Record<string, string>,
 ): Promise<ImportPreview> {
   assertCanWritePeople(ctx);
-  const lower = file.name.toLowerCase();
-  if (!lower.endsWith(".csv") && !lower.endsWith(".xlsx") && !lower.endsWith(".xls")) {
-    throw new ConflictError("Upload a .csv or .xlsx file");
-  }
   if (file.bytes.byteLength === 0 || file.bytes.byteLength > MAX_IMPORT_BYTES) {
     throw new ConflictError("File must be non-empty and under 2 MB");
   }
-
-  // xlsx 0.18.5 (latest on npm) has published advisories (prototype pollution
-  // fixed in 0.19.3, ReDoS in 0.20.2; fixes ship only from the SheetJS CDN).
-  // Limit the work done on an uploaded workbook: only the header plus one row
-  // beyond the import cap is parsed, and formulas/HTML/styles are skipped.
-  const workbook = XLSX.read(file.bytes, {
-    type: "array",
-    sheetRows: MAX_IMPORT_ROWS + 2,
-    cellFormula: false,
-    cellHTML: false,
-    cellStyles: false,
-  });
-  const firstSheet = workbook.SheetNames[0];
-  const sheet = firstSheet === undefined ? undefined : workbook.Sheets[firstSheet];
-  if (sheet === undefined) {
-    throw new ConflictError("Workbook contains no sheets");
-  }
-  const grid = XLSX.utils.sheet_to_json<unknown[]>(sheet, {
-    header: 1,
-    defval: "",
-    raw: false,
-  });
+  // xlsx 0.18.5 (latest on npm) has open advisories and no resource limits;
+  // the gate checks name, content and decompressed size before it parses
+  // anything (lib/uploads/spreadsheet.ts). Only the header plus one row beyond
+  // the import cap is read, from the first sheet.
+  const bytes = new Uint8Array(file.bytes);
+  const kind = classifyImportFile(file.name, bytes);
+  if ("problem" in kind) throw new ConflictError(kind.problem);
+  const parsed = parseImportGrid(bytes, MAX_IMPORT_ROWS + 2);
+  if ("problem" in parsed) throw new ConflictError(parsed.problem);
+  const grid = parsed.grid;
   if (grid.length < 2) {
     throw new ConflictError("File needs a header row plus at least one data row");
   }

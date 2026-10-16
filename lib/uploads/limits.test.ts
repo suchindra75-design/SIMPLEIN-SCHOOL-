@@ -1,12 +1,16 @@
 import { describe, expect, it } from "vitest";
 import nextConfig from "../../next.config.mjs";
 import { MAX_HOMEWORK_FILE_BYTES, MAX_PHOTO_BYTES, validateDocumentUpload } from "@/lib/services/storage";
+import { routeErrorResponse } from "@/lib/services/errors";
 import {
   checkRequestFiles,
   declaredBodyTooLarge,
   MAX_DOCUMENT_BYTES,
   MAX_FILES_PER_REQUEST_BYTES,
+  PAYLOAD_TOO_LARGE_MESSAGE,
+  PayloadTooLargeError,
   PLATFORM_REQUEST_BODY_LIMIT_BYTES,
+  readFormDataWithinLimit,
   SERVER_ACTION_BODY_LIMIT_BYTES,
 } from "@/lib/uploads/limits";
 
@@ -74,5 +78,73 @@ describe("declaredBodyTooLarge", () => {
     expect(declaredBodyTooLarge(String(SERVER_ACTION_BODY_LIMIT_BYTES))).toBe(false);
     expect(declaredBodyTooLarge(String(SERVER_ACTION_BODY_LIMIT_BYTES + 1))).toBe(true);
     expect(declaredBodyTooLarge("not-a-number")).toBe(false);
+  });
+});
+
+describe("readFormDataWithinLimit (API routes; L6)", () => {
+  const multipart = (size: number) => {
+    const form = new FormData();
+    form.append("file", new File([new Uint8Array(size)], "a.pdf", { type: "application/pdf" }));
+    return new Request("http://local.test/upload", { method: "POST", body: form });
+  };
+  /** A chunked request: no Content-Length, body produced on demand. */
+  const chunked = (chunkSize: number, chunks: number) => {
+    let sent = 0;
+    let cancelled = false; // set if the transport cancels the source
+    const body = new ReadableStream<Uint8Array>(
+      {
+        pull(controller) {
+          if (cancelled) return;
+          if (sent === chunks) return controller.close();
+          sent++;
+          controller.enqueue(new Uint8Array(chunkSize));
+        },
+        cancel() {
+          cancelled = true;
+        },
+      },
+      { highWaterMark: 0 }, // produce a chunk only when the reader asks for one
+    );
+    const request = new Request("http://local.test/upload", {
+      method: "POST",
+      body,
+      headers: { "content-type": "multipart/form-data; boundary=x" },
+      duplex: "half",
+    } as RequestInit);
+    return { request, sentChunks: () => sent };
+  };
+
+  it("parses a body within the limit", async () => {
+    const form = await readFormDataWithinLimit(multipart(1000));
+    expect((form.get("file") as File).size).toBe(1000);
+  });
+
+  it("refuses a declared Content-Length over the limit without reading the body", async () => {
+    const { request, sentChunks } = chunked(64 * 1024, 100);
+    request.headers.set("content-length", String(SERVER_ACTION_BODY_LIMIT_BYTES + 1));
+    await expect(readFormDataWithinLimit(request)).rejects.toBeInstanceOf(PayloadTooLargeError);
+    expect(sentChunks()).toBe(0);
+  });
+
+  it("stops reading a chunked body (no Content-Length) as soon as it passes the limit", async () => {
+    const chunk = 256 * 1024;
+    const { request, sentChunks } = chunked(chunk, 1000); // would be ~256 MB
+    expect(request.headers.get("content-length")).toBeNull();
+    await expect(readFormDataWithinLimit(request)).rejects.toBeInstanceOf(PayloadTooLargeError);
+    await new Promise((resolve) => setTimeout(resolve, 50)); // let any read-ahead settle
+    // Only the chunks up to the limit (plus the transport's small read-ahead) were produced.
+    expect(sentChunks()).toBeLessThanOrEqual(Math.ceil(SERVER_ACTION_BODY_LIMIT_BYTES / chunk) + 3);
+  });
+
+  it("uses the caller's limit and message (student import: 2 MB)", async () => {
+    await expect(readFormDataWithinLimit(multipart(5000), 4000, "File must be under 2 MB")).rejects.toThrow(
+      "File must be under 2 MB",
+    );
+  });
+
+  it("API routes answer 413 PAYLOAD_TOO_LARGE for it", async () => {
+    const response = routeErrorResponse(new PayloadTooLargeError());
+    expect(response.status).toBe(413);
+    expect(await response.json()).toEqual({ error: { code: "PAYLOAD_TOO_LARGE", message: PAYLOAD_TOO_LARGE_MESSAGE } });
   });
 });

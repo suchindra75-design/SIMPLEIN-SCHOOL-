@@ -83,6 +83,7 @@ function validatePyqFile(file: {
   name: string;
   type: string;
   size: number;
+  bytes?: ArrayBuffer;
 }): string | null {
   return validateDocumentUpload(file);
 }

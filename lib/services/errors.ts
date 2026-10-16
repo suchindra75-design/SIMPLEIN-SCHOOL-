@@ -1,6 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { fail } from "@/lib/api/response";
 import { authErrorResponse } from "@/lib/api/auth-errors";
+import { redactForLog } from "@/lib/errors/server-log";
+import { PayloadTooLargeError } from "@/lib/uploads/limits";
 
 /** Service threw because the (tenant-scoped) record does not exist. */
 export class NotFoundError extends Error {
@@ -18,12 +20,13 @@ export class ConflictError extends Error {
   }
 }
 
-/** Unexpected database/PostgREST error. Its message is for server logs only:
- *  it can name tables and constraints or echo submitted values. */
+/** Unexpected database/PostgREST error. Its message is for server logs only,
+ *  and is redacted here (quoted values, e-mails, numbers) so that no logger,
+ *  including Next.js's own report of an uncaught error, prints submitted data. */
 export class DatabaseError extends Error {
   readonly code: string | undefined;
   constructor(message: string, code?: string) {
-    super(message);
+    super(redactForLog(message));
     this.name = "DatabaseError";
     this.code = code;
   }
@@ -77,6 +80,9 @@ export function routeErrorResponse(error: unknown) {
   }
   if (error instanceof ConflictError) {
     return fail("CONFLICT", error.message);
+  }
+  if (error instanceof PayloadTooLargeError) {
+    return fail("PAYLOAD_TOO_LARGE", error.message);
   }
   return authErrorResponse(error);
 }

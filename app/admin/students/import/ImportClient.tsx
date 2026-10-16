@@ -85,7 +85,7 @@ export function ImportClient() {
           <span className="mb-1 block font-medium">Excel/CSV file (.csv, .xlsx, ≤2 MB, ≤200 rows)</span>
           <input
             type="file"
-            accept=".csv,.xlsx,.xls"
+            accept=".csv,.xlsx"
             onChange={(e) => setFile(e.target.files?.[0] ?? null)}
             className="ui-input"
           />

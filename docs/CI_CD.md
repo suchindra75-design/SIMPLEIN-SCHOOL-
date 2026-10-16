@@ -3,7 +3,10 @@
 Status: `.github/workflows/ci.yml` exists (branch `production-hardening`;
 not yet run on GitHub because nothing has been pushed). It runs on pushes to
 `main`, `release/**`, `production-hardening`, `phase-16-production-infrastructure`
-and on pull requests to `main` / `release/**`, with read-only permissions.
+and on pull requests to `main` / `release/**`, with read-only permissions,
+checkout without persisted credentials, job timeouts (20/30 min) and
+superseded runs cancelled. Actions are pinned by major tag (`@v4`); pinning
+by commit SHA is a follow-up that needs the SHAs looked up on GitHub.
 
 ## 1. Pipeline
 
@@ -11,16 +14,21 @@ Job `validate` (placeholder env values, never real secrets):
 
 1. `npm ci`
 2. `npm run typecheck`, `npm run lint`, `npm test`
-3. `npm audit --omit=dev --audit-level=critical` (known high advisories are
-   tracked in `docs/PRODUCTION_READINESS.md` §4)
+3. `npm audit --omit=dev --json` → `scripts/audit-gate.mjs`: fails on any
+   critical advisory, on any high advisory not listed (with a reason and a
+   review date) in the script, and when the audit could not run; known ones
+   are tracked in `docs/PRODUCTION_READINESS.md` §4
 4. `node scripts/check-env.mjs`, `npm run build`
 
 Job `database` (throwaway local Supabase in Docker on the runner):
 
 1. `supabase start` (only Auth, PostgREST, Postgres, Storage, Kong)
 2. `supabase test db` — every migration + all pgTAP suites, including
-   `fee_integrity.sql` and `storage_limits.sql`
+   `fee_integrity.sql`, `fee_assignment_integrity.sql`,
+   `fee_receipt_integrity.sql`, `audit_integrity.sql` and `storage_limits.sql`
 3. seed (`scripts/seed-local.mjs`, localhost-only) + `npm run test:integration`
+   (the concurrency tests open extra sessions on the runner's own database
+   container with `docker exec`)
 4. `supabase stop --no-backup`
 
 Required before production deploys (manual today): staging migrate + live

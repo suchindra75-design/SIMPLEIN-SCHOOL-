@@ -15,6 +15,13 @@ import {
   updatePyq,
 } from "@/lib/services/pyqs";
 
+/** Fake upload content that starts like a real PDF (uploads are signature-checked). */
+const pdfBytes = (size: number) => {
+  const bytes = new Uint8Array(size);
+  bytes.set(new TextEncoder().encode("%PDF-1.4\n"));
+  return bytes.buffer;
+};
+
 /**
  * Server-boundary authorization suite for Phase 12 PYQs. Admin manages own
  * school; students/teachers/parents read-only own school; archive =
@@ -141,7 +148,7 @@ function seed(): Record<string, Row[]> {
 const db = () => createFakeDb(seed()) as unknown as DbClient;
 
 function paper(size = 1024) {
-  return { name: "paper.pdf", type: "application/pdf", size, bytes: new ArrayBuffer(size) };
+  return { name: "paper.pdf", type: "application/pdf", size, bytes: pdfBytes(size) };
 }
 
 describe("admin upload authorization", () => {

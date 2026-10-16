@@ -162,15 +162,58 @@ export function getPortalBaseUrl(
     }
 
     // Any other host is a single-domain deployment (e.g. *.vercel.app or a
-    // school's own domain): both portals live on this origin and are chosen
-    // with ?portal=. Never send users to a domain this deployment may not own.
+    // school's own domain): both portals live on one origin and are chosen
+    // with ?portal=. The Host header is client-controlled, so it is echoed
+    // back only when this deployment is configured for that host; any other
+    // host is sent to the canonical NEXT_PUBLIC_APP_URL instead.
     if (hostname !== "") {
-      return `https://${hostname}${port}`;
+      return configuredOrigins().get(`${hostname}${port}`) ?? canonicalAppOrigin();
     }
   }
 
   // No host information at all: stay relative to the current origin.
   return "";
+}
+
+/** Origin of NEXT_PUBLIC_APP_URL, or "" when it is unset or not a URL. */
+export function canonicalAppOrigin(): string {
+  const value = process.env["NEXT_PUBLIC_APP_URL"];
+  if (!value) return "";
+  try {
+    return new URL(value).origin;
+  } catch {
+    return "";
+  }
+}
+
+/**
+ * Hosts this deployment is configured to serve, mapped to their origin: the
+ * app URL, the optional portal URLs, and Vercel's own deployment, branch and
+ * production hosts (system variables, always https).
+ */
+function configuredOrigins(): Map<string, string> {
+  const origins = new Map<string, string>();
+  for (const value of [
+    process.env["NEXT_PUBLIC_APP_URL"],
+    process.env["NEXT_PUBLIC_STAFF_PORTAL_URL"],
+    process.env["NEXT_PUBLIC_FAMILY_PORTAL_URL"],
+  ]) {
+    if (!value) continue;
+    try {
+      const url = new URL(value);
+      origins.set(url.host.toLowerCase(), url.origin);
+    } catch {
+      // A malformed value configures nothing.
+    }
+  }
+  for (const host of [
+    process.env["VERCEL_URL"],
+    process.env["VERCEL_BRANCH_URL"],
+    process.env["VERCEL_PROJECT_PRODUCTION_URL"],
+  ]) {
+    if (host) origins.set(host.toLowerCase(), `https://${host.toLowerCase()}`);
+  }
+  return origins;
 }
 
 /** Local development hosts (localhost, 127.0.0.1, *.localhost, ::1, *.nip.io). */
@@ -185,15 +228,18 @@ export function isLocalDevHost(host: string | null | undefined): boolean {
  * Redirect target for a request that belongs to the other portal. On a
  * single-domain deployment the target is this same host, so the `portal`
  * query parameter that caused the switch is dropped (otherwise the request
- * would be redirected back and forth forever).
+ * would be redirected back and forth forever). `requestOrigin` (the
+ * framework's view of this request's origin) is used only when no portal or
+ * app URL applies, i.e. when nothing is configured.
  */
 export function crossPortalRedirectUrl(
   targetBase: string,
   pathname: string,
   search: string,
   currentHost: string,
+  requestOrigin: string,
 ): URL {
-  const url = new URL(`${pathname}${search}`, targetBase || `https://${currentHost}`);
+  const url = new URL(`${pathname}${search}`, targetBase || requestOrigin);
   if (url.host === currentHost) url.searchParams.delete("portal");
   return url;
 }

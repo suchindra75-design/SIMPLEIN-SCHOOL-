@@ -612,7 +612,11 @@ export async function voidPaymentRecord(
 
 /* ------------------------------- receipts -------------------------------- */
 
-/** Admin only. Sets/updates the receipt document on a record. */
+/**
+ * Admin only. Sets/updates the receipt document on a record while it is
+ * unverified. Once verified (or voided) the receipt is evidence and frozen;
+ * the database and the fee-receipts bucket enforce this too (migration 0026).
+ */
 export async function setPaymentReceipt(
   db: DbClient,
   ctx: SessionContext,
@@ -624,12 +628,17 @@ export async function setPaymentReceipt(
   if (problem !== null) throw new ConflictError(problem);
   const { data: record, error: recError } = await db
     .from("fee_payment_records")
-    .select("id")
+    .select("id, verified_by, is_voided")
     .eq("id", recordId)
     .eq("school_id", ctx.profile.schoolId)
     .single();
   throwForPostgrest(recError, "Payment record not found");
-  void record;
+  const state = record as unknown as { verified_by: string | null; is_voided: boolean };
+  if (state.verified_by !== null || state.is_voided) {
+    throw new ConflictError(
+      "The receipt of a verified or voided payment cannot be changed. Another admin can void the payment so it can be recorded again with the correct receipt.",
+    );
+  }
   const path = buildAttachmentPath(ctx.profile.schoolId, "fee-receipts", recordId, file.name);
   await uploadToBucket(db, FEE_RECEIPTS_BUCKET, path, file.bytes, file.type);
   const { data, error } = await db

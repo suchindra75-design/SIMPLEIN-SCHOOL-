@@ -162,8 +162,12 @@ limitation — not an assumed behavior.
 
 ## 15. Audit logging
 
-- Append-only `audit_logs` (no UPDATE/DELETE RLS policies; `school_id`
-  immutable). Coverage after the Phase 13 pass: users, students (+photos,
+- Append-only `audit_logs`: no UPDATE/DELETE RLS policies, and since 0025 a
+  trigger refuses UPDATE/DELETE/TRUNCATE for every role, including the
+  service-role key (not the database owner, who can disable triggers — see
+  `docs/DATABASE_TRUST_MODEL.md`). API appends cannot use the actions the
+  database writes (`*.db_*`) or `metadata.via`; fee events only from admins;
+  server-set time. `school_id` immutable. Coverage after the Phase 13 pass: users, students (+photos,
   import, links), teachers (+assignments), parents, classes/sections/subjects
   (+links), academic years, attendance, exams (+schedules), marks
   (saved/locked/unlocked), results (published/unpublished), report cards,

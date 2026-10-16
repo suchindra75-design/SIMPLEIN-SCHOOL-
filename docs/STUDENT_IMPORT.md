@@ -2,7 +2,11 @@
 
 Route: `POST /api/v1/students/import` (admin only) and `/admin/students/import`.
 Flow: upload → parse → validate → **preview** → confirm. Nothing is created
-until Confirm. Limits: one sheet (first), ≤ 200 rows, ≤ 2 MB, `.csv`/`.xlsx`.
+until Confirm. Limits: one sheet (first), ≤ 200 rows, ≤ 2 MB, `.csv`/`.xlsx`
+(old `.xls` workbooks: save as `.xlsx` first). The file's content must match
+its extension; CSV must be plain text (UTF-8); an `.xlsx` may have at most 100
+parts and 10 MB of content once decompressed (far more than 200 rows need);
+password-protected and `.xlsb` workbooks are refused.
 
 ## Columns
 

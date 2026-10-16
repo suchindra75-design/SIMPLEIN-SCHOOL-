@@ -1,4 +1,4 @@
-import { declaredBodyTooLarge } from "@/lib/uploads/limits";
+import { readFormDataWithinLimit } from "@/lib/uploads/limits";
 import { fail, ok } from "@/lib/api/response";
 import { requireAuth } from "@/lib/auth/session";
 import { routeErrorResponse } from "@/lib/services/errors";
@@ -18,10 +18,7 @@ export async function POST(
 ) {
   try {
     const ctx = await requireAuth();
-    if (declaredBodyTooLarge(request.headers.get("content-length"))) {
-      return fail("PAYLOAD_TOO_LARGE", "Upload is too large: files must be 4 MB or less in total");
-    }
-    const form = await request.formData();
+    const form = await readFormDataWithinLimit(request);
     const file = form.get("file");
     if (!(file instanceof File)) {
       return routeErrorResponse(

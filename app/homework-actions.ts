@@ -9,6 +9,7 @@ import {
   deleteHomework,
   updateHomework,
 } from "@/lib/services/homework";
+import { throwForPostgrest } from "@/lib/services/errors";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { MAX_HOMEWORK_FILE_BYTES } from "@/lib/services/storage";
 
@@ -110,7 +111,7 @@ export async function restoreHomeworkAction(
       .update({ is_active: true })
       .eq("id", homeworkId)
       .eq("school_id", ctx.profile.schoolId);
-    if (error !== null) return { error: error.message };
+    throwForPostgrest(error);
     revalidatePath(redirectTo);
     return { success: true };
   } catch (error) {

@@ -62,6 +62,7 @@ import {
   setUserActive,
 } from "@/lib/services/users";
 import { logAudit } from "@/lib/services/audit";
+import { throwForPostgrest } from "@/lib/services/errors";
 import {
   buildPhotoPath,
   uploadPhoto,
@@ -213,21 +214,23 @@ export async function uploadStudentPhotoAction(
     const db = await createServerSupabaseClient();
     const file = form.get("photo");
     if (!(file instanceof File)) return { error: "Choose a photo file" };
+    const bytes = await file.arrayBuffer();
     const problem = validatePhotoUpload({
       size: file.size,
       type: file.type,
       name: file.name,
+      bytes,
     });
     if (problem !== null) return { error: problem };
     const path = buildPhotoPath(ctx.profile.schoolId, "student", id, file.name);
-    await uploadPhoto(db, "student", path, await file.arrayBuffer(), file.type);
+    await uploadPhoto(db, "student", path, bytes, file.type);
     // Persist the path directly (updateStudent has no photo field by design).
     const { error } = await db
       .from("students")
       .update({ photo_path: path })
       .eq("id", id)
       .eq("school_id", ctx.profile.schoolId);
-    if (error !== null) return { error: error.message };
+    throwForPostgrest(error);
     await logAudit(db, ctx, "student.photo_updated", "students", id, {
       name: file.name,
       size: file.size,

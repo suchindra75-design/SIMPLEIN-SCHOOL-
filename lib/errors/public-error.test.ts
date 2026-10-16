@@ -91,3 +91,11 @@ describe("throwForPostgrest", () => {
     }
   });
 });
+
+describe("DatabaseError redaction (L7)", () => {
+  it("never carries submitted values, so even an uncaught one logged by Next.js is safe", () => {
+    const error = new DatabaseError('invalid input syntax for type uuid: "ramesh.sharma@greenfield.test 9876500301"', "22P02");
+    expect(error.message).not.toMatch(/ramesh|greenfield|9876500301/);
+    expect(error.code).toBe("22P02");
+  });
+});

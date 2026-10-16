@@ -56,12 +56,12 @@ export async function middleware(request: NextRequest) {
   if (portal === "staff" && routePortal === "family") {
     // Cross-portal navigation from staff to family
     const familyBase = getPortalBaseUrl("family", host);
-    return NextResponse.redirect(crossPortalRedirectUrl(familyBase, pathname, search, host));
+    return NextResponse.redirect(crossPortalRedirectUrl(familyBase, pathname, search, host, request.nextUrl.origin));
   }
   if (portal === "family" && routePortal === "staff") {
     // Cross-portal navigation from family to staff
     const staffBase = getPortalBaseUrl("staff", host);
-    return NextResponse.redirect(crossPortalRedirectUrl(staffBase, pathname, search, host));
+    return NextResponse.redirect(crossPortalRedirectUrl(staffBase, pathname, search, host, request.nextUrl.origin));
   }
 
   // If visiting the root on a branded portal subdomain:

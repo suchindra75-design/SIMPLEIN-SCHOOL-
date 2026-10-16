@@ -1,5 +1,5 @@
 import { fail, ok } from "@/lib/api/response";
-import { checkRequestFiles, declaredBodyTooLarge } from "@/lib/uploads/limits";
+import { checkRequestFiles, readFormDataWithinLimit } from "@/lib/uploads/limits";
 import { requireAuth } from "@/lib/auth/session";
 import { routeErrorResponse } from "@/lib/services/errors";
 import { createPyq } from "@/lib/services/pyqs";
@@ -15,10 +15,7 @@ export const dynamic = "force-dynamic";
 export async function POST(request: Request) {
   try {
     const ctx = await requireAuth();
-    if (declaredBodyTooLarge(request.headers.get("content-length"))) {
-      return fail("PAYLOAD_TOO_LARGE", "Upload is too large: files must be 4 MB or less in total");
-    }
-    const form = await request.formData();
+    const form = await readFormDataWithinLimit(request);
     const file = form.get("file");
     if (!(file instanceof File)) {
       return fail("VALIDATION_ERROR", "Attach the question paper as 'file'");

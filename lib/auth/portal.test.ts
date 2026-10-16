@@ -165,10 +165,32 @@ describe("validateSafeRedirect", () => {
 describe("single-domain deployments", () => {
   afterEach(() => vi.unstubAllEnvs());
 
-  it("keeps users on the deployment's own host instead of a hard-coded domain", () => {
-    expect(getPortalBaseUrl("staff", "simplin-erp.vercel.app")).toBe("https://simplin-erp.vercel.app");
+  it("keeps users on the deployment's own configured host instead of a hard-coded domain", () => {
+    vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://erp.someschool.edu.in");
+    vi.stubEnv("VERCEL_URL", "simplin-erp-abc123.vercel.app");
+    vi.stubEnv("VERCEL_BRANCH_URL", "simplin-erp-git-main.vercel.app");
     expect(getPortalBaseUrl("family", "erp.someschool.edu.in")).toBe("https://erp.someschool.edu.in");
+    expect(getPortalBaseUrl("staff", "simplin-erp-abc123.vercel.app")).toBe("https://simplin-erp-abc123.vercel.app");
+    expect(getPortalBaseUrl("staff", "simplin-erp-git-main.vercel.app")).toBe("https://simplin-erp-git-main.vercel.app");
     expect(getPortalBaseUrl("staff", null)).toBe("");
+  });
+
+  it("never echoes an unconfigured Host header back into redirects", () => {
+    vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://erp.someschool.edu.in/");
+    expect(getPortalBaseUrl("staff", "evil.example.com")).toBe("https://erp.someschool.edu.in");
+    expect(getPortalBaseUrl("family", "evil.example.com:8443")).toBe("https://erp.someschool.edu.in");
+    const url = crossPortalRedirectUrl(getPortalBaseUrl("staff", "evil.example.com"), "/admin", "?portal=staff", "evil.example.com", "https://evil.example.com");
+    expect(url.origin).toBe("https://erp.someschool.edu.in");
+    // Nothing configured: no origin is trusted, so links stay relative ("") and
+    // the middleware falls back to the framework's request origin.
+    vi.stubEnv("NEXT_PUBLIC_APP_URL", "");
+    expect(getPortalBaseUrl("staff", "evil.example.com")).toBe("");
+    expect(crossPortalRedirectUrl("", "/parent", "?portal=staff", "erp.local", "http://erp.local").toString()).toBe("http://erp.local/parent");
+  });
+
+  it("keeps the configured protocol (e.g. an http intranet deployment)", () => {
+    vi.stubEnv("NEXT_PUBLIC_APP_URL", "http://erp.school.lan:8080");
+    expect(getPortalBaseUrl("staff", "erp.school.lan:8080")).toBe("http://erp.school.lan:8080");
   });
 
   it("still honours explicit portal URLs", () => {
@@ -177,9 +199,9 @@ describe("single-domain deployments", () => {
   });
 
   it("does not loop when switching portals on the same host", () => {
-    const url = crossPortalRedirectUrl("https://simplin-erp.vercel.app", "/parent", "?portal=staff&x=1", "simplin-erp.vercel.app");
+    const url = crossPortalRedirectUrl("https://simplin-erp.vercel.app", "/parent", "?portal=staff&x=1", "simplin-erp.vercel.app", "https://simplin-erp.vercel.app");
     expect(url.toString()).toBe("https://simplin-erp.vercel.app/parent?x=1");
-    const cross = crossPortalRedirectUrl("https://family.simplinschool.com", "/parent", "?portal=staff", "staff.simplinschool.com");
+    const cross = crossPortalRedirectUrl("https://family.simplinschool.com", "/parent", "?portal=staff", "staff.simplinschool.com", "https://staff.simplinschool.com");
     expect(cross.toString()).toBe("https://family.simplinschool.com/parent?portal=staff");
   });
 });

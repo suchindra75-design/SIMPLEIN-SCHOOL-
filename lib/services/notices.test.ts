@@ -26,6 +26,13 @@ import {
   unreadCount,
 } from "@/lib/services/notifications";
 
+/** Fake upload content that starts like a real PDF (uploads are signature-checked). */
+const pdfBytes = (size: number) => {
+  const bytes = new Uint8Array(size);
+  bytes.set(new TextEncoder().encode("%PDF-1.4\n"));
+  return bytes.buffer;
+};
+
 /**
  * Server-boundary authorization suite for Phase 10 notices + notifications.
  * A programmable fake stands in for PostgREST/Storage so tests assert
@@ -330,7 +337,7 @@ describe("attachment authorization", () => {
       name: "circular.pdf",
       type: "application/pdf",
       size: 2048,
-      bytes: new ArrayBuffer(2048),
+      bytes: pdfBytes(2048),
     });
     const uploads = fake.callsTo("storage:notice-attachments", "insert");
     expect(uploads).toHaveLength(1);
@@ -357,7 +364,7 @@ describe("attachment authorization", () => {
       name: "circular.pdf",
       type: "application/pdf",
       size: 2048,
-      bytes: new ArrayBuffer(2048),
+      bytes: pdfBytes(2048),
     });
     // Parent: school-wide notice → allowed.
     const url = await getNoticeAttachmentUrl(fake as unknown as DbClient, parentCtx(), "n-school");
@@ -368,7 +375,7 @@ describe("attachment authorization", () => {
       name: "sports.pdf",
       type: "application/pdf",
       size: 2048,
-      bytes: new ArrayBuffer(2048),
+      bytes: pdfBytes(2048),
     });
     await expect(
       getNoticeAttachmentUrl(fake2 as unknown as DbClient, parentCtx(), "n-sec7b"),
