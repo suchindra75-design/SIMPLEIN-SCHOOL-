@@ -17,8 +17,8 @@ ready but not on any hosted project · **NOT DONE** owner action required.
 |---|------|--------|
 | 1 | Rotate the exposed staging credentials: service-role/secret key, anon key, JWT secret if legacy keys are used, `ONBOARDING_SECRET`, staging user passwords. They are in pushed Git history (`90c1333`) and in the main checkout's `.env.local`. | NOT DONE |
 | 2 | Confirm the production project. The CLI lists `rpcydhgavfebywhlfukp` ("simplin school production", ap-southeast-1), currently **paused**. Confirm, unpause, choose a plan with point-in-time recovery, take a backup and complete one restore drill (`docs/BACKUP_AND_RECOVERY.md`). | NOT DONE |
-| 3 | Apply migrations `0016`–`0026` (staging first, then production), after running the read-only `scripts/sql/fee-integrity-precheck.sql` there and reviewing its findings. Without them: question papers are readable/writable across schools (0016), storage files are readable school-wide (0021), fee records can be altered by any admin (0022), buckets have no limits (0023), a paid assignment can be moved to another student (0024), audit entries can be forged and edited with the service-role key (0025), verified receipts can be swapped or deleted (0026). | NOT APPLIED |
-| 4 | Fee maker-checker, assignment, receipt and audit integrity enforced by the database (migrations 0022, 0024–0026). Do **not** use the fee module with real data until they are applied to that database. | DONE (local) |
+| 3 | Apply migrations `0016`–`0027` (staging first, then production), after running the read-only `scripts/sql/fee-integrity-precheck.sql` there and reviewing its findings. Without them: question papers are readable/writable across schools (0016), storage files are readable school-wide (0021), fee records can be altered by any admin (0022), buckets have no limits (0023), a paid assignment can be moved to another student (0024), audit entries can be forged and edited with the service-role key (0025), verified receipts can be swapped or deleted (0026), receipt policy helpers are callable through the API (0027). | NOT APPLIED |
+| 4 | Fee maker-checker, assignment, receipt and audit integrity enforced by the database (migrations 0022, 0024–0027). Do **not** use the fee module with real data until they are applied to that database. | DONE (local) |
 | 5 | Production Auth settings: Site URL and redirect allowlist set to the production URL; **public signups disabled** (accounts are provisioned by admins); SMTP only if password-reset e-mails are offered. | NOT DONE |
 | 6 | Minimum operations: Vercel log drain or equivalent, uptime check on `GET /api/v1/health`, error alerting. | NOT DONE |
 
@@ -66,6 +66,14 @@ ready but not on any hosted project · **NOT DONE** owner action required.
   Tests: `supabase/tests/fee_receipt_integrity.sql` (29; 20 fail without
   0026), `tests/integration/fee-receipts.test.ts` (checks the stored bytes
   through the real Storage API, not only audit rows).
+- **Receipt policy helpers off the API (0027).** The two SECURITY DEFINER
+  helpers the fee-receipts Storage policies use moved from `public` (where
+  every function is an `/rest/v1/rpc` endpoint, so any member could probe
+  payment ids) to schema `private`, which PostgREST does not serve. Policy
+  behaviour unchanged. Keep `private` out of the hosted project's exposed
+  schemas. Tests: `supabase/tests/receipt_helpers_private.sql` (9),
+  `tests/integration/fee-receipts.test.ts` (RPC calls fail for student,
+  teacher and admin).
 - **Storage bucket limits (0023).** Photos: 2 MiB, JPEG/PNG/WebP. Homework,
   notice, fee-receipt and question-paper buckets: 4,000,000 bytes, the app's
   document types. Report cards: 5 MiB, PDF. Tests: `storage_limits.sql`,
@@ -104,16 +112,27 @@ ready but not on any hosted project · **NOT DONE** owner action required.
   Same-host portal switches do not loop.
 - **Student import (xlsx/csv).** A gate (`lib/uploads/spreadsheet.ts`) runs
   before the parser: `.csv`/`.xlsx` only (legacy `.xls` dropped), the content
-  must match the name (the parser otherwise picks XLS/HTML/DBF/… parsers by
-  content), CSV must be plain text, and every ZIP entry is decompressed by
-  the gate with a hard cap — at most 100 parts and 10,000,000 bytes in total,
-  no encryption/ZIP64/comments/trailing data/inconsistent headers — so
-  declared sizes are never trusted. Then only the first sheet, header plus
-  201 rows, without formulas/HTML/styles, is parsed. Measured (local, child
-  process, 256 MB heap cap): a 48 MB-expanding bomb is refused in 16 ms; the
-  largest accepted workbooks (≤ 2 MB upload, ≤ 10 MB expanded, ~20,000 rows)
-  parse in ≤ 250 ms at ~105–120 MB peak RSS. The parser's own advisories
-  (prototype pollution, ReDoS) remain until it is replaced (§4).
+  must match the name, and every ZIP entry is decompressed by the gate with a
+  hard cap — at most 100 parts and 10,000,000 bytes in total, no
+  encryption/ZIP64/comments/trailing data/inconsistent or unsafe entry
+  names — so declared sizes are never trusted. The parser picks its format
+  from the content and several of its parsers turn a few bytes into huge
+  work (a DBF header claiming a million rows, ODS cells repeated 1,048,576 ×
+  16,384 times, one hyperlink or column range covering the whole sheet), so:
+  CSV is always read by its CSV parser (text that would select DBF, SYLK,
+  DIF, RTF or SocialCalc gets one leading newline, which forces the CSV
+  route); for `.xlsx` the parser never sees the upload, only a minimal
+  workbook the gate rebuilds from the first sheet's cell data, shared
+  strings, styles and the 1904-date flag. Only header + 201 rows and 64
+  columns are read, without formulas/HTML/styles. Measured (local, child
+  process with a 256 MB heap cap): inputs that previously took 2–25+ s or ran
+  out of memory (DBF-as-CSV, ODS/Numbers markers, full-range hyperlinks,
+  1e9-wide column ranges) now take ≤ 30 ms; a 48 MB-expanding bomb is refused
+  before parsing; a ~20,000-row workbook at the 2 MB cap parses in ~80 ms
+  (~130 MB peak RSS). Normal files parse exactly as before (tested against
+  the previous path). The parser's own advisories (prototype pollution,
+  ReDoS) still apply to the cell data, shared strings and styles it reads,
+  within those caps, until it is replaced (§4).
 - **CI** (`.github/workflows/ci.yml`): typecheck, lint, unit tests, production
   dependency audit gate (`scripts/audit-gate.mjs`: fails on any critical, on
   any high advisory not listed with a reason and review date, and when the
@@ -143,7 +162,7 @@ ready but not on any hosted project · **NOT DONE** owner action required.
 | `postcss` 8.4.31 (pinned by `next`) | high, build-time only (first-party CSS) | Fixed only by a Next major; accept for now. |
 | `sharp` 0.35.4 | high, image processing | Not used at runtime (no `next/image`); resolved by the `next` upgrade. |
 | `source-map-js` 1.2.1 | high, build-time | `npm update source-map-js` (1.2.2) with approval. |
-| `xlsx` 0.18.5 | high (prototype pollution, ReDoS), admin-only; input now bounded by the import gate (content check, ≤ 10 MB expanded, first sheet only) | Replace with the SheetJS CDN build 0.20.3 (download approval) or a CSV-only importer. Accepted in `scripts/audit-gate.mjs` until 2026-11-30. |
+| `xlsx` 0.18.5 | high (prototype pollution, ReDoS), admin-only; behind the import gate (content and size checks; CSV forced through the CSV parser; `.xlsx` rebuilt to the first sheet's cell data, strings and styles) | Replace with the SheetJS CDN build 0.20.3 (download approval) or a CSV-only importer. Accepted in `scripts/audit-gate.mjs` until 2026-11-30. |
 | `vitest` & tooling | critical, dev-only (not deployed) | Major upgrade later; not a production risk. |
 
 ## 5. Remaining risks (not blockers for a pilot, track them)
@@ -163,16 +182,17 @@ ready but not on any hosted project · **NOT DONE** owner action required.
 - Document uploads still accept legacy `.doc`/`.xls` (macro-capable). Dropping
   them (and limiting fee receipts to PDF/images) is a compatibility decision
   for the owner.
-- The xlsx parser's ReDoS/prototype-pollution advisories are bounded, not
-  removed, by the import gate.
+- The xlsx parser's ReDoS/prototype-pollution advisories still apply to the
+  cell data, shared strings and styles it reads (within the gate's size
+  caps); only replacing the parser removes them.
 - CI actions are pinned by tag; pin by commit SHA after looking them up.
 
 ## 6. Pre-launch checklist
 
 - [ ] Section 1 items 1, 2, 5, 6 done by the owner
 - [ ] `scripts/sql/fee-integrity-precheck.sql` run on staging and production; findings resolved
-- [ ] `0016`–`0026` applied to staging; `supabase test db`-equivalent suites green there; per-role smoke test
-- [ ] `0016`–`0026` applied to production after a backup; migration history matches
+- [ ] `0016`–`0027` applied to staging; `supabase test db`-equivalent suites green there; per-role smoke test
+- [ ] `0016`–`0027` applied to production after a backup; migration history matches
 - [ ] Buckets private with limits (`select id, public, file_size_limit from storage.buckets`)
 - [ ] `next` 15.5.28 upgrade (and xlsx decision) tested and merged
 - [ ] CI green on GitHub for the release branch

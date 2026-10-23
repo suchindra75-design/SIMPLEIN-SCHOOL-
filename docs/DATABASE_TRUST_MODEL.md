@@ -1,7 +1,7 @@
 # SIMPLEIN SCHOOL ERP — Database trust model (fees, receipts, audit)
 
 What the database enforces for fee records and the audit log, for whom, and
-what it deliberately does not. Applies from migrations 0022–0026. Names only;
+what it deliberately does not. Applies from migrations 0022–0027. Names only;
 no secret values.
 
 ## 1. Who is calling
@@ -39,7 +39,9 @@ server and never changed.
 Receipt files (`storage.objects`, bucket `fee-receipts`, 0026): upload only by
 a school admin, only into the folder of an unverified, non-voided payment of
 their own school; no overwrite (upsert), update or move by any user session;
-delete only of files that no payment refers to.
+delete only of files that no payment refers to. The policies' helper
+functions live in schema `private` (0027), which the API does not serve;
+`private` must stay out of the project's exposed schemas.
 
 Audit log (`audit_logs`, 0025): appends with the caller as actor and their
 own school; actions containing `.db_` (written by triggers) and a
@@ -72,7 +74,7 @@ the same transaction (`fee_payment.db_*`, `fee_assignment.db_*`, with
   appended with the caller's session: the actor is always the real caller,
   but the content is what that caller's code chose to write. For fees, the
   `*.db_*` rows written by the database are the authoritative record.
-- **Existing data.** 0022–0026 check new changes only. Run
+- **Existing data.** 0022–0027 check new changes only. Run
   `scripts/sql/fee-integrity-precheck.sql` (read-only) before applying them
   and review its findings (the local demo seed, for example, contained
   self-verified payments until it was corrected).

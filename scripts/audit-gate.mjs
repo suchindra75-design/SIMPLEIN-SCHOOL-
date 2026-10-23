@@ -22,7 +22,7 @@ export const ACCEPTED = [
   {
     package: "xlsx",
     ids: ["GHSA-4r6h-8v6p-xvw6", "GHSA-5pgg-2g8v-p4x9"],
-    reason: "Admin-only student import behind the content/size gate (lib/uploads/spreadsheet.ts); no fixed version on npm. Replace with SheetJS 0.20.3 or a CSV-only importer.",
+    reason: "Admin-only student import behind the import gate (lib/uploads/spreadsheet.ts: content and size checks, CSV forced through the CSV parser, .xlsx rebuilt to cell data/strings/styles); no fixed version on npm. Replace with SheetJS 0.20.3 or a CSV-only importer.",
     reviewBy: "2026-11-30",
   },
   {
