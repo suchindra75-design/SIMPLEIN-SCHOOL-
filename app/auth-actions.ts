@@ -4,12 +4,35 @@ import { redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { getCurrentUser, roleHome } from "@/lib/auth/session";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { passwordUpdateSchema } from "@/lib/validation/auth";
 import {
   detectPortal,
   isRoleAllowedForPortal,
   validateSafeRedirect,
   type PortalType,
 } from "@/lib/auth/portal";
+
+const LOGIN_ROLES = ["STUDENT", "PARENT", "TEACHER", "ADMIN", "SCHOOL_ADMIN"] as const;
+type LoginRole = (typeof LOGIN_ROLES)[number];
+
+function normalizeRole(raw: string | null): LoginRole {
+  const upper = raw?.toUpperCase() ?? "ADMIN";
+  return (LOGIN_ROLES as readonly string[]).includes(upper) ? (upper as LoginRole) : "ADMIN";
+}
+
+/** Canonical origin for recovery links: configured app URL, else the request host. */
+async function appOrigin(): Promise<string> {
+  const configured = process.env["NEXT_PUBLIC_APP_URL"];
+  if (configured !== undefined && configured !== "") return configured.replace(/\/+$/, "");
+  try {
+    const h = await headers();
+    const host = h.get("x-forwarded-host") ?? h.get("host");
+    const proto = h.get("x-forwarded-proto") ?? "https";
+    return host !== null ? `${proto}://${host}` : "";
+  } catch {
+    return "";
+  }
+}
 
 /**
  * Server actions for login/logout. Supabase Auth owns credentials and
@@ -113,4 +136,66 @@ export async function logoutAction(): Promise<never> {
   const supabase = await createServerSupabaseClient();
   await supabase.auth.signOut();
   redirect("/login");
+}
+
+/**
+ * Step 1 of password recovery: email a reset link to the account behind the
+ * given identifier. Supabase Auth owns the token and the email. This action
+ * NEVER reveals whether an account exists — it always ends on the same neutral
+ * "if an account exists, we've sent a link" screen (no account enumeration).
+ * Sending requires SMTP configured on the Supabase project; the redirect
+ * target must be in the project's redirect allow-list (see DEPLOY_RUNBOOK.md).
+ */
+export async function requestPasswordResetAction(formData: FormData): Promise<never> {
+  const role = normalizeRole(formData.get("role") as string | null);
+  const identifier = ((formData.get("identifier") as string | null) ?? "").trim();
+  const done = "/forgot-password?sent=1";
+
+  if (identifier !== "") {
+    let email: string | null = null;
+    try {
+      const { resolveIdentifierToEmail } = await import("@/lib/services/identity");
+      const resolved = await resolveIdentifierToEmail(role, identifier);
+      email = resolved?.email ?? null;
+    } catch {
+      email = null;
+    }
+    if (email !== null) {
+      try {
+        const origin = await appOrigin();
+        const supabase = await createServerSupabaseClient();
+        await supabase.auth.resetPasswordForEmail(email, {
+          redirectTo: `${origin}/auth/callback?next=/reset-password`,
+        });
+      } catch {
+        // Never surface send failures — would leak account existence.
+      }
+    }
+  }
+  redirect(done); // outside try/catch so NEXT_REDIRECT is not swallowed
+}
+
+/**
+ * Step 2 of password recovery: set a new password. Requires the recovery
+ * session established by /auth/callback (exchangeCodeForSession). Validates
+ * strength locally (Supabase Auth also enforces its own policy), updates the
+ * password, signs out, and returns the user to the login screen.
+ */
+export async function updatePasswordAction(formData: FormData): Promise<never> {
+  const parsed = passwordUpdateSchema.safeParse({
+    password: (formData.get("password") as string | null) ?? "",
+    confirmPassword: (formData.get("confirmPassword") as string | null) ?? "",
+  });
+  if (!parsed.success) {
+    redirect("/reset-password?error=weak");
+  }
+
+  const supabase = await createServerSupabaseClient();
+  const { error } = await supabase.auth.updateUser({ password: parsed.data.password });
+  if (error !== null) {
+    // No valid recovery session (expired/invalid link) or password rejected.
+    redirect("/reset-password?error=expired");
+  }
+  await supabase.auth.signOut();
+  redirect("/login?reset=1");
 }

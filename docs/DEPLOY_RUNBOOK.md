@@ -45,9 +45,10 @@ compromised.
    `scripts/sql/fee-integrity-precheck.sql` first if there is any existing
    data). Keep `private` **out of** the API “Exposed schemas”.
 4. Run the pgTAP suites against it; all green.
-5. Auth: **disable public sign-ups**, set Site URL + redirect allowlist to the
-   production origin, configure **SMTP** (enables password reset), enable MFA
-   for admins.
+5. Auth: **disable public sign-ups**, set Site URL to the production origin, and
+   add **`https://<prod-origin>/auth/callback`** to the redirect allow-list
+   (the password-reset link lands there). Configure **SMTP** — password reset
+   does not send email without it. Enable MFA for admins.
 
 ## Step 3 — Wire Vercel production
 1. Connect the `main` branch of the production repo to the Vercel project.
@@ -66,7 +67,12 @@ demo data into production.
 2. `GET /api/v1/health` → `status: ok`.
 3. Sign in to each portal (Admin, Teacher, Parent, Student); record a fee
    payment and verify it as a second admin; confirm cross-school isolation.
-4. Confirm password-reset email arrives (SMTP).
+4. **Password reset end-to-end** (verifies the new flow — currently untested
+   without SMTP): open `/forgot-password`, submit a known admin identifier →
+   neutral "link sent" screen → open the email → it lands on `/auth/callback`
+   and forwards to `/reset-password` → set a new password → sign in with it.
+   Also confirm a non-existent identifier shows the **same** neutral screen (no
+   account enumeration).
 
 ## Step 6 — Minimum operations
 Error tracking (Sentry), uptime check on `/api/v1/health`, a Vercel log drain.

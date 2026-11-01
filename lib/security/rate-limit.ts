@@ -57,6 +57,11 @@ export function checkRate(
 export function tierFor(pathname: string, method: string): RateTier | null {
   // The login form posts its server action to /login itself.
   if (pathname === "/login" && method === "POST") return "LOGIN";
+  // Password-recovery server actions post to their own routes; rate-limit the
+  // request-reset (email send) and the set-new-password steps like sign-in.
+  if ((pathname === "/forgot-password" || pathname === "/reset-password") && method === "POST") {
+    return "LOGIN";
+  }
   if (pathname.startsWith("/api/v1/auth/") || pathname.startsWith("/api/v1/onboarding/")) {
     return "AUTH";
   }
