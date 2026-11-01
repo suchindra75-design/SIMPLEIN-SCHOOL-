@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { requireRole } from "@/lib/auth/session";
 import {
   assignFeesAction,
@@ -13,6 +14,7 @@ import { listAcademicYears } from "@/lib/services/years";
 import { listClasses } from "@/lib/services/classes";
 import { listActiveStudentsByClass, listStudents } from "@/lib/services/students";
 import {
+  listFeeDefaulters,
   listFeeStructures,
   listStudentFees,
 } from "@/lib/services/fees";
@@ -55,6 +57,12 @@ export default async function AdminFeesPage({
     studentId === ""
       ? { fees: [] }
       : await listStudentFees(db, ctx, studentId);
+
+  // Defaulters (outstanding dues) report, optionally filtered by class.
+  const defClass = sp["defClass"] !== undefined && UUID_RE.test(sp["defClass"]) ? sp["defClass"] : "";
+  const { defaulters, studentCount, totalOutstanding } = await listFeeDefaulters(db, ctx, {
+    classId: defClass === "" ? undefined : defClass,
+  });
 
   return (
     <div>
@@ -313,6 +321,76 @@ export default async function AdminFeesPage({
             </li>
           ))}
         </ul>
+      )}
+
+      <h3 className="mb-2 mt-8 font-semibold">Outstanding dues (defaulters)</h3>
+      <form method="get" className="mb-3 flex flex-wrap items-end gap-3">
+        {q !== "" && <input type="hidden" name="q" value={q} />}
+        {studentId !== "" && <input type="hidden" name="studentId" value={studentId} />}
+        <label className="text-sm">
+          <span className="ui-label">Class</span>
+          <select name="defClass" defaultValue={defClass} className="ui-input">
+            <option value="">All classes</option>
+            {classes.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <button type="submit" className="ui-btn ui-btn-secondary">
+          Filter
+        </button>
+      </form>
+      {defaulters.length === 0 ? (
+        <EmptyState message="No outstanding dues for the current filter." />
+      ) : (
+        <>
+          <p className="mb-2 text-sm text-gray-600">
+            {studentCount} student{studentCount === 1 ? "" : "s"} with dues · total outstanding {totalOutstanding}
+          </p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr className="border-b border-zinc-200 bg-zinc-50 text-zinc-700 font-semibold font-mono">
+                  <th className="py-3 px-4">Student</th>
+                  <th className="py-3 px-4">Admission No</th>
+                  <th className="py-3 px-4">Class &amp; Section</th>
+                  <th className="py-3 px-4 text-right">Fees due</th>
+                  <th className="py-3 px-4 text-right">Outstanding</th>
+                  <th className="py-3 px-4">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-100">
+                {defaulters.map((d) => (
+                  <tr key={d.studentId} className="hover:bg-zinc-50/60 transition-colors">
+                    <td className="py-3 px-4 font-semibold text-zinc-950">
+                      <Link href={`/admin/fees?studentId=${d.studentId}`} className="hover:underline">
+                        {d.name}
+                      </Link>
+                    </td>
+                    <td className="py-3 px-4 font-mono text-zinc-600">{d.admissionNo}</td>
+                    <td className="py-3 px-4 text-zinc-700">
+                      {d.className ?? "—"}
+                      {d.sectionName ? ` • Sec ${d.sectionName}` : ""}
+                    </td>
+                    <td className="py-3 px-4 text-right font-mono text-zinc-800">{d.feeCount}</td>
+                    <td className="py-3 px-4 text-right font-mono font-semibold text-zinc-950">{d.totalDue}</td>
+                    <td className="py-3 px-4">
+                      <span
+                        className={`rounded px-2 py-0.5 text-xs ${
+                          d.overdue ? "bg-red-100 text-red-800" : "bg-amber-100 text-amber-800"
+                        }`}
+                      >
+                        {d.overdue ? `OVERDUE ${d.overdueDue}` : "DUE"}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
     </div>
   );
