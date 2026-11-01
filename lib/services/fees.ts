@@ -13,6 +13,7 @@ import {
   type DbClient,
 } from "@/lib/services/errors";
 import {
+  aggregateStudentDues,
   concessionAmount,
   feeBalance,
   structureTotal,
@@ -740,6 +741,122 @@ export interface FeeStructureDto {
   academicYears?: { name: string } | null;
   classes?: { name: string } | null;
   components?: { name: string; amount: number }[];
+}
+
+export interface FeeDefaulterDto {
+  studentId: string;
+  admissionNo: string;
+  name: string;
+  className: string | null;
+  sectionName: string | null;
+  totalDue: number;
+  overdueDue: number;
+  feeCount: number;
+  overdue: boolean;
+}
+
+/**
+ * Admin-only outstanding-dues report: every student in the caller's school with
+ * a positive balance, highest first. Figures reuse feeBalance (via
+ * aggregateStudentDues) so they reconcile with the per-student fee view.
+ * Two queries total (no N+1). Active students only unless includeInactive.
+ */
+export async function listFeeDefaulters(
+  db: DbClient,
+  ctx: SessionContext,
+  filters: { classId?: string; sectionId?: string; minDue?: number; includeInactive?: boolean } = {},
+): Promise<{ defaulters: FeeDefaulterDto[]; studentCount: number; totalOutstanding: number }> {
+  authorizeRoles(ctx, ["SCHOOL_ADMIN"]);
+
+  let query = db
+    .from("student_fees")
+    .select(
+      "id, student_id, total_amount, due_date, students!inner(display_name, admission_no, status, class_id, section_id, classes(name), sections(name))",
+    )
+    .eq("school_id", ctx.profile.schoolId);
+  if (filters.classId !== undefined) query = query.eq("students.class_id", filters.classId);
+  if (filters.sectionId !== undefined) query = query.eq("students.section_id", filters.sectionId);
+  if (filters.includeInactive !== true) query = query.eq("students.status", "active");
+
+  const { data, error } = await query;
+  throwForPostgrest(error);
+
+  const rows = (data ?? []) as unknown as {
+    id: string;
+    student_id: string;
+    total_amount: number;
+    due_date: string | null;
+    students: {
+      display_name: string;
+      admission_no: string;
+      classes?: { name: string } | null;
+      sections?: { name: string } | null;
+    } | null;
+  }[];
+
+  // Student display info (first row per student wins — same across assignments).
+  const info = new Map<string, Omit<FeeDefaulterDto, "studentId" | "totalDue" | "overdueDue" | "feeCount" | "overdue">>();
+  for (const r of rows) {
+    if (r.students !== null && !info.has(r.student_id)) {
+      info.set(r.student_id, {
+        admissionNo: r.students.admission_no,
+        name: r.students.display_name,
+        className: r.students.classes?.name ?? null,
+        sectionName: r.students.sections?.name ?? null,
+      });
+    }
+  }
+
+  // One query for all payment records, grouped by assignment (no N+1).
+  const assignmentIds = rows.map((r) => r.id);
+  const recordsByFee = new Map<string, BalanceRecord[]>();
+  if (assignmentIds.length > 0) {
+    const { data: recs, error: recError } = await db
+      .from("fee_payment_records")
+      .select("student_fee_id, amount, is_voided, verified_by")
+      .in("student_fee_id", assignmentIds)
+      .eq("school_id", ctx.profile.schoolId);
+    throwForPostgrest(recError);
+    for (const r of (recs ?? []) as { student_fee_id: string; amount: number; is_voided: boolean; verified_by: string | null }[]) {
+      const list = recordsByFee.get(r.student_fee_id) ?? [];
+      list.push({ amount: r.amount, isVoided: r.is_voided, verified: r.verified_by !== null });
+      recordsByFee.set(r.student_fee_id, list);
+    }
+  }
+
+  const today = new Date().toISOString().slice(0, 10);
+  const dues = aggregateStudentDues(
+    rows.map((r) => ({
+      studentId: r.student_id,
+      totalAmount: r.total_amount,
+      dueDate: r.due_date,
+      records: recordsByFee.get(r.id) ?? [],
+    })),
+    today,
+  );
+
+  const minDue = filters.minDue !== undefined && Number.isFinite(filters.minDue) ? Math.max(0, filters.minDue) : 0;
+  const defaulters: FeeDefaulterDto[] = dues
+    .filter((d) => d.totalDue > 0 && d.totalDue >= minDue)
+    .map((d) => {
+      const meta = info.get(d.studentId);
+      return {
+        studentId: d.studentId,
+        admissionNo: meta?.admissionNo ?? "",
+        name: meta?.name ?? "",
+        className: meta?.className ?? null,
+        sectionName: meta?.sectionName ?? null,
+        totalDue: d.totalDue,
+        overdueDue: d.overdueDue,
+        feeCount: d.feeCount,
+        overdue: d.overdue,
+      };
+    })
+    .sort((a, b) => b.totalDue - a.totalDue);
+
+  const totalOutstanding =
+    Math.round(defaulters.reduce((sum, d) => sum + d.totalDue, 0) * 100) / 100;
+  return { defaulters, studentCount: defaulters.length, totalOutstanding };
 }
 
 export { concessionAmount };
