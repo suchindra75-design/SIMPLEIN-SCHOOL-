@@ -12,13 +12,14 @@ const csp = [
   "base-uri 'self'",
   "object-src 'none'",
   "frame-ancestors 'none'",
-  "frame-src 'none'",
+  // Razorpay Checkout (UPI fee payments) runs in an iframe from these hosts.
+  "frame-src https://api.razorpay.com https://checkout.razorpay.com",
   "form-action 'self'",
-  "img-src 'self' data: blob: https://*.supabase.co",
+  "img-src 'self' data: blob: https://*.supabase.co https://*.razorpay.com",
   "font-src 'self' data:",
   "style-src 'self' 'unsafe-inline'",
-  "script-src 'self' 'unsafe-inline'",
-  "connect-src 'self' https://*.supabase.co wss://*.supabase.co",
+  "script-src 'self' 'unsafe-inline' https://checkout.razorpay.com",
+  "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.razorpay.com https://lumberjack.razorpay.com",
 ].join("; ");
 
 const securityHeaders = [

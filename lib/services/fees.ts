@@ -35,9 +35,11 @@ import type {
 } from "@/lib/validation/fees";
 
 /**
- * Fee tracking service (Phase 11). RECORDS-ONLY: fee_payment_records are
- * offline amounts a school staff member recorded as received — NO gateway,
- * NO online transactions, NO refunds (corrections are superseding audited
+ * Fee tracking service (Phase 11). fee_payment_records are amounts a school
+ * staff member recorded as received (source STAFF, maker-checker) or online
+ * payments captured by the gateway (source GATEWAY, written only by the
+ * server's settlement function — see lib/services/online-payments.ts and
+ * migration 0028). No refunds in-app (corrections are superseding audited
  * records). Overpayment is REJECTED (no credit/advance in V1 — documented).
  * Parents are read-only, linked children only. Teachers have no fee access
  * (RBAC matrix has no fees entry for TEACHER — deny-by-default).
@@ -50,7 +52,16 @@ const COMPONENT_COLUMNS =
 const ASSIGNMENT_COLUMNS =
   "id, school_id, student_id, fee_structure_id, total_amount, due_date, fee_structures(name), students(display_name, admission_no)";
 const RECORD_COLUMNS =
-  "id, school_id, student_fee_id, amount, paid_on, mode, reference_no, receipt_bucket, receipt_path, receipt_name, receipt_mime, receipt_bytes, recorded_by, verified_by, is_voided, void_reason, version, created_at";
+  "id, school_id, student_fee_id, amount, paid_on, mode, reference_no, receipt_bucket, receipt_path, receipt_name, receipt_mime, receipt_bytes, recorded_by, verified_by, is_voided, void_reason, version, created_at, source, gateway_payment_id";
+
+/**
+ * A record counts toward "paid" once confirmed: verified by a second admin
+ * (office payments) or captured by the payment gateway (online payments,
+ * migration 0028). Voided records never count.
+ */
+export function isConfirmedRecord(r: { verifiedBy: string | null; source?: string | null }): boolean {
+  return r.verifiedBy !== null || r.source === "GATEWAY";
+}
 
 const FEE_RECEIPTS_BUCKET = "fee-receipts";
 
@@ -67,7 +78,7 @@ async function parentStudentIds(
 }
 
 /** Fee read scope: admin own school; parent linked children only; else 404. */
-async function assertStudentFeeAccess(
+export async function assertStudentFeeAccess(
   db: DbClient,
   ctx: SessionContext,
   studentId: string,
@@ -441,7 +452,7 @@ export async function listStudentFees(
       recRows.map((r) => ({
         amount: r.amount,
         isVoided: r.isVoided,
-        verified: r.verifiedBy !== null,
+        verified: isConfirmedRecord(r),
       })),
       { dueDate: a.due_date, today },
     );
@@ -538,7 +549,7 @@ export async function verifyPaymentRecord(
   authorizeRoles(ctx, ["SCHOOL_ADMIN"]);
   const { data: record, error: recError } = await db
     .from("fee_payment_records")
-    .select("id, recorded_by, is_voided, verified_by")
+    .select("id, recorded_by, is_voided, verified_by, source")
     .eq("id", recordId)
     .eq("school_id", ctx.profile.schoolId)
     .single();
@@ -548,7 +559,13 @@ export async function verifyPaymentRecord(
     recorded_by: string;
     is_voided: boolean;
     verified_by: string | null;
+    source?: string | null;
   };
+  if (row.source === "GATEWAY") {
+    throw new ConflictError(
+      "Online payments are confirmed by the payment gateway and need no verification",
+    );
+  }
   if (row.is_voided) {
     throw new ConflictError("Voided records cannot be verified");
   }
@@ -629,12 +646,19 @@ export async function setPaymentReceipt(
   if (problem !== null) throw new ConflictError(problem);
   const { data: record, error: recError } = await db
     .from("fee_payment_records")
-    .select("id, verified_by, is_voided")
+    .select("id, verified_by, is_voided, source")
     .eq("id", recordId)
     .eq("school_id", ctx.profile.schoolId)
     .single();
   throwForPostgrest(recError, "Payment record not found");
-  const state = record as unknown as { verified_by: string | null; is_voided: boolean };
+  const state = record as unknown as {
+    verified_by: string | null;
+    is_voided: boolean;
+    source?: string | null;
+  };
+  if (state.source === "GATEWAY") {
+    throw new ConflictError("Online payments do not take an office receipt");
+  }
   if (state.verified_by !== null || state.is_voided) {
     throw new ConflictError(
       "The receipt of a verified or voided payment cannot be changed. Another admin can void the payment so it can be recorded again with the correct receipt.",
@@ -716,6 +740,9 @@ export interface PaymentRecordDto {
   isVoided: boolean;
   voidReason: string | null;
   version: number;
+  /** 'STAFF' (recorded at the office) or 'GATEWAY' (online, migration 0028). */
+  source?: "STAFF" | "GATEWAY";
+  gatewayPaymentId?: string | null;
 }
 
 export interface StudentFeeDto {
@@ -813,13 +840,17 @@ export async function listFeeDefaulters(
   if (assignmentIds.length > 0) {
     const { data: recs, error: recError } = await db
       .from("fee_payment_records")
-      .select("student_fee_id, amount, is_voided, verified_by")
+      .select("student_fee_id, amount, is_voided, verified_by, source")
       .in("student_fee_id", assignmentIds)
       .eq("school_id", ctx.profile.schoolId);
     throwForPostgrest(recError);
-    for (const r of (recs ?? []) as { student_fee_id: string; amount: number; is_voided: boolean; verified_by: string | null }[]) {
+    for (const r of (recs ?? []) as { student_fee_id: string; amount: number; is_voided: boolean; verified_by: string | null; source?: string | null }[]) {
       const list = recordsByFee.get(r.student_fee_id) ?? [];
-      list.push({ amount: r.amount, isVoided: r.is_voided, verified: r.verified_by !== null });
+      list.push({
+        amount: r.amount,
+        isVoided: r.is_voided,
+        verified: isConfirmedRecord({ verifiedBy: r.verified_by, source: r.source ?? null }),
+      });
       recordsByFee.set(r.student_fee_id, list);
     }
   }

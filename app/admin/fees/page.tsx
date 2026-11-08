@@ -18,6 +18,7 @@ import {
   listFeeStructures,
   listStudentFees,
 } from "@/lib/services/fees";
+import { listPaymentOrdersForReview, onlinePaymentsAvailable } from "@/lib/services/online-payments";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { EmptyState, PageHeader, StatusBadge } from "@/app/admin/_components/ui";
 
@@ -64,15 +65,43 @@ export default async function AdminFeesPage({
     classId: defClass === "" ? undefined : defClass,
   });
 
+  const [onlineOn, { orders: reviewOrders }] = await Promise.all([
+    onlinePaymentsAvailable(db, ctx),
+    listPaymentOrdersForReview(db, ctx),
+  ]);
+
   return (
     <div>
       <PageHeader title="Fees" />
       <FlashMessage />
 
       <p className="mb-4 text-xs text-gray-500">
-        V1 records school-received payments only — no online payments, no
-        refunds. Verification is maker-checker (a second admin confirms).
+        Office payments are verified maker-checker (a second admin confirms).
+        Online payments (UPI via Razorpay) are{" "}
+        {onlineOn ? "ON for this school and" : "OFF for this school; when on, they are"} recorded
+        automatically once the gateway confirms them. Refunds are made from the
+        Razorpay dashboard, then the record is voided here.
       </p>
+
+      {reviewOrders.length > 0 && (
+        <div className="mb-6 rounded border border-amber-300 bg-amber-50 p-3 text-sm">
+          <h3 className="font-semibold text-amber-900">Online payments needing review</h3>
+          <p className="mt-1 text-xs text-amber-900">
+            Money was taken but not applied to the fee (usually because the balance
+            changed after the payer started). Refund it from the Razorpay dashboard
+            or record it against the right fee.
+          </p>
+          <ul className="mt-2 space-y-1 text-xs">
+            {reviewOrders.map((o) => (
+              <li key={o.id}>
+                {o.studentName ?? "Student"} {o.admissionNo !== null ? `(${o.admissionNo})` : ""} ·{" "}
+                {o.feeName ?? "Fee"} · ₹{o.amount} · payment {o.gatewayPaymentId ?? "—"} ·{" "}
+                {o.lastError ?? "Needs review"}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <h3 className="mb-2 font-semibold">Fee structures</h3>
       {structures.length === 0 ? (
@@ -239,9 +268,15 @@ export default async function AdminFeesPage({
                 <ul className="space-y-1 text-xs">
                   {f.records.map((r) => (
                     <li key={r.id} className={r.isVoided ? "text-gray-400 line-through" : ""}>
-                      {r.paidOn} · {r.mode} · {r.amount}
+                      {r.paidOn} · {r.source === "GATEWAY" ? "ONLINE (Razorpay)" : r.mode} · {r.amount}
                       {r.referenceNo !== null ? ` · ref ${r.referenceNo}` : ""}
-                      {r.isVoided ? " · VOIDED" : r.verifiedBy !== null ? " · verified" : " · unverified"}
+                      {r.isVoided
+                        ? " · VOIDED"
+                        : r.source === "GATEWAY"
+                          ? " · gateway-confirmed"
+                          : r.verifiedBy !== null
+                            ? " · verified"
+                            : " · unverified"}
                       {r.receiptName !== null && (
                         <span className="ml-2">
                           <AttachmentLink
@@ -254,7 +289,7 @@ export default async function AdminFeesPage({
                       )}
                       {!r.isVoided && (
                         <span className="ml-2 flex gap-2">
-                          {r.verifiedBy === null && (
+                          {r.verifiedBy === null && r.source !== "GATEWAY" && (
                             <ConfirmButton
                               reloadOnSuccess
                               successMessage="Payment verified."
@@ -313,7 +348,7 @@ export default async function AdminFeesPage({
               <div className="mt-2">
                 <SmartForm
                   reloadOnSuccess
-                  action={uploadReceiptAction.bind(null, f.records[0]?.id ?? "")}
+                  action={uploadReceiptAction.bind(null, f.records.find((r) => r.source !== "GATEWAY")?.id ?? "")}
                   submitLabel="Upload receipt for latest record"
                   fields={[{ name: "file", label: "Receipt file (PDF/images, ≤4 MB)", type: "file", required: true }]}
                 />
