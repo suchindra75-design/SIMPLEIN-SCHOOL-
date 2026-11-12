@@ -119,13 +119,53 @@ export async function buildReportCard(
   // Reuse the Phase 6 result calculation (tenant + scope + publish gating).
   const result = await getStudentResult(db, ctx, studentId, examId);
 
-  // Student class/section + exam + academic year (already tenant-scoped).
-  const { data: studentRow, error: studentError } = await db
-    .from("students")
-    .select("id, class_id, section_id, classes(name), sections(name)")
-    .eq("id", studentId)
-    .eq("school_id", ctx.profile.schoolId)
-    .single();
+  // Access is settled above; the remaining reads are independent, so they
+  // run together (one round trip instead of five in a row).
+  const [
+    { data: studentRow, error: studentError },
+    yearAndExam,
+    attendance,
+    { data: snapshot, error: snapError },
+  ] = await Promise.all([
+    db
+      .from("students")
+      .select("id, class_id, section_id, classes(name), sections(name)")
+      .eq("id", studentId)
+      .eq("school_id", ctx.profile.schoolId)
+      .single(),
+    (async () => {
+      const { data: examRow, error: examError } = await db
+        .from("exams")
+        .select("id, name, academic_year_id, academic_years(name)")
+        .eq("id", examId)
+        .eq("school_id", ctx.profile.schoolId)
+        .single();
+      throwForPostgrest(examError, "Exam not found");
+      const exam = toCamel<{
+        name: string;
+        academicYearId: string;
+        academicYears?: { name: string } | null;
+      }>(examRow);
+      const { data: yearRow, error: yearError } = await db
+        .from("academic_years")
+        .select("name")
+        .eq("id", exam.academicYearId)
+        .eq("school_id", ctx.profile.schoolId)
+        .single();
+      throwForPostgrest(yearError, "Academic year not found");
+      return { exam, yearName: (yearRow as { name: string }).name };
+    })(),
+    // Reuse the Phase 4 attendance summary (existing calculation).
+    getStudentSummary(db, ctx, studentId, {}),
+    // Existing snapshot (remarks/attendance persisted from a prior generation).
+    db
+      .from("report_cards")
+      .select(REPORT_CARD_COLUMNS)
+      .eq("exam_id", examId)
+      .eq("student_id", studentId)
+      .eq("school_id", ctx.profile.schoolId)
+      .maybeSingle(),
+  ]);
   throwForPostgrest(studentError, "Student not found");
   const student = toCamel<{
     classId: string | null;
@@ -133,37 +173,7 @@ export async function buildReportCard(
     classes?: { name: string } | null;
     sections?: { name: string } | null;
   }>(studentRow);
-  const { data: examRow, error: examError } = await db
-    .from("exams")
-    .select("id, name, academic_year_id, academic_years(name)")
-    .eq("id", examId)
-    .eq("school_id", ctx.profile.schoolId)
-    .single();
-  throwForPostgrest(examError, "Exam not found");
-  const exam = toCamel<{
-    name: string;
-    academicYearId: string;
-    academicYears?: { name: string } | null;
-  }>(examRow);
-  const { data: yearRow, error: yearError } = await db
-    .from("academic_years")
-    .select("name")
-    .eq("id", exam.academicYearId)
-    .eq("school_id", ctx.profile.schoolId)
-    .single();
-  throwForPostgrest(yearError, "Academic year not found");
-
-  // Reuse the Phase 4 attendance summary (existing calculation).
-  const attendance = await getStudentSummary(db, ctx, studentId, {});
-
-  // Existing snapshot (remarks/attendance persisted from a prior generation).
-  const { data: snapshot, error: snapError } = await db
-    .from("report_cards")
-    .select(REPORT_CARD_COLUMNS)
-    .eq("exam_id", examId)
-    .eq("student_id", studentId)
-    .eq("school_id", ctx.profile.schoolId)
-    .maybeSingle();
+  const { exam, yearName } = yearAndExam;
   throwForPostgrest(snapError);
   const snap = toCamel<ReportCardDto | null>(snapshot);
 
@@ -187,7 +197,7 @@ export async function buildReportCard(
       className: student.classes?.name ?? "-",
       sectionName: student.sections?.name ?? null,
     },
-    academicYear: (yearRow as { name: string }).name,
+    academicYear: yearName,
     exam: { id: examId, name: exam.name },
     subjects: result.subjects,
     attendance,

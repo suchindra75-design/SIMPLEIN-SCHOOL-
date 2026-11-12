@@ -133,6 +133,8 @@ import { containsSearchTerm } from "@/lib/services/search";
 export interface ParentScope {
   parentId: string;
   studentIds: Set<string>;
+  /** The same links with their details (reused by listChildren: no second query). */
+  links: { student_id: string; relation: string; is_primary: boolean }[];
 }
 
 /** Resolve the caller's parent scope (null when the user is not a parent). */
@@ -153,14 +155,14 @@ export const getParentScope = cache(
     const parentId = (data as { id: string }).id;
     const { data: links, error: linkError } = await db
       .from("student_parents")
-      .select("student_id")
+      .select("student_id, relation, is_primary")
       .eq("parent_id", parentId);
     throwForPostgrest(linkError);
+    const rows = (links ?? []) as { student_id: string; relation: string; is_primary: boolean }[];
     return {
       parentId,
-      studentIds: new Set(
-        (links as { student_id: string }[]).map((l) => l.student_id),
-      ),
+      studentIds: new Set(rows.map((l) => l.student_id)),
+      links: rows,
     };
   },
 );
@@ -171,20 +173,22 @@ export async function listChildren(
   ctx: SessionContext,
   parentId: string,
 ): Promise<{ children: ChildDto[] }> {
+  let rows: { student_id: string; relation: string; is_primary: boolean }[];
   if (!isAdmin(ctx)) {
     const scope = await getParentScope(db, ctx);
     if (scope === null || scope.parentId !== parentId) {
       throw new TenantBoundaryError();
     }
+    rows = scope.links; // already loaded with the scope (same request)
   } else {
     await getParent(db, ctx, parentId);
+    const { data: links, error: linkError } = await db
+      .from("student_parents")
+      .select("student_id, relation, is_primary")
+      .eq("parent_id", parentId);
+    throwForPostgrest(linkError);
+    rows = (links ?? []) as { student_id: string; relation: string; is_primary: boolean }[];
   }
-  const { data: links, error: linkError } = await db
-    .from("student_parents")
-    .select("student_id, relation, is_primary")
-    .eq("parent_id", parentId);
-  throwForPostgrest(linkError);
-  const rows = links as { student_id: string; relation: string; is_primary: boolean }[];
   if (rows.length === 0) return { children: [] };
   const { data: students, error: studentError } = await db
     .from("students")

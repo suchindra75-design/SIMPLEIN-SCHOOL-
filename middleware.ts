@@ -126,9 +126,16 @@ export async function middleware(request: NextRequest) {
     },
   });
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // getClaims() refreshes an expired session (cookies via setAll) and verifies
+  // the access token's signature and expiry. With asymmetric JWT signing keys
+  // this is a local check against the cached JWKS (no Auth round trip on every
+  // request, ~1-5 ms instead of ~120 ms); with a legacy symmetric secret
+  // Supabase falls back to the same Auth-server check getUser() made.
+  // The verified `sub` is forwarded to server code (lib/auth/session.ts);
+  // any client-sent x-auth-user-id was deleted above.
+  const { data: claimsData, error: claimsError } = await supabase.auth.getClaims();
+  const sub = claimsError === null ? claimsData?.claims?.sub : undefined;
+  const user = typeof sub === "string" && sub !== "" ? { id: sub } : null;
 
   if (user !== null) {
     requestHeaders.set("x-auth-user-id", user.id);
