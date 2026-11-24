@@ -7,7 +7,10 @@ import { createClient } from "@supabase/supabase-js";
  *   user-context clients (lib/supabase/client.ts, lib/supabase/server.ts).
  *   RLS applies to everything they do.
  * - This admin client bypasses RLS. It is SERVER-ONLY and reserved for
- *   trusted operations: school onboarding and user/role provisioning.
+ *   trusted operations: school onboarding, user/role provisioning, and
+ *   settling gateway-confirmed fee payments (lib/services/online-payments.ts,
+ *   only via the settle_fee_payment_order / note_fee_payment_order_failure
+ *   functions, only after the gateway has proven the capture).
  * - It must NEVER be imported by client components, NEVER be used as a
  *   convenience for ordinary authenticated CRUD, and NEVER reach the
  *   browser bundle (the getter throws outside a server runtime and when

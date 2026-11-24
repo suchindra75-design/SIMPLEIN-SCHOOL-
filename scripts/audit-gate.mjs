@@ -22,7 +22,7 @@ export const ACCEPTED = [
   {
     package: "xlsx",
     ids: ["GHSA-4r6h-8v6p-xvw6", "GHSA-5pgg-2g8v-p4x9"],
-    reason: "Admin-only student import behind the content/size gate (lib/uploads/spreadsheet.ts); no fixed version on npm. Replace with SheetJS 0.20.3 or a CSV-only importer.",
+    reason: "Admin-only student import behind the import gate (lib/uploads/spreadsheet.ts: content and size checks, CSV forced through the CSV parser, .xlsx rebuilt to cell data/strings/styles); no fixed version on npm. Replace with SheetJS 0.20.3 or a CSV-only importer.",
     reviewBy: "2026-11-30",
   },
   {
@@ -41,6 +41,12 @@ export const ACCEPTED = [
     package: "source-map-js",
     ids: ["GHSA-68fv-2mgg-jv7q"],
     reason: "Build-time only; `npm update source-map-js` (1.2.2) pending approval.",
+    reviewBy: "2026-11-30",
+  },
+  {
+    package: "zod",
+    ids: ["GHSA-mrhx-c7xc-m3w5"],
+    reason: "Memory exhaustion validating oversized constrained collections. Not yet in production; request bodies are bounded before validation (server actions 4.26 MB; API routes parse-then-validate). The only fix is zod v4 (breaking across the 13 lib/validation files); migrate separately, then remove this entry.",
     reviewBy: "2026-11-30",
   },
 ];

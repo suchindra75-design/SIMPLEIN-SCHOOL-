@@ -25,3 +25,6 @@ scratch/
 coverage/
 tsconfig.tsbuildinfo
 .vercel
+
+# transient output of scripts/deploy-preflight.mjs
+.preflight-audit.json

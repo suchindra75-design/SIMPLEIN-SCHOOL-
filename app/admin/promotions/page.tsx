@@ -4,7 +4,7 @@ import { promoteStudentsFormAction } from "@/app/admin/actions";
 import { previewPromotion } from "@/lib/services/promotions";
 import { listAcademicYears } from "@/lib/services/years";
 import { listClasses } from "@/lib/services/classes";
-import { listSections } from "@/lib/services/classes";
+import { throwForPostgrest } from "@/lib/services/errors";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { EmptyState } from "@/app/admin/_components/ui";
 
@@ -25,8 +25,17 @@ export default async function AdminPromotionsPage({
   const sp = await searchParams;
   const ctx = await requireRole("SCHOOL_ADMIN");
   const db = await createServerSupabaseClient();
-  const { academicYears } = await listAcademicYears(db, ctx);
-  const { classes } = await listClasses(db, ctx);
+  const [{ academicYears }, { classes }, { data: allSections, error: sectionsError }] = await Promise.all([
+    listAcademicYears(db, ctx),
+    listClasses(db, ctx),
+    // Every section of the school in one query (was one query per class).
+    db
+      .from("sections")
+      .select("id, name, class_id, order_index")
+      .eq("school_id", ctx.profile.schoolId)
+      .order("order_index"),
+  ]);
+  throwForPostgrest(sectionsError);
 
   const fromYearId = sp["fromYearId"] !== undefined && UUID_RE.test(sp["fromYearId"]) ? sp["fromYearId"] : "";
   const toYearId = sp["toYearId"] !== undefined && UUID_RE.test(sp["toYearId"]) ? sp["toYearId"] : "";
@@ -48,12 +57,13 @@ export default async function AdminPromotionsPage({
 
   // Section options per class (for the per-student next-section selects).
   const sectionOptionsByClass = new Map<string, { value: string; label: string }[]>();
-  for (const c of classes) {
-    const { sections } = await listSections(db, ctx, c.id);
-    sectionOptionsByClass.set(
-      c.id,
-      sections.map((s) => ({ value: s.id, label: `${c.name} ${s.name}` })),
-    );
+  const classNames = new Map(classes.map((c) => [c.id, c.name]));
+  for (const c of classes) sectionOptionsByClass.set(c.id, []);
+  for (const sec of (allSections ?? []) as { id: string; name: string; class_id: string }[]) {
+    sectionOptionsByClass.get(sec.class_id)?.push({
+      value: sec.id,
+      label: `${classNames.get(sec.class_id) ?? ""} ${sec.name}`,
+    });
   }
 
   return (

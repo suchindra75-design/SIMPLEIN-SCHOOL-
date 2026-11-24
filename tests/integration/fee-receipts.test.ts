@@ -142,6 +142,18 @@ describe("verified receipt integrity (database + Storage)", () => {
     expect(await stored(first)).toBeNull();
   });
 
+  it("the receipt policy helpers are not API endpoints (migration 0027)", async () => {
+    for (const role of ["student", "teacher", "admin"] as const) {
+      const actor = role === "admin" ? maker : await as(role);
+      const upload = await actor.db.rpc("fee_receipt_upload_allowed", { payment_folder: verifiedId });
+      expect(upload.error).not.toBeNull();
+      expect(upload.data).toBeNull();
+      const referenced = await actor.db.rpc("fee_receipt_is_referenced", { object_name: verifiedPath });
+      expect(referenced.error).not.toBeNull();
+      expect(referenced.data).toBeNull();
+    }
+  });
+
   it("Storage rejections reach the user as readable messages (size, type)", async () => {
     const { id } = await recordPayment(maker.db, maker.ctx, feeId, { amount: 25, paidOn: "2026-10-12", mode: "CASH" });
     payments.push(id);

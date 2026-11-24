@@ -57,7 +57,9 @@ describe("report-card PDFs", () => {
     createdPaths.push((data as { pdf_path: string }).pdf_path);
 
     const url = await getReportCardPdfUrl(parent.db, parent.ctx, reportCardId);
-    expect(url).toMatch(/^http:\/\/127\.0\.0\.1:54321\/storage\/v1\/object\/sign\//);
+    // Signed URLs point at the configured local Supabase (port may differ per machine).
+    const base = (process.env["LOCAL_SUPABASE_URL"] ?? "http://127.0.0.1:54321").replace(/\/$/, "");
+    expect(url.startsWith(`${base}/storage/v1/object/sign/`)).toBe(true);
     const other = await as("parent2");
     const stranger = await other.db.storage.from("report-cards").createSignedUrl((data as { pdf_path: string }).pdf_path, 60);
     expect(stranger.error).not.toBeNull();

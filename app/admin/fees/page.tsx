@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { requireRole } from "@/lib/auth/session";
 import {
   assignFeesAction,
@@ -13,9 +14,11 @@ import { listAcademicYears } from "@/lib/services/years";
 import { listClasses } from "@/lib/services/classes";
 import { listActiveStudentsByClass, listStudents } from "@/lib/services/students";
 import {
+  listFeeDefaulters,
   listFeeStructures,
   listStudentFees,
 } from "@/lib/services/fees";
+import { listPaymentOrdersForReview, onlinePaymentsAvailable } from "@/lib/services/online-payments";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { EmptyState, PageHeader, StatusBadge } from "@/app/admin/_components/ui";
 
@@ -56,15 +59,49 @@ export default async function AdminFeesPage({
       ? { fees: [] }
       : await listStudentFees(db, ctx, studentId);
 
+  // Defaulters (outstanding dues) report, optionally filtered by class.
+  const defClass = sp["defClass"] !== undefined && UUID_RE.test(sp["defClass"]) ? sp["defClass"] : "";
+  const { defaulters, studentCount, totalOutstanding } = await listFeeDefaulters(db, ctx, {
+    classId: defClass === "" ? undefined : defClass,
+  });
+
+  const [onlineOn, { orders: reviewOrders }] = await Promise.all([
+    onlinePaymentsAvailable(db, ctx),
+    listPaymentOrdersForReview(db, ctx),
+  ]);
+
   return (
     <div>
       <PageHeader title="Fees" />
       <FlashMessage />
 
       <p className="mb-4 text-xs text-gray-500">
-        V1 records school-received payments only — no online payments, no
-        refunds. Verification is maker-checker (a second admin confirms).
+        Office payments are verified maker-checker (a second admin confirms).
+        Online payments (UPI via Razorpay) are{" "}
+        {onlineOn ? "ON for this school and" : "OFF for this school; when on, they are"} recorded
+        automatically once the gateway confirms them. Refunds are made from the
+        Razorpay dashboard, then the record is voided here.
       </p>
+
+      {reviewOrders.length > 0 && (
+        <div className="mb-6 rounded border border-amber-300 bg-amber-50 p-3 text-sm">
+          <h3 className="font-semibold text-amber-900">Online payments needing review</h3>
+          <p className="mt-1 text-xs text-amber-900">
+            Money was taken but not applied to the fee (usually because the balance
+            changed after the payer started). Refund it from the Razorpay dashboard
+            or record it against the right fee.
+          </p>
+          <ul className="mt-2 space-y-1 text-xs">
+            {reviewOrders.map((o) => (
+              <li key={o.id}>
+                {o.studentName ?? "Student"} {o.admissionNo !== null ? `(${o.admissionNo})` : ""} ·{" "}
+                {o.feeName ?? "Fee"} · ₹{o.amount} · payment {o.gatewayPaymentId ?? "—"} ·{" "}
+                {o.lastError ?? "Needs review"}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <h3 className="mb-2 font-semibold">Fee structures</h3>
       {structures.length === 0 ? (
@@ -231,9 +268,15 @@ export default async function AdminFeesPage({
                 <ul className="space-y-1 text-xs">
                   {f.records.map((r) => (
                     <li key={r.id} className={r.isVoided ? "text-gray-400 line-through" : ""}>
-                      {r.paidOn} · {r.mode} · {r.amount}
+                      {r.paidOn} · {r.source === "GATEWAY" ? "ONLINE (Razorpay)" : r.mode} · {r.amount}
                       {r.referenceNo !== null ? ` · ref ${r.referenceNo}` : ""}
-                      {r.isVoided ? " · VOIDED" : r.verifiedBy !== null ? " · verified" : " · unverified"}
+                      {r.isVoided
+                        ? " · VOIDED"
+                        : r.source === "GATEWAY"
+                          ? " · gateway-confirmed"
+                          : r.verifiedBy !== null
+                            ? " · verified"
+                            : " · unverified"}
                       {r.receiptName !== null && (
                         <span className="ml-2">
                           <AttachmentLink
@@ -246,7 +289,7 @@ export default async function AdminFeesPage({
                       )}
                       {!r.isVoided && (
                         <span className="ml-2 flex gap-2">
-                          {r.verifiedBy === null && (
+                          {r.verifiedBy === null && r.source !== "GATEWAY" && (
                             <ConfirmButton
                               reloadOnSuccess
                               successMessage="Payment verified."
@@ -305,7 +348,7 @@ export default async function AdminFeesPage({
               <div className="mt-2">
                 <SmartForm
                   reloadOnSuccess
-                  action={uploadReceiptAction.bind(null, f.records[0]?.id ?? "")}
+                  action={uploadReceiptAction.bind(null, f.records.find((r) => r.source !== "GATEWAY")?.id ?? "")}
                   submitLabel="Upload receipt for latest record"
                   fields={[{ name: "file", label: "Receipt file (PDF/images, ≤4 MB)", type: "file", required: true }]}
                 />
@@ -313,6 +356,76 @@ export default async function AdminFeesPage({
             </li>
           ))}
         </ul>
+      )}
+
+      <h3 className="mb-2 mt-8 font-semibold">Outstanding dues (defaulters)</h3>
+      <form method="get" className="mb-3 flex flex-wrap items-end gap-3">
+        {q !== "" && <input type="hidden" name="q" value={q} />}
+        {studentId !== "" && <input type="hidden" name="studentId" value={studentId} />}
+        <label className="text-sm">
+          <span className="ui-label">Class</span>
+          <select name="defClass" defaultValue={defClass} className="ui-input">
+            <option value="">All classes</option>
+            {classes.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <button type="submit" className="ui-btn ui-btn-secondary">
+          Filter
+        </button>
+      </form>
+      {defaulters.length === 0 ? (
+        <EmptyState message="No outstanding dues for the current filter." />
+      ) : (
+        <>
+          <p className="mb-2 text-sm text-gray-600">
+            {studentCount} student{studentCount === 1 ? "" : "s"} with dues · total outstanding {totalOutstanding}
+          </p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr className="border-b border-zinc-200 bg-zinc-50 text-zinc-700 font-semibold font-mono">
+                  <th className="py-3 px-4">Student</th>
+                  <th className="py-3 px-4">Admission No</th>
+                  <th className="py-3 px-4">Class &amp; Section</th>
+                  <th className="py-3 px-4 text-right">Fees due</th>
+                  <th className="py-3 px-4 text-right">Outstanding</th>
+                  <th className="py-3 px-4">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-100">
+                {defaulters.map((d) => (
+                  <tr key={d.studentId} className="hover:bg-zinc-50/60 transition-colors">
+                    <td className="py-3 px-4 font-semibold text-zinc-950">
+                      <Link href={`/admin/fees?studentId=${d.studentId}`} className="hover:underline">
+                        {d.name}
+                      </Link>
+                    </td>
+                    <td className="py-3 px-4 font-mono text-zinc-600">{d.admissionNo}</td>
+                    <td className="py-3 px-4 text-zinc-700">
+                      {d.className ?? "—"}
+                      {d.sectionName ? ` • Sec ${d.sectionName}` : ""}
+                    </td>
+                    <td className="py-3 px-4 text-right font-mono text-zinc-800">{d.feeCount}</td>
+                    <td className="py-3 px-4 text-right font-mono font-semibold text-zinc-950">{d.totalDue}</td>
+                    <td className="py-3 px-4">
+                      <span
+                        className={`rounded px-2 py-0.5 text-xs ${
+                          d.overdue ? "bg-red-100 text-red-800" : "bg-amber-100 text-amber-800"
+                        }`}
+                      >
+                        {d.overdue ? `OVERDUE ${d.overdueDue}` : "DUE"}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
     </div>
   );

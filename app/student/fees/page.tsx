@@ -1,13 +1,15 @@
 import { requireRole } from "@/lib/auth/session";
 import { AttachmentLink } from "@/app/components/AttachmentLink";
-import { listStudentFees } from "@/lib/services/fees";
+import { isConfirmedRecord, listStudentFees } from "@/lib/services/fees";
+import { PayNowButton } from "@/app/components/PayNowButton";
+import { onlinePaymentsAvailable } from "@/lib/services/online-payments";
 import { getStudentScope } from "@/lib/services/students";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { EmptyState } from "@/app/admin/_components/ui";
 
 export const dynamic = "force-dynamic";
 
-/** Student fees: own only (read-only, NO Pay Now). */
+/** Student fees: own only, with Pay Now (UPI) when the school has online payment on. */
 export default async function StudentFeesPage() {
   const ctx = await requireRole("STUDENT");
   const db = await createServerSupabaseClient();
@@ -23,6 +25,7 @@ export default async function StudentFeesPage() {
     );
   }
   const { fees } = await listStudentFees(db, ctx, scope.studentId);
+  const canPayOnline = fees.length > 0 && (await onlinePaymentsAvailable(db, ctx));
   const grandTotal = fees.reduce((sum, f) => sum + f.total, 0);
   const grandPaid = fees.reduce((sum, f) => sum + f.paid, 0);
 
@@ -30,7 +33,8 @@ export default async function StudentFeesPage() {
     <div>
       <h1 className="page-title">My fees</h1>
       <p className="mt-1 text-sm text-gray-600">
-        {ctx.school.name} · Read-only (pay at the school office)
+        {ctx.school.name} ·{" "}
+        {canPayOnline ? "Pay online with UPI or at the school office" : "Pay at the school office"}
       </p>
       {fees.length === 0 ? (
         <div className="mt-4">
@@ -74,12 +78,15 @@ export default async function StudentFeesPage() {
                     {f.dueDate !== null ? ` · due ${f.dueDate}` : ""}
                   </span>
                 </div>
+                {canPayOnline && payableOnline(f) >= 1 && (
+                  <PayNowButton studentFeeId={f.id} amountDue={payableOnline(f)} />
+                )}
                 {f.records.length > 0 && (
                   <ul className="mt-2 space-y-1 text-xs">
                     {f.records.map((r) => (
                       <li key={r.id}>
-                        {r.paidOn} · {r.mode} · {r.amount}
-                        {r.verifiedBy !== null ? " · verified" : " · pending"}
+                        {r.paidOn} · {r.source === "GATEWAY" ? "ONLINE (UPI/gateway)" : r.mode} · {r.amount}
+                        {r.source === "GATEWAY" ? " · paid online" : r.verifiedBy !== null ? " · verified" : " · pending"}
                         {r.receiptName !== null && (
                           <span className="ml-2">
                             <AttachmentLink
@@ -101,4 +108,12 @@ export default async function StudentFeesPage() {
       )}
     </div>
   );
+}
+
+/** What can be paid online now: due minus office payments still awaiting verification. */
+function payableOnline(f: { due: number; records: { amount: number; isVoided: boolean; verifiedBy: string | null; source?: string }[] }): number {
+  const pending = f.records
+    .filter((r) => !r.isVoided && !isConfirmedRecord(r))
+    .reduce((sum, r) => sum + Number(r.amount), 0);
+  return Math.max(0, Math.round((f.due - pending) * 100) / 100);
 }

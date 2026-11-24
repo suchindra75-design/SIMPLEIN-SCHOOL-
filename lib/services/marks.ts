@@ -203,10 +203,43 @@ export async function listMarkableSubjects(
   const all = toCamel<ExamSubjectStateDto[]>(data ?? []);
   if (isAdmin(ctx)) return { subjects: all };
   if (!ctx.roles.includes("TEACHER")) return { subjects: [] };
-  const checks = await Promise.all(
-    all.map((s) => teacherCanEnterMarks(db, ctx, s)),
-  );
-  return { subjects: all.filter((_, i) => checks[i]) };
+  // Same rule as markableSectionIds, computed once for every subject of the
+  // exam (3 queries in total instead of 3 per subject).
+  const scope = await getTeacherScope(db, ctx);
+  if (scope === null || scope.sectionIds.size === 0 || all.length === 0) return { subjects: [] };
+  const { data: examRow, error: classError } = await db
+    .from("exams")
+    .select("class_id")
+    .eq("id", examId)
+    .eq("school_id", ctx.profile.schoolId)
+    .single();
+  throwForPostgrest(classError, "Exam not found");
+  const [{ data: sections, error: secError }, { data: ts, error: tsError }] = await Promise.all([
+    db
+      .from("sections")
+      .select("id, class_teacher_id")
+      .in("id", [...scope.sectionIds])
+      .eq("class_id", (examRow as { class_id: string }).class_id)
+      .eq("school_id", ctx.profile.schoolId),
+    db
+      .from("teacher_subjects")
+      .select("section_id, subject_id")
+      .eq("teacher_id", scope.teacherId)
+      .eq("school_id", ctx.profile.schoolId),
+  ]);
+  throwForPostgrest(secError);
+  throwForPostgrest(tsError);
+  const inClass = (sections ?? []) as { id: string; class_teacher_id: string | null }[];
+  const assignments = (ts ?? []) as { section_id: string; subject_id: string }[];
+  const classTeacher = inClass.some((sec) => sec.class_teacher_id === scope.teacherId);
+  const inClassIds = new Set(inClass.map((sec) => sec.id));
+  return {
+    subjects: all.filter(
+      (subject) =>
+        classTeacher ||
+        assignments.some((a) => a.subject_id === subject.subjectId && inClassIds.has(a.section_id)),
+    ),
+  };
 }
 
 export interface MarksGrid {
@@ -493,38 +526,50 @@ export async function getStudentResult(
   examId: string,
 ): Promise<StudentResultDto> {
   authorizeRoles(ctx, ["SCHOOL_ADMIN", "TEACHER", "PARENT", "STUDENT"]);
-  const { data: student, error: studentError } = await db
-    .from("students")
-    .select("id, display_name, admission_no")
-    .eq("id", studentId)
-    .eq("school_id", ctx.profile.schoolId)
-    .single();
+  // Independent reads in one round trip (errors still surface in the same
+  // order: student, then exam, then subjects).
+  const [
+    { data: student, error: studentError },
+    { data: exam, error: examError },
+    { data: subjects, error: subError },
+  ] = await Promise.all([
+    db
+      .from("students")
+      .select("id, display_name, admission_no")
+      .eq("id", studentId)
+      .eq("school_id", ctx.profile.schoolId)
+      .single(),
+    db
+      .from("exams")
+      .select("id, class_id")
+      .eq("id", examId)
+      .eq("school_id", ctx.profile.schoolId)
+      .single(),
+    db
+      .from("exam_subjects")
+      .select("id, subject_id, max_marks, is_published, subjects(name)")
+      .eq("exam_id", examId)
+      .eq("school_id", ctx.profile.schoolId),
+  ]);
   throwForPostgrest(studentError, "Student not found");
-  const { data: exam, error: examError } = await db
-    .from("exams")
-    .select("id, class_id")
-    .eq("id", examId)
-    .eq("school_id", ctx.profile.schoolId)
-    .single();
   throwForPostgrest(examError, "Exam not found");
+  throwForPostgrest(subError);
   const examRow = exam as { id: string; class_id: string };
+  const subjectRows = (subjects ?? []) as unknown as {
+    id: string;
+    subject_id: string;
+    max_marks: number;
+    is_published: boolean;
+    subjects: { name: string } | null;
+  }[];
 
-  let published: boolean;
   // Results are published per subject. `published` = every subject published;
   // parents/students see the result once any subject is published, limited to
   // the published subjects (matching marks RLS, exam_subject_is_published).
   const publishedSubjectIds = new Set<string>();
-  {
-    const { data: states, error: stError } = await db
-      .from("exam_subjects")
-      .select("id, is_published")
-      .eq("exam_id", examId)
-      .eq("school_id", ctx.profile.schoolId);
-    throwForPostgrest(stError);
-    const rows = (states ?? []) as { id: string; is_published: boolean }[];
-    for (const r of rows) if (r.is_published) publishedSubjectIds.add(r.id);
-    published = rows.length > 0 && publishedSubjectIds.size === rows.length;
-  }
+  for (const r of subjectRows) if (r.is_published) publishedSubjectIds.add(r.id);
+  const published = subjectRows.length > 0 && publishedSubjectIds.size === subjectRows.length;
+
   let familyView = false;
   if (!isAdmin(ctx)) {
     let teacherAccess = false;
@@ -561,23 +606,16 @@ export async function getStudentResult(
     }
   }
 
-  const { data: subjects, error: subError } = await db
-    .from("exam_subjects")
-    .select("id, subject_id, max_marks, subjects(name)")
-    .eq("exam_id", examId)
-    .eq("school_id", ctx.profile.schoolId);
-  throwForPostgrest(subError);
-  const subjectRowsRaw = ((subjects ?? []) as unknown as {
-    id: string;
-    subject_id: string;
-    max_marks: number;
-    subjects: { name: string } | null;
-  }[]).filter((s) => !familyView || publishedSubjectIds.has(s.id));
-  const { data: marks, error: marksError } = await db
-    .from("marks")
-    .select("exam_subject_id, marks_obtained, is_absent, grade")
-    .eq("student_id", studentId)
-    .eq("school_id", ctx.profile.schoolId);
+  const subjectRowsRaw = subjectRows.filter((s) => !familyView || publishedSubjectIds.has(s.id));
+  // Marks and grading rules are independent: fetch together (after access).
+  const [{ data: marks, error: marksError }, rules] = await Promise.all([
+    db
+      .from("marks")
+      .select("exam_subject_id, marks_obtained, is_absent, grade")
+      .eq("student_id", studentId)
+      .eq("school_id", ctx.profile.schoolId),
+    defaultGradingRules(db, ctx),
+  ]);
   throwForPostgrest(marksError);
   const marksBySubject = new Map(
     ((marks ?? []) as {
@@ -587,7 +625,6 @@ export async function getStudentResult(
       grade: string | null;
     }[]).map((m) => [m.exam_subject_id, m]),
   );
-  const rules = await defaultGradingRules(db, ctx);
   const result = calculateResult(
     {
       id: (student as { id: string }).id,

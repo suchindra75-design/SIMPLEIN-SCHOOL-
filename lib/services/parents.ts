@@ -130,17 +130,48 @@ export async function updateParent(
 import { cache } from "react";
 import { containsSearchTerm } from "@/lib/services/search";
 
+type ChildRow = Record<string, unknown> & { id: string };
+type LinkRow = { student_id: string; relation: string; is_primary: boolean };
+
 export interface ParentScope {
   parentId: string;
   studentIds: Set<string>;
+  /** The same links with their details (reused by listChildren: no second query). */
+  links: LinkRow[];
+  /** Linked children in this school, when loaded with the scope (my_parent_children). */
+  children?: Map<string, ChildRow>;
 }
 
-/** Resolve the caller's parent scope (null when the user is not a parent). */
+/** PostgREST "function not found" (migration 0032 not applied yet). */
+const MISSING_FUNCTION = new Set(["PGRST202", "42883"]);
+
+/**
+ * Resolve the caller's parent scope (null when the user is not a parent).
+ * One round trip via public.my_parent_children() (migration 0032, runs with
+ * the caller's RLS); falls back to the separate queries when it is missing.
+ */
 export const getParentScope = cache(
   async (
     db: DbClient,
     ctx: SessionContext,
   ): Promise<ParentScope | null> => {
+    const rpc = typeof db.rpc === "function" ? await db.rpc("my_parent_children") : null;
+    if (rpc !== null && (rpc.error === null || !MISSING_FUNCTION.has(rpc.error.code ?? ""))) {
+      throwForPostgrest(rpc.error);
+      const payload = rpc.data as
+        | { parent_id: string; links: (LinkRow & { student: ChildRow | null })[] }
+        | null;
+      if (payload === null) return null;
+      const links = payload.links.map(({ student_id, relation, is_primary }) => ({ student_id, relation, is_primary }));
+      const children = new Map<string, ChildRow>();
+      for (const l of payload.links) if (l.student !== null) children.set(l.student_id, l.student);
+      return {
+        parentId: payload.parent_id,
+        studentIds: new Set(links.map((l) => l.student_id)),
+        links,
+        children,
+      };
+    }
     const { data, error } = await db
       .from("parents")
       .select("id")
@@ -153,14 +184,14 @@ export const getParentScope = cache(
     const parentId = (data as { id: string }).id;
     const { data: links, error: linkError } = await db
       .from("student_parents")
-      .select("student_id")
+      .select("student_id, relation, is_primary")
       .eq("parent_id", parentId);
     throwForPostgrest(linkError);
+    const rows = (links ?? []) as LinkRow[];
     return {
       parentId,
-      studentIds: new Set(
-        (links as { student_id: string }[]).map((l) => l.student_id),
-      ),
+      studentIds: new Set(rows.map((l) => l.student_id)),
+      links: rows,
     };
   },
 );
@@ -171,20 +202,34 @@ export async function listChildren(
   ctx: SessionContext,
   parentId: string,
 ): Promise<{ children: ChildDto[] }> {
+  let rows: LinkRow[];
+  let preloaded: Map<string, ChildRow> | undefined;
   if (!isAdmin(ctx)) {
     const scope = await getParentScope(db, ctx);
     if (scope === null || scope.parentId !== parentId) {
       throw new TenantBoundaryError();
     }
+    rows = scope.links; // already loaded with the scope (same request)
+    preloaded = scope.children;
   } else {
     await getParent(db, ctx, parentId);
+    const { data: links, error: linkError } = await db
+      .from("student_parents")
+      .select("student_id, relation, is_primary")
+      .eq("parent_id", parentId);
+    throwForPostgrest(linkError);
+    rows = (links ?? []) as LinkRow[];
   }
-  const { data: links, error: linkError } = await db
-    .from("student_parents")
-    .select("student_id, relation, is_primary")
-    .eq("parent_id", parentId);
-  throwForPostgrest(linkError);
-  const rows = links as { student_id: string; relation: string; is_primary: boolean }[];
+  if (rows.length === 0) return { children: [] };
+  if (preloaded !== undefined) {
+    return {
+      children: toCamel<ChildDto[]>(
+        rows
+          .filter((l) => preloaded.has(l.student_id))
+          .map((l) => ({ ...preloaded.get(l.student_id), link: l })),
+      ),
+    };
+  }
   if (rows.length === 0) return { children: [] };
   const { data: students, error: studentError } = await db
     .from("students")
