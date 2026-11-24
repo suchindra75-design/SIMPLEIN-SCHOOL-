@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { requireRole } from "@/lib/auth/session";
 import { AttachmentLink } from "@/app/components/AttachmentLink";
-import { listStudentFees } from "@/lib/services/fees";
+import { isConfirmedRecord, listStudentFees } from "@/lib/services/fees";
+import { PayNowButton } from "@/app/components/PayNowButton";
+import { onlinePaymentsAvailable } from "@/lib/services/online-payments";
 import { getParentScope, listChildren } from "@/lib/services/parents";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { EmptyState } from "@/app/admin/_components/ui";
@@ -10,7 +12,7 @@ export const dynamic = "force-dynamic";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-/** Parent view: child selector + fee summary + history + receipts (read-only, NO Pay Now). */
+/** Parent view: child selector + fee summary + history + receipts + Pay Now (UPI) when the school has online payment on. */
 export default async function ParentFeesPage({
   searchParams,
 }: {
@@ -34,6 +36,7 @@ export default async function ParentFeesPage({
   const { fees } =
     selectedId === "" ? { fees: [] } : await listStudentFees(db, ctx, selectedId);
 
+  const canPayOnline = fees.length > 0 && (await onlinePaymentsAvailable(db, ctx));
   const grandTotal = fees.reduce((sum, f) => sum + f.total, 0);
   const grandPaid = fees.reduce((sum, f) => sum + f.paid, 0);
 
@@ -41,8 +44,8 @@ export default async function ParentFeesPage({
     <div>
       <h1 className="page-title">Fees</h1>
       <p className="mt-1 text-sm text-gray-600">
-        {ctx.profile.fullName} · {ctx.school.name} · Read-only (pay at the
-        school office)
+        {ctx.profile.fullName} · {ctx.school.name} ·{" "}
+        {canPayOnline ? "Pay online with UPI or at the school office" : "Pay at the school office"}
       </p>
 
       {scope === null ? (
@@ -116,6 +119,9 @@ export default async function ParentFeesPage({
                         {f.dueDate !== null ? ` · due ${f.dueDate}` : ""}
                       </span>
                     </div>
+                    {canPayOnline && payableOnline(f) >= 1 && (
+                      <PayNowButton studentFeeId={f.id} amountDue={payableOnline(f)} />
+                    )}
                     <h5 className="mb-1 mt-2 text-xs font-medium text-gray-600">
                       Payment history
                     </h5>
@@ -125,10 +131,12 @@ export default async function ParentFeesPage({
                       <ul className="space-y-1 text-xs">
                         {f.records.map((r) => (
                           <li key={r.id}>
-                            {r.paidOn} · {r.mode} · {r.amount}
-                            {r.verifiedBy !== null
-                              ? " · verified"
-                              : " · pending verification"}
+                            {r.paidOn} · {r.source === "GATEWAY" ? "ONLINE (UPI/gateway)" : r.mode} · {r.amount}
+                            {r.source === "GATEWAY"
+                              ? " · paid online"
+                              : r.verifiedBy !== null
+                                ? " · verified"
+                                : " · pending verification"}
                             {r.receiptName !== null && (
                               <span className="ml-2">
                                 <AttachmentLink
@@ -147,7 +155,7 @@ export default async function ParentFeesPage({
                 ))}
               </ul>
               <p className="mt-3 text-xs text-gray-500">
-                Paid amounts reflect school-verified records. Receipts open via
+                Paid amounts count school-verified and online (gateway-confirmed) payments. Receipts open via
                 secure expiring links.
               </p>
             </>
@@ -161,4 +169,12 @@ export default async function ParentFeesPage({
       </p>
     </div>
   );
+}
+
+/** What can be paid online now: due minus office payments still awaiting verification. */
+function payableOnline(f: { due: number; records: { amount: number; isVoided: boolean; verifiedBy: string | null; source?: string }[] }): number {
+  const pending = f.records
+    .filter((r) => !r.isVoided && !isConfirmedRecord(r))
+    .reduce((sum, r) => sum + Number(r.amount), 0);
+  return Math.max(0, Math.round((f.due - pending) * 100) / 100);
 }

@@ -6,7 +6,9 @@ until Confirm. Limits: one sheet (first), ≤ 200 rows, ≤ 2 MB, `.csv`/`.xlsx`
 (old `.xls` workbooks: save as `.xlsx` first). The file's content must match
 its extension; CSV must be plain text (UTF-8); an `.xlsx` may have at most 100
 parts and 10 MB of content once decompressed (far more than 200 rows need);
-password-protected and `.xlsb` workbooks are refused.
+password-protected and `.xlsb` workbooks are refused. Only the first sheet's
+cells are read (links, comments, merged cells and other sheets are ignored),
+and only its first 64 columns.
 
 ## Columns
 

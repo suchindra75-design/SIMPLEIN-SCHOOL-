@@ -25,7 +25,8 @@ Job `database` (throwaway local Supabase in Docker on the runner):
 1. `supabase start` (only Auth, PostgREST, Postgres, Storage, Kong)
 2. `supabase test db` — every migration + all pgTAP suites, including
    `fee_integrity.sql`, `fee_assignment_integrity.sql`,
-   `fee_receipt_integrity.sql`, `audit_integrity.sql` and `storage_limits.sql`
+   `fee_receipt_integrity.sql`, `receipt_helpers_private.sql`, `audit_integrity.sql` and
+   `storage_limits.sql`
 3. seed (`scripts/seed-local.mjs`, localhost-only) + `npm run test:integration`
    (the concurrency tests open extra sessions on the runner's own database
    container with `docker exec`)

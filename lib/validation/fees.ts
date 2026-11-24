@@ -61,3 +61,16 @@ export const feeVoidSchema = z.object({
 });
 
 export type FeeVoidInput = z.infer<typeof feeVoidSchema>;
+
+/** POST /api/v1/payments/orders (start an online payment). */
+export const paymentOrderCreateSchema = z.object({
+  studentFeeId: z.string().uuid(),
+  amount: z.coerce.number().min(1).max(10000000).nullish(),
+});
+
+/** POST /api/v1/payments/confirm (Razorpay Checkout success callback). */
+export const paymentConfirmSchema = z.object({
+  razorpayOrderId: z.string().regex(/^order_[A-Za-z0-9]{1,40}$/),
+  razorpayPaymentId: z.string().regex(/^pay_[A-Za-z0-9]{1,40}$/),
+  razorpaySignature: z.string().regex(/^[0-9a-f]{64}$/i),
+});

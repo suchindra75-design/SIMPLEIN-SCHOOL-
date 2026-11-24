@@ -46,13 +46,13 @@ export async function previewStudentImport(
     throw new ConflictError("File must be non-empty and under 2 MB");
   }
   // xlsx 0.18.5 (latest on npm) has open advisories and no resource limits;
-  // the gate checks name, content and decompressed size before it parses
-  // anything (lib/uploads/spreadsheet.ts). Only the header plus one row beyond
-  // the import cap is read, from the first sheet.
-  const bytes = new Uint8Array(file.bytes);
-  const kind = classifyImportFile(file.name, bytes);
+  // the gate checks name, content and decompressed size, and for .xlsx hands
+  // the parser a rebuilt minimal workbook instead of the upload
+  // (lib/uploads/spreadsheet.ts). Only the header plus one row beyond the
+  // import cap is read, from the first sheet.
+  const kind = classifyImportFile(file.name, new Uint8Array(file.bytes));
   if ("problem" in kind) throw new ConflictError(kind.problem);
-  const parsed = parseImportGrid(bytes, MAX_IMPORT_ROWS + 2);
+  const parsed = parseImportGrid(kind, MAX_IMPORT_ROWS + 2);
   if ("problem" in parsed) throw new ConflictError(parsed.problem);
   const grid = parsed.grid;
   if (grid.length < 2) {

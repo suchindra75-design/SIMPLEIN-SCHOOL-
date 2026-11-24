@@ -10,7 +10,7 @@ No secrets in this file — names only.
 | Concern | Development | Staging | Production |
 |---------|-------------|---------|------------|
 | Supabase project | local Docker stack (`docs/LOCAL_DEMO.md`) | `simplein school` (`krzbajfioftoubcbyeso`, ap-northeast-2) | `simplin school production` (`rpcydhgavfebywhlfukp`, ap-southeast-1): **exists, paused; owner must confirm it is production** |
-| Database | local PG (all migrations) | 0001–0015 applied (Phase 14); **0016–0026 pending** | state unknown until unpaused and inspected; forward migrations only |
+| Database | local PG (all migrations) | 0001–0015 applied (Phase 14); **0016–0027 pending** | state unknown until unpaused and inspected; forward migrations only |
 | App hosting | `npm run dev` (localhost) | staging Vercel project | production Vercel project |
 | App URL | `http://localhost:3000` | staging URL | production URL (TBD) |
 | Secrets | local `.env.local` only | staging Vercel env | production Vercel env (different values) |
@@ -90,7 +90,7 @@ exist ONLY in server env (local `.env.local`, Vercel project settings).
 
 Apply in order; each is re-runnable. 0016–0023 were verified on a fresh
 local database (`supabase db reset` + seed + pgTAP + integration tests);
-0024–0026 were applied on top of that local database (not a fresh reset) and
+0024–0027 were applied on top of that local database (not a fresh reset) and
 verified with pgTAP + integration tests; replaying them is idempotent. CI's
 database job applies all of them to a fresh database. **Before applying to a
 database with real data, run `scripts/sql/fee-integrity-precheck.sql`
@@ -110,6 +110,7 @@ re-check existing rows.
 | 0024 | paid assignments keep their student/structure; assignment audit; server-set creation times | 0011, 0022 | `DROP TRIGGER/FUNCTION` statements in the file header (data untouched) |
 | 0025 | audit append policy (no forged DB events), append-only triggers for every role, server time; TRUNCATE revoked from API roles | 0003, 0022 | statements in the file header |
 | 0026 | receipt columns frozen after verification; fee-receipts Storage write-once policies | 0011, 0021, 0022 | statements in the file header (re-creates the 0011 write policy) |
+| 0027 | receipt policy helpers moved to schema `private` (not API-exposed); policies re-created to call them | 0026 | re-run sections 2–3 of 0026; keep `private` out of the exposed schemas |
 
 ## 6. Rollback process
 

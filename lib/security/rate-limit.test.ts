@@ -76,6 +76,13 @@ describe("tierFor (route classification)", () => {
     expect(checkRate("LOGIN", 1000 + 5 * 60 * 1000, thirty).allowed).toBe(true);
   });
 
+  it("password-recovery POSTs (forgot/reset) → LOGIN tier; GETs are not limited", () => {
+    expect(tierFor("/forgot-password", "POST")).toBe("LOGIN");
+    expect(tierFor("/reset-password", "POST")).toBe("LOGIN");
+    expect(tierFor("/forgot-password", "GET")).toBeNull();
+    expect(tierFor("/reset-password", "GET")).toBeNull();
+  });
+
   it("keeps a separate bucket per tier for the same client", () => {
     const limiter = new RateLimiter();
     for (let i = 0; i < 10; i++) limiter.check("AUTH", "AUTH:1.2.3.4", 1000 + i);
